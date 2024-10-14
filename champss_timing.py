@@ -7,6 +7,7 @@ from .utils import utils
 from .timing import timing
 from .database import database
 from .archive_utils import archive_utils
+from .archive_cache import archive_cache
 
 class champss_timing:
     def __init__(self, psr_dir, data_archives, n_pools=4, workspace_cleanup=True):
@@ -41,12 +42,19 @@ class champss_timing:
 
         # Objects
         self.db_hdl = database(self.path_db)
+        self.archive_cache = archive_cache(self.path_psr_dir, db_hdl=self.db_hdl)
 
         # Timing config
         self.timing_config = {}
 
     def initialize(self):
         # Initialize DB
+        self.db_hdl.initialize()
+
+        # Initialize archive_cache
+        self.archive_cache.initialize()
+
+        # Initialize archive_cache
         self.db_hdl.initialize()
         
         # Check number of data archives
@@ -171,10 +179,10 @@ class champss_timing:
                     print(f" > Updating timing model for archives")
                     tim.update_model()
 
-                    ## Save archive information to database
-                    print(f" > Saving archive information")
+                    ## Save cache archive and information to database
+                    print(f" > Saving and caching archive information")
                     for f in tim.fs:
-                        self.db_insert_archive_info(f"{f}.clfd.FTp")
+                        self.archive_cache.add_archive(f"{f}.clfd.FTp")
 
                 # Create new timfile from database and overwrite the one in the workspace
                 print(f" > Creating timfile")
@@ -191,7 +199,13 @@ class champss_timing:
                 tim.pint.f.print_summary()
 
                 # Insert timing info
+                print(f" Saving timing info to database")
                 self.db_insert_timing_info(archives, mjds, fit_params, tim.pint.f, tim.pint.t)
+
+                # update model for archives
+                print(f" Updating model for all cached archives")
+                self.archive_cache.update_model()
+                
             utils.print_success("======== Timing completed ========")
         except Exception as e:
             print(" Timing failed")
@@ -278,16 +292,16 @@ class champss_timing:
 
         return n_inserted
 
-    def db_insert_archive_info(self, archive):
-        archive_hdl = archive_utils(archive)
+    # def db_insert_archive_info(self, archive):
+    #     archive_hdl = archive_utils(archive)
 
-        print(f"  [Archive] {archive} -> database")
-        self.db_hdl.insert_archive_info(
-            filename = self.utils.get_archive_id(archive), 
-            psr_amps = archive_hdl.get_amps(), 
-            psr_snr = archive_hdl.get_snr(), 
-            notes = {}
-        )
+    #     print(f"  [Archive] {archive} -> database")
+    #     self.db_hdl.insert_archive_info(
+    #         filename = self.utils.get_archive_id(archive), 
+    #         psr_amps = archive_hdl.get_amps(), 
+    #         psr_snr = archive_hdl.get_snr(), 
+    #         notes = {}
+    #     )
 
         
     def db_insert_invalid_toa(self, archive):
@@ -339,6 +353,9 @@ class champss_timing:
     def cleanup(self):
         # Close DB
         self.db_hdl.close()
+
+        # Cleanup archive_cache
+        self.archive_cache.cleanup()
 
     def __enter__(self):
         self.initialize()

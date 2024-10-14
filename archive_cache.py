@@ -1,0 +1,104 @@
+import os
+import shutil
+
+from .exec import exec
+from .utils import utils
+from .database import database
+from .archive_utils import archive_utils
+
+class archive_cache:
+    def __init__(self, psr_dir, db_hdl=None, db_path=None):
+        self.db_hdl = db_hdl
+        self.db_path = db_path
+        self.psr_dir = psr_dir
+        self.cache_dir = f"{psr_dir}/__champss_archive_cache__"
+        
+        self.initialize()
+
+    def initialize(self):
+        # check database connection
+        if self.db_hdl is None and self.db_path is None:
+            raise Exception("Either db_hdl or db_path must be provided.")
+        
+        # create database connection
+        if self.db_path is not None:
+            self.db_hdl = database(self.db_path)
+            self.db_hdl.initialize()
+            
+        # create cache directory
+        if not os.path.exists(self.cache_dir):
+            os.makedirs(self.cache_dir, exist_ok=True)
+
+        # check archive cache integrity
+        archive_info = self.db_hdl.get_all_archive_info()
+        for ar in archive_info:
+            if not os.path.exists(f"{self.cache_dir}/{ar['filename']}"):
+                utils.print_warning(f"Archive {ar['filename']} not found in cache. Please resolve this issue manually. Maybe the cache was deleted and needs to be created manually.")
+        
+    def add_archive(self, filename):
+        if not os.path.exists(filename):
+            raise Exception(f"Archive {filename} does not exist.")
+
+        # copy archive to cache
+        print(f"  [Archive] {filename} -> archive cache")
+        shutil.copyfile(filename, f"{self.cache_dir}/{self.utils.get_archive_id(filename)}")
+
+        # insert archive info to database
+        print(f"  [Archive] {filename} -> database")
+        self.db_insert_archive_info(filename)
+
+    def update_model(self, parfile="auto"):
+        if parfile == "auto":
+            parfile = f"{self.psr_dir}/pulsar.par"
+
+        # get all archives
+        archives = []
+        for ar in self.db_hdl.get_all_archive_info():
+            this_path = f"{self.cache_dir}/{ar['filename']}"
+            if os.path.exists(f"{this_path}"):
+                archives.append(this_path)
+            else:
+                utils.print_warning(f"Archive {ar['filename']} not found in cache. Skipping.")
+
+        # update model for each archive
+        self.exec_update_model(archives, parfile)
+
+        # update psr_amps in database
+        for ar in archives:
+            self.db_update_psr_amps(f"{self.cache_dir}/{ar['filename']}")
+
+        return True
+    
+    def exec_update_model(self, fs, parfile, n_pools=4):
+        # pam -e .pam -E pulsar.par xxx.ar.clfd.FTp
+        exec_hlr = exec.exec_handler(n_pools=n_pools, log=self.cache_dir + "/pam_update.log")
+        for f in fs:
+            exec_hlr.append(f"pam -e .FTp.pam -E {parfile} {f}")
+        exec_hlr.run()
+        
+        if(not exec_hlr.check()):
+            raise Exception("Failed to update model")
+
+        return True
+
+    def db_insert_archive_info(self, filename):
+        archive_hdl = archive_utils(filename)
+
+        self.db_hdl.insert_archive_info(
+            filename = self.utils.get_archive_id(filename), 
+            psr_amps = archive_hdl.get_amps(), 
+            psr_snr = archive_hdl.get_snr(), 
+            notes = {}
+        )
+    
+    def db_update_psr_amps(self, filename):
+        archive_hdl = archive_utils(filename)
+
+        self.db_hdl.update_archive_info(
+            filename = self.utils.get_archive_id(filename),
+            psr_amps = archive_hdl.get_amps()
+        )
+        
+    def cleanup(self):
+        if self.db_path is not None: # close if database connection was created here
+            self.db_hdl.close()

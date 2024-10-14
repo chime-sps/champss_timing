@@ -230,6 +230,33 @@ class database:
         if commit:
             self.conn.commit()
 
+    def update_archive_info(self, filename=None, psr_amps=None, psr_snr=None, notes=None, commit=True):
+        if filename is None:
+            raise Exception("Filename must be provided")
+            
+        if psr_amps is None and psr_snr is None and notes is None:
+            raise Exception("At least one of psr_amps, psr_snr, or notes must be provided")
+        
+        sql = "UPDATE archive_info SET "
+        sql_values = []
+        if psr_amps is not None:
+            sql += "psr_amps = ?, "
+            sql_values.append(json.dumps(psr_amps))
+        if psr_snr is not None:
+            sql += "psr_snr = ?, "
+            sql_values.append(psr_snr)
+        if notes is not None:
+            sql += "notes = ?, "
+            sql_values.append(json.dumps(notes))
+
+        sql = sql[:-2] + " WHERE filename = ?"
+        sql_values.append(filename)
+
+        self.cur.execute(sql, sql_values)
+
+        if commit:
+            self.conn.commit()
+
     def get_all_archive_info(self):
         self.cur.execute("SELECT * FROM archive_info ORDER BY timestamp")
         archive_info_raw = self.cur.fetchall()

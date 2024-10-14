@@ -119,22 +119,3 @@ class psrchive_handler():
         
         return True
         
-
-    def update_model(self, fs, parfile, ext=".clfd.FTp"):
-        # pam -e .pam -E pulsar.par xxx.ar.clfd.FTp
-        output_files = []
-        exec_hlr = self.exec_handler(n_pools=self.n_pools, log=self._get_log_path(fs) + "/pam_update.log")
-        for f in fs:
-            output_files.append(f"{f}{ext}.pam")
-            exec_hlr.append(f"pam -e .FTp.pam -E {parfile} {f}{ext}")
-        exec_hlr.run()
-
-        # Check output files exist
-        if not self.file_check(output_files):
-            raise Exception("Failed to update model")
-        
-        # if(not exec_hlr.check()):
-        #     raise Exception("Failed to update model")
-
-        return True
-        
