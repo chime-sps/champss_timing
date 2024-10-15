@@ -1,6 +1,7 @@
 import os
 import json
 import shutil
+import traceback
 import astropy.units as u
 
 from .utils import utils
@@ -8,6 +9,7 @@ from .timing import timing
 from .database import database
 from .archive_utils import archive_utils
 from .archive_cache import archive_cache
+from .plot import plot
 
 class champss_timing:
     def __init__(self, psr_dir, data_archives, n_pools=4, workspace_cleanup=True):
@@ -33,6 +35,7 @@ class champss_timing:
         self.path_pulse_template = f"{self.path_psr_dir}/paas.std"
         self.path_timing_model = f"{self.path_psr_dir}/pulsar.par"
         self.path_timing_config = f"{self.path_psr_dir}/champss_timing.config"
+        self.path_diagnostic_plot = f"{self.path_psr_dir}/champss_diagnostic.pdf"
         self.info_ars_mjds = []
         self.info_ars_paths = []
         self.info_first_mjd = 0
@@ -87,6 +90,16 @@ class champss_timing:
     def run(self):
         while True:
             if(self.timing()["status"] != "success"):
+                # update model for cached archives
+                print(f" Updating model for all cached archives")
+                self.archive_cache.update_model()
+
+                # Create diagnostic plot
+                utils.print_info(f"Creating diagnostic plot")
+                plot(db_hdl=self.db_hdl).plot(savefig=self.path_diagnostic_plot)
+
+                # End of the script
+                utils.print_success("Script finished. ")
                 break
     
     def timing(self):
@@ -176,8 +189,8 @@ class champss_timing:
                             self.db_insert_invalid_toa(f)
                     
                     ## Update timing model for archives (for pulse alignment purpose in archive info)
-                    print(f" > Updating timing model for archives")
-                    tim.update_model()
+                    # print(f" > Updating timing model for archives")
+                    # tim.update_model()
 
                     ## Save cache archive and information to database
                     print(f" > Saving and caching archive information")
@@ -201,15 +214,11 @@ class champss_timing:
                 # Insert timing info
                 print(f" Saving timing info to database")
                 self.db_insert_timing_info(archives, mjds, fit_params, tim.pint.f, tim.pint.t)
-
-                # update model for archives
-                print(f" Updating model for all cached archives")
-                self.archive_cache.update_model()
                 
             utils.print_success("======== Timing completed ========")
         except Exception as e:
-            print(" Timing failed")
-            print(f" Error: {e}")
+            utils.print_error(f" Timing failed -> {e}")
+            utils.print_error(traceback.format_exc())
             return {"status": "error"}
 
         # Backup old timing model
@@ -227,6 +236,7 @@ class champss_timing:
         # Get timing info
         fitted_params = pint_f.get_params_dict("all", "quantity")
         residuals = pint_f.resids.time_resids.to(u.us).value
+        residuals_err = pint_t.get_errors().to(u.us).value
         residual_mjds = pint_t.get_mjds().value
         
         # Prepare timing info for JSON dump
@@ -237,19 +247,20 @@ class champss_timing:
             except:
                 fitted_params_dict[key] = str(fitted_params[key].value)
         residuals_list = [float(this_resid) for this_resid in residuals]
+        residuals_err_list = [float(this_resid_err) for this_resid_err in residuals_err]
         residual_mjds_list = [float(this_mjd) for this_mjd in residual_mjds]
 
         # Get archive ids
         archive_ids = []
         for f in fs:
-            archive_ids.append(self.utils.get_archive_id(f))
+            archive_ids.append(utils.get_archive_id(f))
         
         # Insert timing info
         self.db_hdl.insert_timing_info(
             files = archive_ids,
             obs_mjds = mjds,
             unfreeze_params = fit_params,
-            residuals = residuals_list,
+            residuals = {"val": residuals_list, "err": residuals_err_list},
             chi2 = fitted_params["CHI2"].value,
             chi2_reduced = fitted_params["CHI2R"].value,
             fitted_params = fitted_params_dict,
@@ -279,7 +290,7 @@ class champss_timing:
             print(f"  [TOA] filename={splitted[0].split('/')[-1]}, freq={splitted[1]}, toa={splitted[2]}, toa_err={splitted[3]}, telescope={splitted[4]}")
 
             self.db_hdl.insert_toa(
-                filename = self.utils.get_archive_id(splitted[0]), # set only the filename as the index, otherwise the ws id will be different...
+                filename = utils.get_archive_id(splitted[0]), # set only the filename as the index, otherwise the ws id will be different...
                 freq = splitted[1], 
                 toa = splitted[2], 
                 toa_err = splitted[3], 
@@ -297,7 +308,7 @@ class champss_timing:
 
     #     print(f"  [Archive] {archive} -> database")
     #     self.db_hdl.insert_archive_info(
-    #         filename = self.utils.get_archive_id(archive), 
+    #         filename = utils.get_archive_id(archive), 
     #         psr_amps = archive_hdl.get_amps(), 
     #         psr_snr = archive_hdl.get_snr(), 
     #         notes = {}
@@ -306,7 +317,7 @@ class champss_timing:
         
     def db_insert_invalid_toa(self, archive):
         self.db_hdl.insert_toa(
-            filename = self.utils.get_archive_id(archive), # set only the filename as the index, otherwise the ws id will be different...
+            filename = utils.get_archive_id(archive), # set only the filename as the index, otherwise the ws id will be different...
             freq = 0, 
             toa = 0, 
             toa_err = 0, 
@@ -316,7 +327,7 @@ class champss_timing:
         )
     
     def db_check_valid_toa(self, archive):
-        toa = self.db_hdl.get_toa_by_filename(self.utils.get_archive_id(archive))
+        toa = self.db_hdl.get_toa_by_filename(utils.get_archive_id(archive))
 
         if "remark" in toa["notes"]:
             if toa["notes"]["remark"] == "INVALID_TOA":
@@ -328,7 +339,7 @@ class champss_timing:
         timfile = ""
 
         for this_file in archives:
-            this_toa = self.db_hdl.get_toa_by_filename(self.utils.get_archive_id(this_file))
+            this_toa = self.db_hdl.get_toa_by_filename(utils.get_archive_id(this_file))
 
             if(not self.db_check_valid_toa(this_file)):
                 utils.print_warning(f"INVALID_TOA remark was found for {this_file}. Skipped while creating timfile...")
@@ -345,7 +356,7 @@ class champss_timing:
         untimed_archives = []
 
         for this_file in archives:
-            if not self.db_hdl.check_toa_exists(self.utils.get_archive_id(this_file)):
+            if not self.db_hdl.check_toa_exists(utils.get_archive_id(this_file)):
                 untimed_archives.append(this_file)
 
         return untimed_archives

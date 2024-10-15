@@ -204,7 +204,7 @@ class database:
 
     def format_timing_info(self, timing_info):
         if timing_info is None:
-            timing_info = [0, "[]", "[]", "[]", "[]", 0, 0, "[]", "{}"]
+            timing_info = [0, "[]", "[]", "[]", "{}", 0, 0, "[]", "{}"]
         
         return {
             "timestamp": timing_info[0],
@@ -248,6 +248,9 @@ class database:
         if notes is not None:
             sql += "notes = ?, "
             sql_values.append(json.dumps(notes))
+
+        sql += "timestamp = ?, "
+        sql_values.append(time.time())
 
         sql = sql[:-2] + " WHERE filename = ?"
         sql_values.append(filename)

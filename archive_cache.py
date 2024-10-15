@@ -12,8 +12,7 @@ class archive_cache:
         self.db_path = db_path
         self.psr_dir = psr_dir
         self.cache_dir = f"{psr_dir}/__champss_archive_cache__"
-        
-        self.initialize()
+        self.utils = utils
 
     def initialize(self):
         # check database connection
@@ -33,7 +32,7 @@ class archive_cache:
         archive_info = self.db_hdl.get_all_archive_info()
         for ar in archive_info:
             if not os.path.exists(f"{self.cache_dir}/{ar['filename']}"):
-                utils.print_warning(f"Archive {ar['filename']} not found in cache. Please resolve this issue manually. Maybe the cache was deleted and needs to be created manually.")
+                self.utils.print_warning(f"Archive {ar['filename']} not found in cache. Please resolve this issue manually. Maybe the cache was deleted and needs to be created manually.")
         
     def add_archive(self, filename):
         if not os.path.exists(filename):
@@ -58,22 +57,29 @@ class archive_cache:
             if os.path.exists(f"{this_path}"):
                 archives.append(this_path)
             else:
-                utils.print_warning(f"Archive {ar['filename']} not found in cache. Skipping.")
+                self.utils.print_warning(f"Archive {ar['filename']} not found in cache. Skipping.")
+
+        # Remove TZRSITE to fix a problem with psrchive for CHIME observations
+        open(f"{self.cache_dir}/pulsar.par.tmp", "w").write(
+            open(parfile).read().replace("TZRSITE", "# TZRSITE")
+        )
 
         # update model for each archive
-        self.exec_update_model(archives, parfile)
+        self.exec_update_model(archives, f"{self.cache_dir}/pulsar.par.tmp")
+        utils.print_success(f"  [update_model] timing model updated for {len(archives)} observations. ")
 
         # update psr_amps in database
         for ar in archives:
-            self.db_update_psr_amps(f"{self.cache_dir}/{ar['filename']}")
+            self.db_update_psr_amps(ar)
+        utils.print_success(f"  [update_model] archive information in database updated for {len(archives)} observations. ")
 
         return True
     
     def exec_update_model(self, fs, parfile, n_pools=4):
         # pam -e .pam -E pulsar.par xxx.ar.clfd.FTp
-        exec_hlr = exec.exec_handler(n_pools=n_pools, log=self.cache_dir + "/pam_update.log")
+        exec_hlr = exec(n_pools=n_pools)
         for f in fs:
-            exec_hlr.append(f"pam -e .FTp.pam -E {parfile} {f}")
+            exec_hlr.append(f"pam -m -E {parfile} {f}") # -m: modify the original file
         exec_hlr.run()
         
         if(not exec_hlr.check()):
@@ -96,7 +102,8 @@ class archive_cache:
 
         self.db_hdl.update_archive_info(
             filename = self.utils.get_archive_id(filename),
-            psr_amps = archive_hdl.get_amps()
+            psr_amps = archive_hdl.get_amps(),
+            psr_snr = archive_hdl.get_snr(), 
         )
         
     def cleanup(self):

@@ -21,5 +21,5 @@ class utils:
     def get_rand_string():
         return md5(str(random.random()).encode()).hexdigest()[0:6]
     
-    def get_archive_id(self, archive):
+    def get_archive_id(archive):
         return archive.split("/")[-1].split(".")[0]

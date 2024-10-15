@@ -127,18 +127,18 @@ class timing():
 
         self.logger("Done. ")
 
-    def update_model(self): # optional. 
-        if not self.initialized:
-            raise Exception("Workspace not initialized")
+    # def update_model(self): # optional. 
+    #     if not self.initialized:
+    #         raise Exception("Workspace not initialized")
         
-        # Remove TZRSITE to fix a problem with psrchive for CHIME observations
-        open(f"{self.workspace}/pulsar.par.pam", "w").write(
-            open(f"{self.workspace}/pulsar.par").read().replace("TZRSITE", "# TZRSITE")
-        )
+    #     # Remove TZRSITE to fix a problem with psrchive for CHIME observations
+    #     open(f"{self.workspace}/pulsar.par.pam", "w").write(
+    #         open(f"{self.workspace}/pulsar.par").read().replace("TZRSITE", "# TZRSITE")
+    #     )
         
-        self.logger("Updating timing model for scrunched archives... ")
-        self.psrchive.update_model(self.fs, f"{self.workspace}/pulsar.par.pam")
-        self.logger("Updating timing model for scrunched archives... Done. ")
+    #     self.logger("Updating timing model for scrunched archives... ")
+    #     self.psrchive.update_model(self.fs, f"{self.workspace}/pulsar.par.pam")
+    #     self.logger("Updating timing model for scrunched archives... Done. ")
 
     def __enter__(self):
         self.initialize()
