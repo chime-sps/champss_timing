@@ -1,5 +1,6 @@
 import os
 import shutil
+import hashlib
 
 from .exec import exec
 from .utils import utils
@@ -45,6 +46,30 @@ class archive_cache:
         # insert archive info to database
         print(f"  [Archive] {filename} -> database")
         self.db_insert_archive_info(filename)
+
+    def get_md5(self, filename):
+        md5 = hashlib.md5()
+
+        with open(filename, "rb") as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                md5.update(chunk)
+
+        return md5.hexdigest()
+
+    def archive_exists(self, filename):
+        return os.path.exists(f"{self.cache_dir}/{self.utils.get_archive_id(filename)}")
+    
+    def archives_exists(self, filenames):
+        for f in filenames:
+            if not self.archive_exists(f):
+                return False
+        return True
+    
+    def get_archive(self, filename, dest):
+        if not self.archive_exists(filename):
+            raise Exception(f"Archive {filename} not found in cache.")
+        
+        shutil.copyfile(f"{self.cache_dir}/{self.utils.get_archive_id(filename)}", dest)
 
     def update_model(self, parfile="auto"):
         if parfile == "auto":
@@ -94,7 +119,9 @@ class archive_cache:
             filename = self.utils.get_archive_id(filename), 
             psr_amps = archive_hdl.get_amps(), 
             psr_snr = archive_hdl.get_snr(), 
-            notes = {}
+            notes = {
+                "md5": self.get_md5(filename)
+            }
         )
     
     def db_update_psr_amps(self, filename):

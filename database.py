@@ -26,7 +26,7 @@ class database:
     filename unique
     """
     def __init__(self, psr_db, readonly=False):
-        self.version = "1.0"
+        self.version = "1.1"
         self.psr_db = psr_db
         self.readonly = readonly
         
@@ -282,13 +282,18 @@ class database:
         if archive_info is None:
             archive_info = [0, "", "[]", 0, "{}"]
         
-        return {
+        formatted_info = {
             "timestamp": archive_info[0],
             "filename": archive_info[1],
             "psr_amps": json.loads(archive_info[2]),
             "psr_snr": archive_info[3],
             "notes": json.loads(archive_info[4])
         }
+
+        if self.get_version() < 1.1:
+            formatted_info["notes"]["md5"] = "" # md5 information should be present in the notes
+
+        return formatted_info
 
     def get_all_info(self):
         timing_info = self.get_all_timing_info()
@@ -302,6 +307,10 @@ class database:
             timing_info[i]["files"] = this_files
 
         return timing_info
+    
+    def get_version(self):
+        self.cur.execute("SELECT version FROM info")
+        return float(self.cur.fetchone()[0])
     
     def commit(self):
         self.conn.commit()

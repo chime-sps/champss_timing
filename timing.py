@@ -98,7 +98,8 @@ class timing():
         self.logger("Scrunching...")
         self.psrchive.scrunch(self.fs)
         self.logger("Scrunching... Done. ")
-
+    
+    def get_toas(self):
         self.logger("Getting TOAs...")
         self.psrchive.get_toas(self.fs, template=f"{self.workspace}/paas.std", output=f"{self.workspace}/pulsar.tim")
         self.logger("Getting TOAs... Done. ")

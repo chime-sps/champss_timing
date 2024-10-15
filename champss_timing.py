@@ -177,9 +177,21 @@ class champss_timing:
                 
                 # Process archive as needed
                 if len(archives_untimed) > 0:
+                    ## Check if all archives are cached
+                    if not self.archive_cache.archives_exists(tim.fs):
+                        ### Process archives
+                        print(f" > Preparing data")
+                        tim.prepare()
+                    else:
+                        ### Copy from cache
+                        print(f" > All archives are cached. Copying from cache... ")
+                        for f in tim.fs:
+                            self.archive_cache.get_archive(f, f"{f}.clfd.FTp")
+                            print(f"  [Archive] {f} -> {f}.clfd.FTp copied from cache. ")
+
                     ## Getting TOAs
-                    print(f" > Preparing data")
-                    tim.prepare()
+                    print(f" > Getting TOAs")
+                    tim.get_toas()
 
                     ## Save TOAs to timing database
                     print(f" > Saving TOAs")
@@ -187,10 +199,6 @@ class champss_timing:
                         if(self.db_insert_timfile(f"{f}.clfd.FTp.tim") == 0):
                             utils.print_warning(f"No TOA created from {f}. Placeholder with INVALID_TOA remark has created. ")
                             self.db_insert_invalid_toa(f)
-                    
-                    ## Update timing model for archives (for pulse alignment purpose in archive info)
-                    # print(f" > Updating timing model for archives")
-                    # tim.update_model()
 
                     ## Save cache archive and information to database
                     print(f" > Saving and caching archive information")
