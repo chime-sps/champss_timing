@@ -44,7 +44,8 @@ class plot:
             "amps": [], 
             "amps_normalized": [], 
             "stacked_amps": [], 
-            "fitted_params": {}
+            "fitted_params": {}, 
+            "mjd_gaps": []
         }
 
         last_mjd = 0
@@ -55,6 +56,17 @@ class plot:
                 plot_data["chi2r"].append(this_timing["chi2_reduced"])
                 plot_data["n_params"].append(len(this_timing["unfreeze_params"]))
                 plot_data["snr"].append(self.archive_info_file_inxed[this_timing["files"][i]]["psr_snr"])
+
+                # Find mjd gaps and add blanks to amplitude for no observation days
+                if len(plot_data["mjds"]) > 1:
+                    d_mjd = plot_data["mjds"][-1] - plot_data["mjds"][-2]
+                    if d_mjd > 1:
+                        for _ in range(int(d_mjd - 1)):
+                            plot_data["amps"].append(np.zeros_like(plot_data["amps"][-1]))
+                            plot_data["amps_normalized"].append(np.zeros_like(plot_data["amps_normalized"][-1]))
+                        plot_data["mjd_gaps"].append([plot_data["mjds"][-2] + 0.75, plot_data["mjds"][-1] - 0.75])
+
+                # Get Amplitude
                 plot_data["amps"].append(self.archive_info_file_inxed[this_timing["files"][i]]["psr_amps"])
                 
                 # Normalize amplitude
@@ -113,11 +125,16 @@ class plot:
         ## combine the 3 grids
         amps_gs = axs[1, 0].get_gridspec()
         axs_amps = fig.add_subplot(amps_gs[1:, 0])
-        axs_amps.imshow(np.tile(plot_data["amps_normalized"], (1, 2)), cmap="gray_r", aspect="auto")
+        axs_amps.matshow(np.tile(plot_data["amps_normalized"], (1, 2)), cmap="gray_r", aspect="auto")
         # axs_amps.set_title("Amplitudes")
         axs_amps.set_xlabel("Phase")
-        axs_amps.set_ylabel("Time (days)")
-        axs_amps.set_yticklabels(self._round_axis(axs_amps.get_yticks(), 1), rotation=90, fontdict={"verticalalignment": "center"})
+        axs_amps.set_ylabel("MJD")
+        # axs_amps.set_yticklabels(self._round_axis(axs_amps.get_yticks(), 1), rotation=90, fontdict={"verticalalignment": "center"})
+        y_ticks_loc = np.linspace(1, max(plot_data["mjds"]) - min(plot_data["mjds"]), 7)
+        y_ticks_lab = y_ticks_loc + min(plot_data["mjds"])
+        axs_amps.set_yticks(y_ticks_loc)
+        axs_amps.set_yticklabels(self._round_axis(y_ticks_lab, 1), rotation=90, fontdict={"verticalalignment": "center"})
+        axs_amps.set_title("Amplitudes of single observations")
 
         # plot residuals horizontally across 2 grids
         ## remove the underlying Axes
@@ -134,6 +151,9 @@ class plot:
         axs_resids.set_ylabel("Timing Residuals (phase)")
         axs_resids.set_yticklabels(self._round_axis(axs_resids.get_yticks(), 5), rotation=90, fontdict={"verticalalignment": "center"})
         axs_resids.set_title("Diagnostic Plots")
+        ## fill mjd gaps
+        for this_gap in plot_data["mjd_gaps"]:
+            axs_resids.fill_between(this_gap, axs_resids.get_ylim()[0], axs_resids.get_ylim()[1], color="gray", alpha=0.10)
 
         # plot chi2r horizontally across 2 grids
         ## remove the underlying Axes
@@ -144,12 +164,15 @@ class plot:
         chi2r_gs = axs[1, 1].get_gridspec()
         axs_chi2r = fig.add_subplot(chi2r_gs[1, 1:4])
         axs_chi2r.axhline(y=1, color="k", linestyle="--", alpha=0.25)
-        axs_chi2r.plot(plot_data["mjds"], plot_data["chi2r"], "k-o")
+        axs_chi2r.plot(plot_data["mjds"], plot_data["chi2r"], "kx")
         axs_chi2r.set_yscale("log")
         # axs_chi2r.set_title("Reduced Chi2")
         axs_chi2r.set_xlabel("MJD")
         axs_chi2r.set_ylabel("Reduced Chi2")
         axs_chi2r.set_yticklabels(self._round_axis(axs_chi2r.get_yticks(), 2), rotation=90, fontdict={"verticalalignment": "center"})
+        ## fill mjd gaps
+        for this_gap in plot_data["mjd_gaps"]:
+            axs_chi2r.fill_between(this_gap, axs_chi2r.get_ylim()[0], axs_chi2r.get_ylim()[1], color="gray", alpha=0.10)
 
         # plot n_params horizontally across 2 grids
         ## remove the underlying Axes
@@ -159,11 +182,14 @@ class plot:
         ## combine the 2 grids
         n_params_gs = axs[2, 1].get_gridspec()
         axs_n_params = fig.add_subplot(n_params_gs[2, 1:4])
-        axs_n_params.plot(plot_data["mjds"], plot_data["n_params"], "k-o")
+        axs_n_params.plot(plot_data["mjds"], plot_data["n_params"], "kx")
         # axs_n_params.set_title("N Params")
         axs_n_params.set_xlabel("MJD")
         axs_n_params.set_ylabel("Number of Parameters Fitted")
         axs_n_params.set_yticklabels(self._round_axis(axs_n_params.get_yticks(), 1), rotation=90, fontdict={"verticalalignment": "center"})
+        ## fill mjd gaps
+        for this_gap in plot_data["mjd_gaps"]:
+            axs_n_params.fill_between(this_gap, axs_n_params.get_ylim()[0], axs_n_params.get_ylim()[1], color="gray", alpha=0.10)
         
         # plot snr horizontally across 2 grids
         ## remove the underlying Axes
@@ -173,11 +199,14 @@ class plot:
         ## combine the 2 grids
         snr_gs = axs[3, 1].get_gridspec()
         axs_snr = fig.add_subplot(snr_gs[3, 1:4])
-        axs_snr.plot(plot_data["mjds"], plot_data["snr"], "k-o")
+        axs_snr.plot(plot_data["mjds"], plot_data["snr"], "kx")
         # axs_snr.set_title("SNR")
         axs_snr.set_xlabel("MJD")
         axs_snr.set_ylabel("Signal to Noise Ratio")
         axs_snr.set_yticklabels(self._round_axis(axs_snr.get_yticks(), 2), rotation=90, fontdict={"verticalalignment": "center"})
+        ## fill mjd gaps
+        for this_gap in plot_data["mjd_gaps"]:
+            axs_snr.fill_between(this_gap, axs_snr.get_ylim()[0], axs_snr.get_ylim()[1], color="gray", alpha=0.10)
 
         # Plot fitted_params as table
         table_data = []
