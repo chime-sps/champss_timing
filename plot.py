@@ -152,8 +152,10 @@ class plot:
         axs_resids.set_yticklabels(self._round_axis(axs_resids.get_yticks(), 5), rotation=90, fontdict={"verticalalignment": "center"})
         axs_resids.set_title("Diagnostic Plots")
         ## fill mjd gaps
+        lim_0, lim_1 = axs_resids.get_ylim()
+        axs_resids.set_ylim(lim_0, lim_1)
         for this_gap in plot_data["mjd_gaps"]:
-            axs_resids.fill_between(this_gap, axs_resids.get_ylim()[0], axs_resids.get_ylim()[1], color="gray", alpha=0.10)
+            axs_resids.fill_between(this_gap, lim_0, lim_1, color="gray", alpha=0.10)
 
         # plot chi2r horizontally across 2 grids
         ## remove the underlying Axes
@@ -171,8 +173,10 @@ class plot:
         axs_chi2r.set_ylabel("Reduced Chi2")
         axs_chi2r.set_yticklabels(self._round_axis(axs_chi2r.get_yticks(), 2), rotation=90, fontdict={"verticalalignment": "center"})
         ## fill mjd gaps
+        lim_0, lim_1 = axs_chi2r.get_ylim()
+        axs_chi2r.set_ylim(lim_0, lim_1)
         for this_gap in plot_data["mjd_gaps"]:
-            axs_chi2r.fill_between(this_gap, axs_chi2r.get_ylim()[0], axs_chi2r.get_ylim()[1], color="gray", alpha=0.10)
+            axs_chi2r.fill_between(this_gap, lim_0, lim_1, color="gray", alpha=0.10)
 
         # plot n_params horizontally across 2 grids
         ## remove the underlying Axes
@@ -188,8 +192,10 @@ class plot:
         axs_n_params.set_ylabel("Number of Parameters Fitted")
         axs_n_params.set_yticklabels(self._round_axis(axs_n_params.get_yticks(), 1), rotation=90, fontdict={"verticalalignment": "center"})
         ## fill mjd gaps
+        lim_0, lim_1 = axs_n_params.get_ylim()
+        axs_n_params.set_ylim(lim_0, lim_1)
         for this_gap in plot_data["mjd_gaps"]:
-            axs_n_params.fill_between(this_gap, axs_n_params.get_ylim()[0], axs_n_params.get_ylim()[1], color="gray", alpha=0.10)
+            axs_n_params.fill_between(this_gap, lim_0, lim_1, color="gray", alpha=0.10)
         
         # plot snr horizontally across 2 grids
         ## remove the underlying Axes
@@ -205,8 +211,10 @@ class plot:
         axs_snr.set_ylabel("Signal to Noise Ratio")
         axs_snr.set_yticklabels(self._round_axis(axs_snr.get_yticks(), 2), rotation=90, fontdict={"verticalalignment": "center"})
         ## fill mjd gaps
+        lim_0, lim_1 = axs_snr.get_ylim()
+        axs_snr.set_ylim(lim_0, lim_1)
         for this_gap in plot_data["mjd_gaps"]:
-            axs_snr.fill_between(this_gap, axs_snr.get_ylim()[0], axs_snr.get_ylim()[1], color="gray", alpha=0.10)
+            axs_snr.fill_between(this_gap, lim_0, lim_1, color="gray", alpha=0.10)
 
         # Plot fitted_params as table
         table_data = []

@@ -10,6 +10,8 @@ from .database import database
 from .archive_utils import archive_utils
 from .archive_cache import archive_cache
 from .plot import plot
+from .notification import notification
+from .champss_checker import champss_checker
 
 class champss_timing:
     def __init__(self, psr_dir, data_archives, n_pools=4, workspace_cleanup=True):
@@ -30,6 +32,7 @@ class champss_timing:
 
         # Parameters
         self.path_psr_dir = psr_dir
+        self.psr_id = None
         self.path_data_archives = data_archives
         self.path_db = f"{self.path_psr_dir}/champss_timing.sqlite3.db"
         self.path_pulse_template = f"{self.path_psr_dir}/paas.std"
@@ -43,9 +46,14 @@ class champss_timing:
         self.n_pools = n_pools
         self.workspace_cleanup = workspace_cleanup
 
+        # Format psr_dir
+        if self.path_psr_dir.endswith("/"):
+            self.path_psr_dir = self.path_psr_dir[0:-1]
+
         # Objects
         self.db_hdl = database(self.path_db)
         self.archive_cache = archive_cache(self.path_psr_dir, db_hdl=self.db_hdl)
+        self.noti_hdl = notification()
 
         # Timing config
         self.timing_config = {}
@@ -87,9 +95,18 @@ class champss_timing:
         # Load config
         self.timing_config = json.load(open(self.path_timing_config, "r")) 
 
+        # Get psr id
+        self.psr_id = self.path_psr_dir.split("/")[-1]
+
     def run(self):
+        n_timed = 0
         while True:
             if(self.timing()["status"] != "success"):
+                if n_timed == 1:
+                # if n_timed == 0:
+                    print(f" No additional file for timing. ")
+                    break
+
                 # update model for cached archives
                 print(f" Updating model for all cached archives")
                 self.archive_cache.update_model()
@@ -98,9 +115,17 @@ class champss_timing:
                 utils.print_info(f"Creating diagnostic plot")
                 plot(db_hdl=self.db_hdl).plot(savefig=self.path_diagnostic_plot)
 
+                # Run checker
+                champss_checker(self.path_psr_dir, self.db_hdl, self.psr_id).check()
+
                 # End of the script
                 utils.print_success("Script finished. ")
+                self.noti_hdl.send_message(f"Timing finished for {n_timed} days of data. ", psr_id=self.psr_id)
+
                 break
+            n_timed += 1
+
+        return {"n_timed": n_timed}
     
     def timing(self):
         print("Starting timing... ")
@@ -225,8 +250,10 @@ class champss_timing:
                 
             utils.print_success("======== Timing completed ========")
         except Exception as e:
-            utils.print_error(f" Timing failed -> {e}")
+            utils.print_error(f"Timing failed for {self.path_psr_dir}. Please refer to the traceback below. ")
             utils.print_error(traceback.format_exc())
+            self.noti_hdl.send_urgent_message(f"Timing failed for {self.path_psr_dir}. Please refer to the traceback in the following message. ", psr_id=self.psr_id)
+            self.noti_hdl.send_message(traceback.format_exc(), psr_id=self.psr_id)
             return {"status": "error"}
 
         # Backup old timing model
@@ -382,6 +409,7 @@ class champss_timing:
     
     def __exit__(self, exc_type, exc_value, traceback):
         if exc_type is not None:
-            utils.print_error("champss_timing failed with error. ")
+            utils.print_error(f"A fetal error occurred while timing for {self.path_psr_dir}. Script exited.")
+            # self.noti_hdl.send_urgent_message(f"A fetal error occurred while timing for {self.path_psr_dir}. Script exited.")
             raise exc_type(exc_value).with_traceback(traceback)
         self.cleanup()

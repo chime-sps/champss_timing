@@ -127,10 +127,15 @@ class archive_cache:
     def db_update_psr_amps(self, filename):
         archive_hdl = archive_utils(filename)
 
+        last_archive_info = self.db_hdl.get_archive_info_by_filename(self.utils.get_archive_id(filename))
+        notes = last_archive_info["notes"]
+        notes["md5"] = self.get_md5(filename)
+
         self.db_hdl.update_archive_info(
             filename = self.utils.get_archive_id(filename),
             psr_amps = archive_hdl.get_amps(),
             psr_snr = archive_hdl.get_snr(), 
+            notes = notes
         )
         
     def cleanup(self):

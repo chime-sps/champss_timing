@@ -33,7 +33,7 @@ class pint_handler():
         self.initialized = True
 
     def mad_filter(self):
-        resids = Residuals(self.t, self.m).phase_resids
+        resids = np.abs(np.array(Residuals(self.t, self.m).phase_resids))
         mad = median_abs_deviation(resids)
         self.t = self.t[((resids - np.median(resids)) / mad) < 7]
 
