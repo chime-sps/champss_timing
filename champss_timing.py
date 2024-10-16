@@ -271,6 +271,7 @@ class champss_timing:
         # Get PINT objects
         pint_f = pint.f
         pint_t = pint.t
+        pint_bad_resids = pint.self.bad_resids
         pint_bad_toas = pint.bad_toas
 
         # Get timing info
@@ -278,7 +279,7 @@ class champss_timing:
         residuals = pint_f.resids.time_resids.to(u.us).value
         residuals_err = pint_t.get_errors().to(u.us).value
         residual_mjds = pint_t.get_mjds().value
-        bad_residuals = pint_bad_toas.resids.time_resids.to(u.us).value
+        bad_residuals = pint_bad_resids.to(u.us).value
         bad_residuals_err = pint_bad_toas.get_errors().to(u.us).value
         bad_residual_mjds = pint_bad_toas.get_mjds().value
         

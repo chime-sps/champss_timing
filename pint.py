@@ -25,21 +25,32 @@ class pint_handler():
         self.logger = self_super.logger
         self.m, self.t = False, False
         self.f = False
+        self.prefit_resids = False
         self.bad_toas = []
+        self.bad_resids = []
 
         self.initialized = False
         if initialize:
             self.initialize()
 
     def initialize(self):
+        # Initialize model and toas
         self.m, self.t = get_model_and_toas(self.model, self.toas)
+
+        # Run prefit
+        self.prefit_resids = Residuals(self.t, self.m)
+
+        # Filter
         # self.mad_filter()
+        self.error_filter()
         self.dropout_chi2r_filter()
+
+        # Set initialized
         self.initialized = True
 
     def mad_filter(self, threshold=7):
         # get mad
-        resids = np.abs(np.array(Residuals(self.t, self.m).phase_resids))
+        resids = np.abs(np.array(self.prefit_resids))
         mad = median_abs_deviation(resids)
 
         # filter
@@ -48,9 +59,27 @@ class pint_handler():
 
         # get toas and mjds
         self.bad_toas = self.t[toas_bad]
+        self.bad_resids = resids[toas_bad]
         self.t = self.t[toas_good]
 
         return self.t
+
+    def error_filter(self, threshold=0.5):
+        # get error_ok
+        threshold_phase = threshold * (1 / self.m.F0.value) * u.s
+        error_ok = self.t.get_errors() < threshold_phase.to(u.us)
+
+        # filter
+        toas_bad = np.where(error_ok == False)[0]
+        toas_good = np.where(error_ok == True)[0]
+
+        # get toas and mjds
+        self.bad_toas = self.t[toas_bad]
+        self.bad_resids = self.prefit_resids.time_resids[toas_bad]
+        self.t = self.t[toas_good]
+
+        return self.t
+
     
     def dropout_chi2r_filter(self, threshold=0.7):
         utils.print_info("Running dropout_chi2r_filter, the following PINT output is coming from dropout trials. ")
@@ -75,16 +104,21 @@ class pint_handler():
                 self.logger(f"Dropout trial failed for TOA {i}. ", e)
                 dropout_chi2rs.append(np.inf)
 
+        # fit model without dropout
+        self_tmp = copy.deepcopy(self)
+        self_tmp.fit()
+
         # calculate threshold
         dropout_chi2rs = np.array(dropout_chi2rs)
-        median_chi2r = np.median(dropout_chi2rs)
+        ref_chi2r = self.f.get_params_dict("all", "quantity")["CHI2R"].value
 
         # filter
-        toas_bad = np.where(dropout_chi2rs < threshold * median_chi2r)[0]
-        toas_good = np.where(dropout_chi2rs >= threshold * median_chi2r)[0]
+        toas_bad = np.where(dropout_chi2rs < threshold * ref_chi2r)[0]
+        toas_good = np.where(dropout_chi2rs >= threshold * ref_chi2r)[0]
         
-        # get toas and mjds
+        # get toas resid, err, and mjds
         self.bad_toas = self.t[toas_bad]
+        self.bad_resids = Residuals(self.t, self.m).time_resids[toas_bad]
         self.t = self.t[toas_good]
 
         return self.t
