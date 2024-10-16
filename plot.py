@@ -11,6 +11,7 @@ class plot:
     def __init__(self, db_path=None, db_hdl=None):
         self.db_path = db_path
         self.db_hdl = db_hdl
+        self.db_loaded = False
         self.timing_info = []
         self.archive_info = []
         self.archive_info_file_inxed = {}
@@ -21,9 +22,13 @@ class plot:
         if self.db_hdl is None:
             self.db_hdl = database(self.db_path, readonly=True)
             self.db_hdl.initialize()
+            self.db_loaded = True
         
         self.timing_info = self.db_hdl.get_all_timing_info()
         self.archive_info = self.db_hdl.get_all_archive_info()
+
+        if self.db_loaded:
+            self.db_hdl.close()
 
         # toas_file_idxed = {}
         # for this_toa in toas:
@@ -152,9 +157,10 @@ class plot:
         axs_amps.set_yticklabels(self._round_axis(y_ticks_lab, 1), rotation=90, fontdict={"verticalalignment": "center"})
         axs_amps.set_title("Amplitudes of single observations")
         ## set right axis to mark bad toa mjds
-        ax_right = axs_amps.twinx()
-        ax_right.set_yticks(plot_data["bad_toa_mjds"])
-        ax_right.set_yticklabels("[!]", fontdict={"verticalalignment": "center"}, color="r")
+        if len(plot_data["bad_toa_mjds"]) > 0:
+            ax_right = axs_amps.twinx()
+            ax_right.set_yticks(plot_data["bad_toa_mjds"])
+            ax_right.set_yticklabels("[!]", fontdict={"verticalalignment": "center"}, color="r")
 
         # plot residuals horizontally across 2 grids
         ## remove the underlying Axes
@@ -179,7 +185,7 @@ class plot:
         ## fill bad toa mjds
         for this_bad_toa_mjd in plot_data["bad_toa_mjds"]:
             axs_resids.axvline(x=this_bad_toa_mjd, color="r", linestyle="--", alpha=0.75, label="Bad TOA")
-        axs_resids.legend()
+        self.__legend_without_duplicate_labels(axs_resids)
 
         # plot chi2r horizontally across 2 grids
         ## remove the underlying Axes
@@ -190,7 +196,7 @@ class plot:
         chi2r_gs = axs[1, 1].get_gridspec()
         axs_chi2r = fig.add_subplot(chi2r_gs[1, 1:4])
         axs_chi2r.axhline(y=1, color="k", linestyle="--", alpha=0.25)
-        axs_chi2r.plot(plot_data["mjds"], plot_data["chi2r"], "kx")
+        axs_chi2r.plot(plot_data["mjds"], plot_data["chi2r"], "kx", label="CHI2R")
         axs_chi2r.set_yscale("log")
         # axs_chi2r.set_title("Reduced Chi2")
         axs_chi2r.set_xlabel("MJD")
@@ -201,6 +207,7 @@ class plot:
         axs_chi2r.set_ylim(lim_0, lim_1)
         for this_gap in plot_data["mjd_gaps"]:
             axs_chi2r.fill_between(this_gap, lim_0, lim_1, color="gray", alpha=0.10)
+        self.__legend_without_duplicate_labels(axs_chi2r)
 
         # plot n_params horizontally across 2 grids
         ## remove the underlying Axes
@@ -210,7 +217,7 @@ class plot:
         ## combine the 2 grids
         n_params_gs = axs[2, 1].get_gridspec()
         axs_n_params = fig.add_subplot(n_params_gs[2, 1:4])
-        axs_n_params.plot(plot_data["mjds"], plot_data["n_params"], "kx")
+        axs_n_params.plot(plot_data["mjds"], plot_data["n_params"], "kx", label="Nparams")
         # axs_n_params.set_title("N Params")
         axs_n_params.set_xlabel("MJD")
         axs_n_params.set_ylabel("Number of Parameters Fitted")
@@ -220,6 +227,7 @@ class plot:
         axs_n_params.set_ylim(lim_0, lim_1)
         for this_gap in plot_data["mjd_gaps"]:
             axs_n_params.fill_between(this_gap, lim_0, lim_1, color="gray", alpha=0.10)
+        self.__legend_without_duplicate_labels(axs_n_params)
         
         # plot snr horizontally across 2 grids
         ## remove the underlying Axes
@@ -229,7 +237,7 @@ class plot:
         ## combine the 2 grids
         snr_gs = axs[3, 1].get_gridspec()
         axs_snr = fig.add_subplot(snr_gs[3, 1:4])
-        axs_snr.plot(plot_data["mjds"], plot_data["snr"], "kx")
+        axs_snr.plot(plot_data["mjds"], plot_data["snr"], "kx", label="SNR")
         # axs_snr.set_title("SNR")
         axs_snr.set_xlabel("MJD")
         axs_snr.set_ylabel("Signal to Noise Ratio")
@@ -239,6 +247,7 @@ class plot:
         axs_snr.set_ylim(lim_0, lim_1)
         for this_gap in plot_data["mjd_gaps"]:
             axs_snr.fill_between(this_gap, lim_0, lim_1, color="gray", alpha=0.10)
+        self.__legend_without_duplicate_labels(axs_snr)
 
         # Plot fitted_params as table
         table_data = []
@@ -266,3 +275,9 @@ class plot:
             plt.savefig(savefig)   
         else:
             plt.show()
+
+    def __legend_without_duplicate_labels(self, figure):
+        # Ref: https://stackoverflow.com/questions/19385639/duplicate-items-in-legend-in-matplotlib
+        handles, labels = plt.gca().get_legend_handles_labels()
+        by_label = dict(zip(labels, handles))
+        figure.legend(by_label.values(), by_label.keys(), loc='lower right')

@@ -39,7 +39,7 @@ class database:
                 exit
 
             # copy the database to a temporary file
-            self.psr_db = f"{self.psr_db}.readonly.tmp.{utils.get_rand_string()}"
+            self.psr_db = f"{psr_db}.readonly{utils.get_rand_string()}.tmp"
             shutil.copyfile(psr_db, self.psr_db)
             print(f"Readonly temporary database created at {self.psr_db}")
 
@@ -346,7 +346,7 @@ class database:
         if self.readonly:
             # remove temporary database
             utils.print_info(f"Removing temporary database {self.psr_db}")
-            utils.remove_file(self.psr_db)
+            os.remove(self.psr_db)
 
     def __enter__(self):
         self.initialize()
