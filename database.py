@@ -235,6 +235,9 @@ class database:
         if "bad_toa_mjds" not in formatted_info["notes"]:
             formatted_info["notes"]["bad_toa_mjds"] = []
         
+        if "bad_toa_residuals" not in formatted_info["notes"]:
+            formatted_info["notes"]["bad_toa_residuals"] = {"val": [], "err": []}
+        
         if "fitted_parfile" not in formatted_info["notes"]:
             formatted_info["notes"]["fitted_parfile"] = "NO_PARFILE_PROVIDED"
 

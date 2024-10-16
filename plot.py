@@ -40,19 +40,34 @@ class plot:
 
     def get_plot_data(self):
         plot_data = {
+            # MJDs
             "mjds": [], 
             "bad_toa_mjds": [], 
+
+            # Fitted Residuals
             "resid_mjds": [], 
             "resids": [], 
             "resids_phase": [], 
             "resids_err": [], 
             "resids_err_phase": [], 
+
+            # Bad Residuals
+            "bad_resids": [], 
+            "bad_resids_phase": [], 
+            "bad_resids_err": [],
+            "bad_resids_err_phase": [],
+
+            # Diagnostic Data
             "chi2r": [], 
             "n_params": [], 
             "snr": [], 
+
+            # Amplitudes
             "amps": [], 
             "amps_normalized": [], 
             "stacked_amps": [], 
+
+            # Other
             "fitted_params": {}, 
             "mjd_gaps": []
         }
@@ -87,6 +102,8 @@ class plot:
         # get residuals
         plot_data["resids"] = self.timing_info[-1]["residuals"]["val"]
         plot_data["resids_err"] = self.timing_info[-1]["residuals"]["err"]
+        plot_data["bad_resids"] = self.timing_info[-1]["notes"]["bad_toa_residuals"]["val"]
+        plot_data["bad_resids_err"] = self.timing_info[-1]["notes"]["bad_toa_residuals"]["err"]
 
         # get bad toa mjds
         if "bad_toa_mjds" in self.timing_info[-1]["notes"]:
@@ -101,10 +118,12 @@ class plot:
             plot_data["resid_mjds"] = np.arange(len(plot_data["resids"]))
 
         # Get residuals in phase
-        plot_data["resids_phase"] = np.array(plot_data["resids"])
-        plot_data["resids_phase"] = plot_data["resids_phase"] / ((1/self.timing_info[-1]["fitted_params"]["F0"]) * u.s).to(u.us).value
-        plot_data["resids_err_phase"] = np.array(plot_data["resids_err"])
-        plot_data["resids_err_phase"] = plot_data["resids_err_phase"] / ((1/self.timing_info[-1]["fitted_params"]["F0"]) * u.s).to(u.us).value
+        this_F0 = ((1/self.timing_info[-1]["fitted_params"]["F0"]) * u.s).to(u.us).value
+        plot_data["resids_phase"] = plot_data["resids"] / this_F0
+        plot_data["resids_err_phase"] = plot_data["resids_err"] / this_F0
+        plot_data["bad_resids_phase"] = plot_data["bad_resids"] / this_F0
+        plot_data["bad_resids_err_phase"] = plot_data["bad_resids_err"] / this_F0
+
             
         # stack absolute amplitudes
         plot_data["stacked_amps"] = np.sum(plot_data["amps"], axis=0)
@@ -170,9 +189,11 @@ class plot:
         ## combine the 2 grids
         resids_gs = axs[0, 1].get_gridspec()
         axs_resids = fig.add_subplot(resids_gs[0, 1:4])
-        # axs_resids.plot(plot_data["mjds"], plot_data["resids_phase"], "kx")
-        axs_resids.errorbar(plot_data["resid_mjds"], plot_data["resids_phase"], plot_data["resids_err_phase"], fmt="x", c="k", capsize=3, label="Residuals")
-        # axs_resids.set_title("Residuals")
+        ## plot residuals
+        axs_resids.errorbar(plot_data["resid_mjds"], plot_data["resids_phase"], plot_data["resids_err_phase"], fmt="x", c="k", capsize=3, label="Fitted")
+        ## plot residuals for bad toas
+        if len(plot_data["bad_toa_mjds"]) > 0:
+            axs_resids.errorbar(plot_data["bad_toa_mjds"], plot_data["bad_resids_phase"], plot_data["bad_resids_err_phase"], fmt="x", c="r", capsize=3, label="Bad TOAs")
         axs_resids.set_xlabel("MJD")
         axs_resids.set_ylabel("Timing Residuals (phase)")
         axs_resids.set_yticklabels(self._round_axis(axs_resids.get_yticks(), 5), rotation=90, fontdict={"verticalalignment": "center"})
@@ -182,9 +203,6 @@ class plot:
         axs_resids.set_ylim(lim_0, lim_1)
         for this_gap in plot_data["mjd_gaps"]:
             axs_resids.fill_between(this_gap, lim_0, lim_1, color="gray", alpha=0.10, label="No Observation")
-        ## fill bad toa mjds
-        for this_bad_toa_mjd in plot_data["bad_toa_mjds"]:
-            axs_resids.axvline(x=this_bad_toa_mjd, color="r", linestyle="--", alpha=0.75, label="Bad TOA")
         self.__legend_without_duplicate_labels(axs_resids)
 
         # plot chi2r horizontally across 2 grids

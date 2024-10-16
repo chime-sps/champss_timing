@@ -278,6 +278,9 @@ class champss_timing:
         residuals = pint_f.resids.time_resids.to(u.us).value
         residuals_err = pint_t.get_errors().to(u.us).value
         residual_mjds = pint_t.get_mjds().value
+        bad_residuals = pint_bad_toas.resids.time_resids.to(u.us).value
+        bad_residuals_err = pint_bad_toas.get_errors().to(u.us).value
+        bad_residual_mjds = pint_bad_toas.get_mjds().value
         
         # Prepare timing info for JSON dump
         fitted_params_dict = {}
@@ -289,7 +292,9 @@ class champss_timing:
         residuals_list = [float(this_resid) for this_resid in residuals]
         residuals_err_list = [float(this_resid_err) for this_resid_err in residuals_err]
         residual_mjds_list = [float(this_mjd) for this_mjd in residual_mjds]
-        bad_toa_mjds = [float(this_mjd) for this_mjd in pint_bad_toas.get_mjds().value]
+        bad_residuals_list = [float(this_resid) for this_resid in bad_residuals]
+        bad_residuals_err_list = [float(this_resid_err) for this_resid_err in bad_residuals_err]
+        bad_toa_mjds_list = [float(this_mjd) for this_mjd in bad_residual_mjds]
 
         # Get archive ids
         archive_ids = []
@@ -309,7 +314,8 @@ class champss_timing:
                 "fitted_parfile": pint_f.model.as_parfile(), 
                 "fitted_summary": pint_f.get_summary(), 
                 "fitted_mjds": residual_mjds_list, 
-                "bad_toa_mjds": bad_toa_mjds
+                "bad_toa_mjds": bad_toa_mjds_list, 
+                "bad_toa_residuals": {"val": bad_residuals_list, "err": bad_residuals_err_list}
             }
         )
     
