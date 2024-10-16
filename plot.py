@@ -1,4 +1,6 @@
-from champss_timing import database
+from .database import database
+from .utils import utils
+
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.ndimage import gaussian_filter1d
@@ -17,7 +19,7 @@ class plot:
 
     def initialize(self):
         if self.db_hdl is None:
-            self.db_hdl = database.database(self.db_path, readonly=True)
+            self.db_hdl = database(self.db_path, readonly=True)
             self.db_hdl.initialize()
         
         self.timing_info = self.db_hdl.get_all_timing_info()
@@ -34,6 +36,8 @@ class plot:
     def get_plot_data(self):
         plot_data = {
             "mjds": [], 
+            "bad_toa_mjds": [], 
+            "resid_mjds": [], 
             "resids": [], 
             "resids_phase": [], 
             "resids_err": [], 
@@ -50,9 +54,9 @@ class plot:
 
         last_mjd = 0
         for this_timing in self.timing_info:
-            i_range = np.where(np.array(this_timing["notes"]["fitted_mjds"]) > last_mjd)[0]
+            i_range = np.where(np.array(this_timing["notes"]["obs_mjds"]) > last_mjd)[0]
             for i in i_range:
-                plot_data["mjds"].append(this_timing["notes"]["fitted_mjds"][i])
+                plot_data["mjds"].append(this_timing["notes"]["obs_mjds"][i])
                 plot_data["chi2r"].append(this_timing["chi2_reduced"])
                 plot_data["n_params"].append(len(this_timing["unfreeze_params"]))
                 plot_data["snr"].append(self.archive_info_file_inxed[this_timing["files"][i]]["psr_snr"])
@@ -73,11 +77,19 @@ class plot:
                 plot_data["amps_normalized"].append(plot_data["amps"][-1])
                 plot_data["amps_normalized"][-1] = np.array(plot_data["amps_normalized"][-1]) / max(plot_data["amps_normalized"][-1])
                 plot_data["amps_normalized"][-1] = plot_data["amps_normalized"][-1] - min(plot_data["amps_normalized"][-1])
-            last_mjd = max(this_timing["notes"]["fitted_mjds"])
+            last_mjd = max(this_timing["notes"]["obs_mjds"])
         
         # get residuals
         plot_data["resids"] = self.timing_info[-1]["residuals"]["val"]
         plot_data["resids_err"] = self.timing_info[-1]["residuals"]["err"]
+
+        # get residuals mjds
+        if "fitted_mjds" in self.timing_info[-1]["info"]:
+            plot_data["resid_mjds"] = self.timing_info[-1]["info"]["fitted_mjds"]
+        else:
+            utils.print_warning("No fitted mjds found in the timing info. Using the original mjds.")
+            utils.print_warning("Set the fitted mjds to a time series starting from 0 and incrementing by 1.")
+            plot_data["resid_mjds"] = np.arange(len(plot_data["resids"]))
 
         # Get residuals in phase
         plot_data["resids_phase"] = np.array(plot_data["resids"])
@@ -145,7 +157,7 @@ class plot:
         resids_gs = axs[0, 1].get_gridspec()
         axs_resids = fig.add_subplot(resids_gs[0, 1:4])
         # axs_resids.plot(plot_data["mjds"], plot_data["resids_phase"], "kx")
-        axs_resids.errorbar(plot_data["mjds"], plot_data["resids_phase"], plot_data["resids_err_phase"], fmt="x", c="k", capsize=3)
+        axs_resids.errorbar(plot_data["resid_mjds"], plot_data["resids_phase"], plot_data["resids_err_phase"], fmt="x", c="k", capsize=3)
         # axs_resids.set_title("Residuals")
         axs_resids.set_xlabel("MJD")
         axs_resids.set_ylabel("Timing Residuals (phase)")

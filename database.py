@@ -206,7 +206,7 @@ class database:
         if timing_info is None:
             timing_info = [0, "[]", "[]", "[]", "{}", 0, 0, "[]", "{}"]
         
-        return {
+        formatted_info = {
             "timestamp": timing_info[0],
             "files": json.loads(timing_info[1]),
             "obs_mjds": json.loads(timing_info[2]),
@@ -217,6 +217,17 @@ class database:
             "fitted_params": json.loads(timing_info[7]),
             "notes": json.loads(timing_info[8])
         }
+
+        if "bad_toa_mjds" not in formatted_info["notes"]:
+            formatted_info["notes"]["bad_toa_mjds"] = []
+        
+        if "fitted_parfile" not in formatted_info["notes"]:
+            formatted_info["notes"]["fitted_parfile"] = "NO_PARFILE_PROVIDED"
+
+        if "fitted_summary" not in formatted_info["notes"]:
+            formatted_info["notes"]["fitted_summary"] = "NO_SUMMARY_PROVIDED"
+
+        return formatted_info
     
     def insert_archive_info(self, filename, psr_amps, psr_snr, notes, timestamp="auto", commit=True):
         psr_amps = json.dumps(psr_amps)

@@ -246,7 +246,7 @@ class champss_timing:
 
                 # Insert timing info
                 print(f" Saving timing info to database")
-                self.db_insert_timing_info(archives, mjds, fit_params, tim.pint.f, tim.pint.t)
+                self.db_insert_timing_info(archives, mjds, fit_params, tim.pint)
                 
             utils.print_success("======== Timing completed ========")
         except Exception as e:
@@ -267,7 +267,12 @@ class champss_timing:
 
         return {"status": "success"}
 
-    def db_insert_timing_info(self, fs, mjds, fit_params, pint_f, pint_t):
+    def db_insert_timing_info(self, fs, mjds, fit_params, pint):
+        # Get PINT objects
+        pint_f = pint.f
+        pint_t = pint.t
+        pint_bad_toas = pint_f.bad_toas
+
         # Get timing info
         fitted_params = pint_f.get_params_dict("all", "quantity")
         residuals = pint_f.resids.time_resids.to(u.us).value
@@ -284,6 +289,7 @@ class champss_timing:
         residuals_list = [float(this_resid) for this_resid in residuals]
         residuals_err_list = [float(this_resid_err) for this_resid_err in residuals_err]
         residual_mjds_list = [float(this_mjd) for this_mjd in residual_mjds]
+        bad_toa_mjds = [float(this_mjd) for this_mjd in pint_bad_toas.get_mjds().value]
 
         # Get archive ids
         archive_ids = []
@@ -302,7 +308,8 @@ class champss_timing:
             notes = {
                 "fitted_parfile": pint_f.model.as_parfile(), 
                 "fitted_summary": pint_f.get_summary(), 
-                "fitted_mjds": residual_mjds_list
+                "fitted_mjds": residual_mjds_list, 
+                "bad_toa_mjds": bad_toa_mjds
             }
         )
     

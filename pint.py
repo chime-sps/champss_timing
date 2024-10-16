@@ -10,6 +10,9 @@ from scipy.stats import median_abs_deviation
 import numpy as np
 import shutil
 import time
+import copy
+
+from .utils import utils
 
 pint.logging.setup(level="INFO")
 
@@ -22,6 +25,7 @@ class pint_handler():
         self.logger = self_super.logger
         self.m, self.t = False, False
         self.f = False
+        self.bad_toas = []
 
         self.initialized = False
         if initialize:
@@ -29,13 +33,59 @@ class pint_handler():
 
     def initialize(self):
         self.m, self.t = get_model_and_toas(self.model, self.toas)
-        self.mad_filter()
+        # self.mad_filter()
+        self.dropout_chi2r_filter()
         self.initialized = True
 
-    def mad_filter(self):
+    def mad_filter(self, threshold=7):
+        # get mad
         resids = np.abs(np.array(Residuals(self.t, self.m).phase_resids))
         mad = median_abs_deviation(resids)
-        self.t = self.t[((resids - np.median(resids)) / mad) < 7]
+
+        # filter
+        toas_bad = np.where((resids - np.median(resids)) / mad > threshold)[0]
+        toas_good = np.where((resids - np.median(resids)) / mad <= threshold)[0]
+
+        # get toas and mjds
+        self.bad_toas = self.t[toas_bad]
+        self.t = self.t[toas_good]
+
+        return self.t
+    
+    def dropout_chi2r_filter(self, threshold=0.7):
+        utils.print_info("Running dropout_chi2r_filter, the following PINT output is coming from dropout trials. ")
+        
+        dropout_chi2rs = []
+        for i in range(len(self.t)):
+            try:
+                # copy self
+                self_tmp = copy.deepcopy(self)
+                
+                # remove toa
+                self_tmp.t = self.t[:i] + self.t[i+1:]
+
+                # fit
+                f_tmp = pint.fitter.Fitter.auto(self_tmp.t, self_tmp.m)
+                f_tmp.fit_toas()
+            
+                # append chi2r
+                dropout_chi2rs.append(f_tmp.get_params_dict("all", "quantity")["CHI2R"].value)
+            
+            except Exception as e:
+                self.logger(f"Dropout trial failed for TOA {i}. ", e)
+                dropout_chi2rs.append(np.inf)
+
+        # calculate threshold
+        dropout_chi2rs = np.array(dropout_chi2rs)
+        median_chi2r = np.median(dropout_chi2rs)
+
+        # filter
+        toas_bad = np.where(dropout_chi2rs < threshold * median_chi2r)[0]
+        toas_good = np.where(dropout_chi2rs >= threshold * median_chi2r)[0]
+        
+        # get toas and mjds
+        self.bad_toas = self.t[toas_bad]
+        self.t = self.t[toas_good]
 
         return self.t
 
