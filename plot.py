@@ -83,6 +83,10 @@ class plot:
         plot_data["resids"] = self.timing_info[-1]["residuals"]["val"]
         plot_data["resids_err"] = self.timing_info[-1]["residuals"]["err"]
 
+        # get bad toa mjds
+        if "bad_toa_mjds" in self.timing_info[-1]["notes"]:
+            plot_data["bad_toa_mjds"] = self.timing_info[-1]["notes"]["bad_toa_mjds"]
+
         # get residuals mjds
         if "fitted_mjds" in self.timing_info[-1]["notes"]:
             plot_data["resid_mjds"] = self.timing_info[-1]["notes"]["fitted_mjds"]
@@ -147,6 +151,10 @@ class plot:
         axs_amps.set_yticks(y_ticks_loc)
         axs_amps.set_yticklabels(self._round_axis(y_ticks_lab, 1), rotation=90, fontdict={"verticalalignment": "center"})
         axs_amps.set_title("Amplitudes of single observations")
+        ## set right axis to mark bad toa mjds
+        ax_right = axs_amps.twinx()
+        ax_right.set_yticks(plot_data["bad_toa_mjds"])
+        ax_right.set_yticklabels("[!]", fontdict={"verticalalignment": "center"}, color="r")
 
         # plot residuals horizontally across 2 grids
         ## remove the underlying Axes
@@ -157,7 +165,7 @@ class plot:
         resids_gs = axs[0, 1].get_gridspec()
         axs_resids = fig.add_subplot(resids_gs[0, 1:4])
         # axs_resids.plot(plot_data["mjds"], plot_data["resids_phase"], "kx")
-        axs_resids.errorbar(plot_data["resid_mjds"], plot_data["resids_phase"], plot_data["resids_err_phase"], fmt="x", c="k", capsize=3)
+        axs_resids.errorbar(plot_data["resid_mjds"], plot_data["resids_phase"], plot_data["resids_err_phase"], fmt="x", c="k", capsize=3, label="Residuals")
         # axs_resids.set_title("Residuals")
         axs_resids.set_xlabel("MJD")
         axs_resids.set_ylabel("Timing Residuals (phase)")
@@ -167,7 +175,11 @@ class plot:
         lim_0, lim_1 = axs_resids.get_ylim()
         axs_resids.set_ylim(lim_0, lim_1)
         for this_gap in plot_data["mjd_gaps"]:
-            axs_resids.fill_between(this_gap, lim_0, lim_1, color="gray", alpha=0.10)
+            axs_resids.fill_between(this_gap, lim_0, lim_1, color="gray", alpha=0.10, label="No Observation")
+        ## fill bad toa mjds
+        for this_bad_toa_mjd in plot_data["bad_toa_mjds"]:
+            axs_resids.axvline(x=this_bad_toa_mjd, color="r", linestyle="--", alpha=0.75, label="Bad TOA")
+        axs_resids.legend()
 
         # plot chi2r horizontally across 2 grids
         ## remove the underlying Axes
