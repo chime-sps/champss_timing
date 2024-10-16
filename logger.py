@@ -51,17 +51,20 @@ class logger():
         return output
     
     def info(self, text, layer=0, end="\n"):
-        print(self.format_text(text, "INFO   ", self.default_layer + layer, color="blue"), end=end)
+        for line in text.split("\n"):
+            print(self.format_text(line, "INFO   ", self.default_layer + layer, color="blue"), end=end)
 
     def warning(self, text, layer=0, end="\n"):
-        print(self.format_text(text, "WARNING", self.default_layer + layer, color="yellow"), end=end)
+        for line in text.split("\n"):
+            print(self.format_text(line, "WARNING", self.default_layer + layer, color="yellow"), end=end)
         
         # if self.notification:
         #     self.noti_hdl.send_message(text, psr_id=self.psr_id)
 
     def error(self, text, layer=0, end="\n"):
         try:
-            print(self.format_text(text, "ERROR  ", self.default_layer + layer, color="red"), end=end)
+            for line in text.split("\n"):
+                print(self.format_text(line, "ERROR  ", self.default_layer + layer, color="red"), end=end)
         except Exception as e:
             print("ERROR: ", text)
             print("\033[91m[ Logger Error ] While printing the error message, an error occurred: ", e, "\033[0m")
@@ -70,7 +73,9 @@ class logger():
         #     self.noti_hdl.send_urgent_message(text, psr_id=self.psr_id)
 
     def success(self, text, layer=0, end="\n"):
-        print(self.format_text(text, "SUCCESS", self.default_layer + layer, color="green"), end=end)
+        for line in text.split("\n"):
+            print(self.format_text(line, "SUCCESS", self.default_layer + layer, color="green"), end=end)
 
     def debug(self, text, layer=0, end="\n"):
-        print(self.format_text(text, "DEBUG  ", self.default_layer + layer), end=end)
+        for line in text.split("\n"):
+            print(self.format_text(line, "DEBUG  ", self.default_layer + layer), end=end)
