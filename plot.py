@@ -54,9 +54,9 @@ class plot:
 
         last_mjd = 0
         for this_timing in self.timing_info:
-            i_range = np.where(np.array(this_timing["notes"]["obs_mjds"]) > last_mjd)[0]
+            i_range = np.where(np.array(this_timing["obs_mjds"]) > last_mjd)[0]
             for i in i_range:
-                plot_data["mjds"].append(this_timing["notes"]["obs_mjds"][i])
+                plot_data["mjds"].append(this_timing["obs_mjds"][i])
                 plot_data["chi2r"].append(this_timing["chi2_reduced"])
                 plot_data["n_params"].append(len(this_timing["unfreeze_params"]))
                 plot_data["snr"].append(self.archive_info_file_inxed[this_timing["files"][i]]["psr_snr"])
@@ -77,15 +77,15 @@ class plot:
                 plot_data["amps_normalized"].append(plot_data["amps"][-1])
                 plot_data["amps_normalized"][-1] = np.array(plot_data["amps_normalized"][-1]) / max(plot_data["amps_normalized"][-1])
                 plot_data["amps_normalized"][-1] = plot_data["amps_normalized"][-1] - min(plot_data["amps_normalized"][-1])
-            last_mjd = max(this_timing["notes"]["obs_mjds"])
+            last_mjd = max(this_timing["obs_mjds"])
         
         # get residuals
         plot_data["resids"] = self.timing_info[-1]["residuals"]["val"]
         plot_data["resids_err"] = self.timing_info[-1]["residuals"]["err"]
 
         # get residuals mjds
-        if "fitted_mjds" in self.timing_info[-1]["info"]:
-            plot_data["resid_mjds"] = self.timing_info[-1]["info"]["fitted_mjds"]
+        if "fitted_mjds" in self.timing_info[-1]["notes"]:
+            plot_data["resid_mjds"] = self.timing_info[-1]["notes"]["fitted_mjds"]
         else:
             utils.print_warning("No fitted mjds found in the timing info. Using the original mjds.")
             utils.print_warning("Set the fitted mjds to a time series starting from 0 and incrementing by 1.")
