@@ -2,6 +2,7 @@ import sqlite3
 import time
 import json
 import shutil
+import os
 
 from .utils import utils
 
@@ -33,7 +34,7 @@ class database:
         
         if self.readonly:
             # check if database exists
-            if not utils.check_file_exists(psr_db):
+            if not os.path.exists(psr_db):
                 utils.print_error(f"Database {psr_db} does not exist. Please provide a valid database file.")
                 exit
 
