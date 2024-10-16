@@ -1,6 +1,7 @@
 import sqlite3
 import time
 import json
+import shutil
 
 from .utils import utils
 
@@ -27,12 +28,24 @@ class database:
     """
     def __init__(self, psr_db, readonly=False):
         self.version = "1.1"
-        self.psr_db = psr_db
         self.readonly = readonly
+        self.psr_db = None
         
         if self.readonly:
+            # check if database exists
+            if not utils.check_file_exists(psr_db):
+                utils.print_error(f"Database {psr_db} does not exist. Please provide a valid database file.")
+                exit
+
+            # copy the database to a temporary file
+            self.psr_db = f"{self.psr_db}.readonly.tmp.{utils.get_rand_string()}"
+            shutil.copyfile(psr_db, self.psr_db)
+            print(f"Readonly temporary database created at {self.psr_db}")
+
+            # open the temporary database in readonly mode
             self.conn = sqlite3.connect("file://" + self.psr_db + "?mode=ro", uri=True)
         else:
+            self.psr_db = psr_db
             self.conn = sqlite3.connect(self.psr_db)
         self.cur = self.conn.cursor()
 
@@ -328,6 +341,11 @@ class database:
 
     def close(self):
         self.conn.close()
+
+        if self.readonly:
+            # remove temporary database
+            utils.print_info(f"Removing temporary database {self.psr_db}")
+            utils.remove_file(self.psr_db)
 
     def __enter__(self):
         self.initialize()
