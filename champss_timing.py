@@ -271,7 +271,7 @@ class champss_timing:
         # Get PINT objects
         pint_f = pint.f
         pint_t = pint.t
-        pint_bad_toas = pint_f.bad_toas
+        pint_bad_toas = pint.bad_toas
 
         # Get timing info
         fitted_params = pint_f.get_params_dict("all", "quantity")
