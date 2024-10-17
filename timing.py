@@ -105,7 +105,7 @@ class timing():
         self.psrchive.get_toas(self.fs, template=f"{self.workspace}/paas.std", output=f"{self.workspace}/pulsar.tim")
         self.logger.debug("Getting TOAs... Done. ")
 
-    def time(self, fit_params="auto"):
+    def time(self, fit_params="auto", potential_params=[]):
         if not self.initialized:
             raise Exception("Workspace not initialized")
         
@@ -117,6 +117,12 @@ class timing():
             self.pint.freeze_all()
             for p in fit_params:
                 self.pint.unfreeze(p)
+
+        if(len(potential_params) > 0):
+            if(self.pint.f_test(potential_params)):
+                self.logger.debug(f"F-test passed. Adding parameter {potential_params}... ")
+                for p in potential_params:
+                    self.pint.unfreeze(p)
 
         self.logger.debug("Filtering TOAs... ")
         self.pint.filter()

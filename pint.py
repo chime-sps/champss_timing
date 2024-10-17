@@ -7,6 +7,7 @@ from pint.residuals import Residuals
 import pint.logging
 
 from scipy.stats import median_abs_deviation
+from scipy.stats import f as f_stats
 import numpy as np
 import shutil
 import time
@@ -41,6 +42,7 @@ class pint_handler():
 
         # Set initialized
         self.initialized = True
+    
 
     def filter(self, error=True, dropout=True):
         # MAD filter
@@ -131,6 +133,60 @@ class pint_handler():
         self.t = self.t[toas_good]
 
         return self.t
+    
+    def f_test(self, additional_params, p_value_threshold=0.05, beamsize=0.87376064): # chime beam size
+        # Ref: [1] https://sites.duke.edu/bossbackup/files/2013/02/NonLinSummary.pdf
+        #      [2] https://online.stat.psu.edu/stat501/lesson/6/6.2
+
+        utils.print_info("Running f_test, the following PINT output is coming from f_test trials. ")
+
+        def get_rss(resids):
+            return np.sum([resid**2 for resid in resids])
+
+        # fit current model
+        self_current = copy.deepcopy(self)
+        self_current.fit()
+
+        # fit model with additional params
+        self_additional = copy.deepcopy(self)
+        for param in additional_params:
+            self_additional.unfreeze(param)
+        self_additional.fit()
+
+        # get residuals and rsses
+        rss_current = get_rss(self_current.f.resids.time_resids)
+        rss_additional = get_rss(self_additional.f.resids.time_resids)
+
+        # get number of unfreezed params
+        n_current = len(self_current.m.free_params)
+        n_additional = len(self_additional.m.free_params)
+
+        # calculate df
+        df_current = len(self_current.t) - n_current
+        df_additional = len(self_additional.t) - n_additional
+
+        # calculate f
+        F = ((rss_current - rss_additional) / (df_current - df_additional)) / (rss_additional / df_additional)
+        
+        # calculate p-value
+        p_value = 1 - f_stats.cdf(float(F), dfn=float(df_current - df_additional), dfd=float(df_additional))
+
+        # p-value check
+        self.logger.debug(f"F: {F}, p-value: {p_value}")
+        if p_value > p_value_threshold: 
+            return False
+            
+        # sanity check
+        ## check if freq-dot from more complex model is negative
+        if self_additional.m.F1.value >= 0:
+            self.logger.warning("F-test passed, but freq-dot from more complex model is positive. ")
+            return False
+        ## check if the ra and dec changes are too large
+        if np.abs(self_current.m.RAJ.value - self_additional.m.RAJ.value) > beamsize or np.abs(self_current.m.DECJ.value - self_additional.m.DECJ.value) > beamsize:
+            self.logger.warning("F-test passed, but ra and dec changes are too large (> 1 beamsize). ")
+            return False
+        
+        return True
 
     def freeze(self, param):
         if not self.initialized:
