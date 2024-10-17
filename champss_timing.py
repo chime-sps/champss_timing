@@ -273,11 +273,11 @@ class champss_timing:
             self.logger.error(f"Timing failed for {self.path_psr_dir}. Please refer to the traceback below. ")
             self.logger.error(traceback.format_exc())
             self.noti_hdl.send_urgent_message(f"Timing failed for {self.path_psr_dir}. Please refer to the traceback in the following message. ", psr_id=self.psr_id)
-            self.noti_hdl.send_message(traceback.format_exc(), psr_id=self.psr_id)
+            self.noti_hdl.send_code(traceback.format_exc(), psr_id=self.psr_id)
             return {"status": "error"}
 
         # Backup old timing model
-        backup_filename = f"{self.path_timing_model_bakdir}/{self.path_timing_model}.{time.strftime('%Y_%m_%d__%H_%M_%S', time.gmtime(last_timing_info['timestamp']))}.bak"
+        backup_filename = f"{self.path_timing_model_bakdir}/parfile__{time.strftime('%Y_%m_%d__%H_%M_%S', time.gmtime(last_timing_info['timestamp']))}.bak"
         self.logger.debug(f" Backing up old timing model: {self.path_timing_model} > {backup_filename}")
         shutil.copy(self.path_timing_model, f"{backup_filename}")
         self.logger.debug(f" Writing new timing model > {self.path_timing_model}")

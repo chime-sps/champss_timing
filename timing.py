@@ -112,14 +112,14 @@ class timing():
         self.logger.debug("Initializing PINT handler... ")
         self.pint.initialize()
 
-        self.logger.debug("Filtering TOAs... ")
-        self.pint.filter()
-
         if(fit_params != "auto"):
             self.logger.debug(f"Unfreezing parameters... {fit_params}", layer=1)
             self.pint.freeze_all()
             for p in fit_params:
                 self.pint.unfreeze(p)
+
+        self.logger.debug("Filtering TOAs... ")
+        self.pint.filter()
 
         self.logger.debug("Fitting TOAs... ")
         self.pint.fit()
