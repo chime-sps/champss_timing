@@ -1,5 +1,6 @@
 import time
 import copy
+import inspect
 
 # from .notification import notification
 
@@ -27,6 +28,32 @@ class logger():
     def get_time_string(self):
         return time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())
     
+    def get_stack_info(self):
+        stack = inspect.stack()
+        stack_info = []
+
+        for i in range(1, len(stack)):
+            if stack[i].function == "<module>":
+                break
+            
+            if "logger.py" in stack[i].filename:
+                continue
+
+            stack_info.append(stack[i].function)
+        
+        stack_info_string = ""
+        stack_info.reverse()
+
+        for this_stack in stack_info:
+            if this_stack == "format_text":
+                break
+            stack_info_string += f"{this_stack}:"
+        
+        stack_info_string = "main:" + stack_info_string
+        stack_info_string = stack_info_string[:-1]
+        
+        return stack_info_string
+    
     def format_text(self, text, level, layer, color=None):
         output = ""
         
@@ -34,7 +61,7 @@ class logger():
         if layer > 0:
             output += "│"
 
-        output += f"{level} {text}"
+        output += f"{level} {self.get_stack_info()} -> {text}"
 
         if color is not None:
             if color == "red":
