@@ -156,6 +156,7 @@ class champss_timing:
             mjds = list(self.path_data_archives.keys())[0:5]
             archives = [self.path_data_archives[mjd] for mjd in mjds]
             fit_params = ["F0"]
+            potential_fit_params = []
         else:
             self.logger.info(f"Last timing info found: ")
             self.logger.data("Timestamp", last_timing_info["timestamp"])
