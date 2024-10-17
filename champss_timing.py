@@ -12,9 +12,10 @@ from .archive_cache import archive_cache
 from .plot import plot
 from .notification import notification
 from .champss_checker import champss_checker
+from .logger import logger
 
 class champss_timing:
-    def __init__(self, psr_dir, data_archives, n_pools=4, workspace_cleanup=True):
+    def __init__(self, psr_dir, data_archives, n_pools=4, workspace_cleanup=True, logger=logger()):
         """
         CHAMPSS timing pipeline class
 
@@ -45,6 +46,7 @@ class champss_timing:
         self.info_last_mjd = 0
         self.n_pools = n_pools
         self.workspace_cleanup = workspace_cleanup
+        self.logger = logger
 
         # Format psr_dir
         if self.path_psr_dir.endswith("/"):
@@ -101,25 +103,25 @@ class champss_timing:
     def run(self):
         n_timed = 0
         while True:
-            if(self.timing()["status"] != "success"):
+            if(self.timing(logger=self.logger.copy())["status"] != "success"):
                 if n_timed == 1:
                 # if n_timed == 0:
-                    print(f" No additional file for timing. ")
+                    self.logger.debug(f"No additional file for timing. ")
                     break
 
                 # update model for cached archives
-                print(f" Updating model for all cached archives")
+                self.logger.debug(f"Updating model for all cached archives")
                 self.archive_cache.update_model()
 
                 # Create diagnostic plot
-                utils.print_info(f"Creating diagnostic plot")
+                self.logger.info(f"Creating diagnostic plot")
                 plot(db_hdl=self.db_hdl).plot(savefig=self.path_diagnostic_plot)
 
                 # Run checker
                 champss_checker(self.path_psr_dir, self.db_hdl, self.psr_id).check()
 
                 # End of the script
-                utils.print_success("Script finished. ")
+                self.logger.success("Script finished. ")
                 self.noti_hdl.send_message(f"Timing finished for {n_timed} days of data. ", psr_id=self.psr_id)
 
                 break
@@ -128,7 +130,8 @@ class champss_timing:
         return {"n_timed": n_timed}
     
     def timing(self):
-        print("Starting timing... ")
+        self.logger.level_up()
+        self.logger.debug("Starting timing... ")
         # Get last timing info
         last_timing_info = self.db_hdl.get_last_timing_info()
 
@@ -136,18 +139,18 @@ class champss_timing:
         mjds = []
         archives = []
         if last_timing_info["timestamp"] == 0:
-            utils.print_info(" No timing info found, starting from scratch. ")
+            self.logger.info("No timing info found, starting from scratch. ")
             mjds = list(self.path_data_archives.keys())[0:5]
             archives = [self.path_data_archives[mjd] for mjd in mjds]
             fit_params = ["F0"]
         else:
-            utils.print_info(f" Last timing info found: ")
-            print("  Timestamp", last_timing_info["timestamp"])
-            print("  n_obs", len(last_timing_info["files"]))
-            print("  obs_mjds", last_timing_info["obs_mjds"])
-            print("  unfreeze_params", last_timing_info["unfreeze_params"])
-            print("  chi2", last_timing_info["chi2"])
-            print("  chi2_reduced", last_timing_info["chi2_reduced"])
+            self.logger.info(f"Last timing info found: ")
+            self.logger.debug("Timestamp", last_timing_info["timestamp"], layer=1)
+            self.logger.debug("n_obs", len(last_timing_info["files"]), layer=1)
+            self.logger.debug("obs_mjds", last_timing_info["obs_mjds"], layer=1)
+            self.logger.debug("unfreeze_params", last_timing_info["unfreeze_params"], layer=1)
+            self.logger.debug("chi2", last_timing_info["chi2"], layer=1)
+            self.logger.debug("chi2_reduced", last_timing_info["chi2_reduced"], layer=1)
 
             # find last mjd
             last_mjd = max(last_timing_info["obs_mjds"]) 
@@ -174,30 +177,32 @@ class champss_timing:
                     fit_params.append(this_param_id)
 
             if(len(fit_params) == 0):
-                utils.print_error(f"No parameter to fit at n_days={n_days_to_fit}")
+                self.logger.error(f"No parameter to fit at n_days={n_days_to_fit}")
                 return {"status": "error"} 
 
         # Run timing
         try:
             archives_untimed = self.db_get_untimed_archives(archives)
-            utils.print_info(f" Timing module input parameters: ")
-            print(f"  Timing {mjds} with archives: " + "\n -> " + "\n -> ".join(archives))
-            print(f"  Fit params: {fit_params}")
-            print(f"  MJD range: {min(mjds)} - {max(mjds)}")
-            print(f"  Number of Observations: {len(mjds)} ({len(archives_untimed)} untimed)")
-            print(f"  Input timing model: {self.path_timing_model}")
+            self.logger.info(f"Timing module input parameters: ")
+            self.logger.debug(f"Timing {mjds} with archives: " + "\n -> " + "\n -> ".join(archives), layer=1)
+            self.logger.debug(f"Fit params: {fit_params}", layer=1)
+            self.logger.debug(f"MJD range: {min(mjds)} - {max(mjds)}", layer=1)
+            self.logger.debug(f"Number of Observations: {len(mjds)} ({len(archives_untimed)} untimed)", layer=1)
+            self.logger.debug(f"Input timing model: {self.path_timing_model}", layer=1)
 
-            utils.print_success("======== Running timing modules ========")
+            self.logger.success("======== Running timing modules ========")
+            self.logger.level_up()
             with timing(
                 ars = archives_untimed, # Only run for those archive that does not have any toas in the database
                 par = self.path_timing_model,
                 std = self.path_pulse_template,
                 par_output = f"{self.path_timing_model}.timingoutput", 
                 n_pools = self.n_pools, 
-                workspace_cleanup = self.workspace_cleanup
+                workspace_cleanup = self.workspace_cleanup, 
+                logger = self.logger.copy()
             ) as tim:
                 # Processing initialize workspace
-                print(f" > Initializing modules")
+                self.logger.debug(f" > Initializing modules")
                 tim.initialize()
                 
                 # Process archive as needed
@@ -205,65 +210,68 @@ class champss_timing:
                     ## Check if all archives are cached
                     if not self.archive_cache.archives_exists(tim.fs):
                         ### Process archives
-                        print(f" > Preparing data")
+                        self.logger.debug(f" > Preparing data")
                         tim.prepare()
                     else:
                         ### Copy from cache
-                        print(f" > All archives are cached. Copying from cache... ")
+                        self.logger.debug(f" > All archives are cached. Copying from cache... ")
                         for f in tim.fs:
                             self.archive_cache.get_archive(f, f"{f}.clfd.FTp")
-                            print(f"  [Archive] {f} -> {f}.clfd.FTp copied from cache. ")
+                            self.logger.debug(f"[Archive] {f} -> {f}.clfd.FTp copied from cache. ", layer=1)
 
                     ## Getting TOAs
-                    print(f" > Getting TOAs")
+                    self.logger.debug(f" > Getting TOAs")
                     tim.get_toas()
 
                     ## Save TOAs to timing database
-                    print(f" > Saving TOAs")
+                    self.logger.debug(f" > Saving TOAs")
                     for f in tim.fs:
                         if(self.db_insert_timfile(f"{f}.clfd.FTp.tim") == 0):
-                            utils.print_warning(f"No TOA created from {f}. Placeholder with INVALID_TOA remark has created. ")
+                            self.logger.warning(f"No TOA created from {f}. Placeholder with INVALID_TOA remark has created. ", layer=1)
                             self.db_insert_invalid_toa(f)
 
                     ## Save cache archive and information to database
-                    print(f" > Saving and caching archive information")
+                    self.logger.debug(f" > Saving and caching archive information")
                     for f in tim.fs:
                         self.archive_cache.add_archive(f"{f}.clfd.FTp")
 
                 # Create new timfile from database and overwrite the one in the workspace
-                print(f" > Creating timfile")
+                self.logger.debug(f" > Creating timfile")
                 open(f"{tim.workspace}/pulsar.tim", "w").write(
                     self.db_create_timfile(archives)
                 )
 
                 # Run timing from PINT
-                print(f" > Timing TOAs")
+                self.logger.debug(f" > Timing TOAs")
                 tim.time(fit_params=fit_params)
+                
+                # Insert timing info
+                self.logger.debug(f"Saving timing info to database")
+                self.db_insert_timing_info(archives, mjds, fit_params, tim.pint)
 
                 # Finishing and print summary
-                print(f" Timing completed")
-                tim.pint.f.print_summary()
+                self.logger.success(f"Timing module finished")
+                self.logger.debug(tim.pint.f.get_summary(), layer=1)
 
-                # Insert timing info
-                print(f" Saving timing info to database")
-                self.db_insert_timing_info(archives, mjds, fit_params, tim.pint)
                 
-            utils.print_success("======== Timing completed ========")
+            self.logger.level_down()
+            self.logger.success("======== Timing completed ========")
         except Exception as e:
-            utils.print_error(f"Timing failed for {self.path_psr_dir}. Please refer to the traceback below. ")
-            utils.print_error(traceback.format_exc())
+            self.logger.error(f"Timing failed for {self.path_psr_dir}. Please refer to the traceback below. ")
+            self.logger.error(traceback.format_exc())
             self.noti_hdl.send_urgent_message(f"Timing failed for {self.path_psr_dir}. Please refer to the traceback in the following message. ", psr_id=self.psr_id)
             self.noti_hdl.send_message(traceback.format_exc(), psr_id=self.psr_id)
             return {"status": "error"}
 
         # Backup old timing model
-        print(f" Backing up old timing model: {self.path_timing_model} > {self.path_timing_model}.bak{last_timing_info['timestamp']}")
+        self.logger.debug(f" Backing up old timing model: {self.path_timing_model} > {self.path_timing_model}.bak{last_timing_info['timestamp']}")
         shutil.copy(self.path_timing_model, f"{self.path_timing_model}.bak{last_timing_info['timestamp']}")
-        print(f" Writing new timing model > {self.path_timing_model}")
+        self.logger.debug(f" Writing new timing model > {self.path_timing_model}")
         shutil.copy(f"{self.path_timing_model}.timingoutput", self.path_timing_model)
 
         # Finish
-        utils.print_success("Timing completed. ")
+        self.logger.success("Timing completed. ")
+        self.logger.level_down()
 
         return {"status": "success"}
 
@@ -336,7 +344,7 @@ class champss_timing:
             if(len(splitted) != 5):
                 raise Exception("Unexpected .tim file format", this_param)
             
-            print(f"  [TOA] filename={splitted[0].split('/')[-1]}, freq={splitted[1]}, toa={splitted[2]}, toa_err={splitted[3]}, telescope={splitted[4]}")
+            self.logger.debug(f"[TOA] filename={splitted[0].split('/')[-1]}, freq={splitted[1]}, toa={splitted[2]}, toa_err={splitted[3]}, telescope={splitted[4]}", layer=1)
 
             self.db_hdl.insert_toa(
                 filename = utils.get_archive_id(splitted[0]), # set only the filename as the index, otherwise the ws id will be different...
@@ -391,7 +399,7 @@ class champss_timing:
             this_toa = self.db_hdl.get_toa_by_filename(utils.get_archive_id(this_file))
 
             if(not self.db_check_valid_toa(this_file)):
-                utils.print_warning(f"INVALID_TOA remark was found for {this_file}. Skipped while creating timfile...")
+                self.logger.warning(f"INVALID_TOA remark was found for {this_file}. Skipped while creating timfile...", layer=1)
                 continue
 
             if(this_toa["timestamp"] == 0 or this_toa["raw_tim"].strip() == ""):
@@ -423,7 +431,7 @@ class champss_timing:
     
     def __exit__(self, exc_type, exc_value, traceback):
         if exc_type is not None:
-            utils.print_error(f"A fetal error occurred while timing for {self.path_psr_dir}. Script exited.")
+            self.logger.error(f"A fetal error occurred while timing for {self.path_psr_dir}. Script exited.")
             # self.noti_hdl.send_urgent_message(f"A fetal error occurred while timing for {self.path_psr_dir}. Script exited.")
             raise exc_type(exc_value).with_traceback(traceback)
         self.cleanup()
