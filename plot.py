@@ -178,8 +178,9 @@ class plot:
         ## set right axis to mark bad toa mjds
         if len(plot_data["bad_toa_mjds"]) > 0:
             ax_right = axs_amps.twinx()
-            ax_right.set_yticks(plot_data["bad_toa_mjds"])
-            ax_right.set_yticklabels("[!]", fontdict={"verticalalignment": "center"}, color="r")
+            ax_right.set_ylim(axs_amps.get_ylim())
+            ax_right.set_yticks(np.array(plot_data["bad_toa_mjds"]) - min(plot_data["mjds"]))
+            ax_right.set_yticklabels(["←"] * len(plot_data["bad_toa_mjds"]), fontdict={"verticalalignment": "center"}, color="r")
 
         # plot residuals horizontally across 2 grids
         ## remove the underlying Axes

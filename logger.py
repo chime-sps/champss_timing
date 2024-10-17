@@ -54,14 +54,20 @@ class logger():
         
         return stack_info_string
     
-    def format_text(self, text, level, layer, color=None):
+    def format_text(self, text, level, layer, color=None, marker="│", time=True, stack=True):
         output = ""
         
-        output += "  " * int(layer)
-        if layer > 0:
-            output += "│"
+        output += "    " * int(layer)
+        # if layer > 0:
+        #     output += marker + " "
+        output += marker + " "
 
-        output += f"{level} {self.get_stack_info()} -> {text}"
+        output += f"{level} "
+
+        if stack:
+            output += f"{self.get_stack_info()}  "
+
+        output += text
 
         if color is not None:
             if color == "red":
@@ -72,23 +78,32 @@ class logger():
                 output = f"\033[93m{output}\033[0m"
             elif color == "blue":
                 output = f"\033[94m{output}\033[0m"
+            elif color == "purple":
+                output = f"\033[95m{output}\033[0m"
         
-        output = f"{self.get_time_string()} {output}"
+        if time:
+            output = f"{self.get_time_string()} {output}"
 
         return output
-    
-    def info(self, text, layer=0, end="\n"):
+
+    def info(self, *args, layer=0, end="\n"):
+        text = " ".join([str(arg) for arg in args])
+
         for line in text.split("\n"):
             print(self.format_text(line, "INFO   ", self.default_layer + layer, color="blue"), end=end)
 
-    def warning(self, text, layer=0, end="\n"):
+    def warning(self, *args, layer=0, end="\n"):
+        text = " ".join([str(arg) for arg in args])
+
         for line in text.split("\n"):
             print(self.format_text(line, "WARNING", self.default_layer + layer, color="yellow"), end=end)
         
         # if self.notification:
         #     self.noti_hdl.send_message(text, psr_id=self.psr_id)
 
-    def error(self, text, layer=0, end="\n"):
+    def error(self, *args, layer=0, end="\n"):
+        text = " ".join([str(arg) for arg in args])
+
         try:
             for line in text.split("\n"):
                 print(self.format_text(line, "ERROR  ", self.default_layer + layer, color="red"), end=end)
@@ -99,10 +114,20 @@ class logger():
         # if self.notification:
         #     self.noti_hdl.send_urgent_message(text, psr_id=self.psr_id)
 
-    def success(self, text, layer=0, end="\n"):
+    def success(self, *args, layer=0, end="\n"):
+        text = " ".join([str(arg) for arg in args])
+
         for line in text.split("\n"):
             print(self.format_text(line, "SUCCESS", self.default_layer + layer, color="green"), end=end)
 
-    def debug(self, text, layer=0, end="\n"):
+    def debug(self, *args, layer=0, end="\n"):
+        text = " ".join([str(arg) for arg in args])
+
         for line in text.split("\n"):
             print(self.format_text(line, "DEBUG  ", self.default_layer + layer), end=end)
+
+    def data(self, *args, layer=0, end="\n"):
+        text = " ".join([str(arg) for arg in args])
+
+        for line in text.split("\n"):
+            print(self.format_text(line, "       ", self.default_layer + layer, color="purple"), end=end)

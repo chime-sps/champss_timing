@@ -51,9 +51,11 @@ class database:
         self.cur = self.conn.cursor()
 
     def initialize(self, self_check=True):
-        print(f"Database loaded/created from {self.psr_db}")
         if self.readonly:
             return
+        
+        if not os.path.exists(self.psr_db):
+            utils.print_info(f"Creating database {self.psr_db}")
 
         # create tables
         self.cur.execute("CREATE TABLE IF NOT EXISTS info (version TEXT)")

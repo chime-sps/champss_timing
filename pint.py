@@ -14,15 +14,14 @@ import copy
 
 from .utils import utils
 
-pint.logging.setup(level="INFO")
-
+pint.logging.setup(level="ERROR")
 
 class pint_handler():
     def __init__(self, self_super, initialize=True):
         self.toas = f"{self_super.workspace}/pulsar.tim"
         self.model = self_super.par
         self.model_output = self_super.par_output
-        self.logger = self_super.logger
+        self.logger = self_super.logger.copy()
         self.m, self.t = False, False
         self.f = False
         self.prefit_resids = False
@@ -40,13 +39,21 @@ class pint_handler():
         # Run prefit
         self.prefit_resids = Residuals(self.t, self.m)
 
-        # Filter
-        # self.mad_filter()
-        self.error_filter()
-        self.dropout_chi2r_filter()
-
         # Set initialized
         self.initialized = True
+
+    def filter(self, error=True, dropout=True):
+        # MAD filter
+        # if mad:
+            # self.mad_filter()
+
+        # Error filter
+        if error:
+            self.error_filter()
+
+        # Dropout filter
+        if dropout:
+            self.dropout_chi2r_filter()
 
     def mad_filter(self, threshold=7):
         # get mad
@@ -86,6 +93,7 @@ class pint_handler():
         
         dropout_chi2rs = []
         for i in range(len(self.t)):
+            self.logger.debug("Dropout filter trial", i, "/", len(self.t), layer=1, end="\r")
             try:
                 # copy self
                 self_tmp = copy.deepcopy(self)
@@ -101,7 +109,7 @@ class pint_handler():
                 dropout_chi2rs.append(f_tmp.get_params_dict("all", "quantity")["CHI2R"].value)
             
             except Exception as e:
-                self.logger(f"Dropout trial failed for TOA {i}. ", e)
+                self.logger.error(f"Dropout trial failed for TOA {i}. ", e)
                 dropout_chi2rs.append(np.inf)
 
         # fit model without dropout
@@ -110,7 +118,7 @@ class pint_handler():
 
         # calculate threshold
         dropout_chi2rs = np.array(dropout_chi2rs)
-        ref_chi2r = self.f.get_params_dict("all", "quantity")["CHI2R"].value
+        ref_chi2r = self_tmp.f.get_params_dict("all", "quantity")["CHI2R"].value
         threshold_chi2r = ref_chi2r - median_abs_deviation(np.abs(dropout_chi2rs - ref_chi2r)) * threshold
 
         # filter
@@ -151,9 +159,9 @@ class pint_handler():
             self.f = pint.fitter.Fitter.auto(self.t, self.m)
             self.f.fit_toas()
             # self.f.print_summary()
-            self.logger(self.f.get_summary())
+            self.logger.info(self.f.get_summary())
         except Exception as e:
-            self.logger("Fitting failed. ", e)
+            self.logger.error("Fitting failed. ", e)
             self.f = {
                 "fail": True, 
                 "error": e
@@ -208,7 +216,7 @@ class pint_handler():
         
         if self.model_output != False:
             if(self.model == self.model_output):
-                self.logger("Overwriting", self.model)
+                self.logger.warning("Overwriting", self.model)
                 shutil.copyfile(self.model, self.model + f".bak{int(time.time())}")
             if isinstance(self.f, dict):
                 with open(self.model_output, "w") as f:

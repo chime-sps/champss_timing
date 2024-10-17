@@ -103,9 +103,13 @@ class champss_timing:
     def run(self):
         n_timed = 0
         while True:
-            if(self.timing(logger=self.logger.copy())["status"] != "success"):
-                if n_timed == 1:
-                # if n_timed == 0:
+            timing_res = self.timing()
+            if(timing_res["status"] != "success"):
+                if timing_res["status"] == "error":
+                    raise Exception("Timing failed. ")
+
+                # if n_timed == 1:
+                if n_timed == 0:
                     self.logger.debug(f"No additional file for timing. ")
                     break
 
@@ -145,12 +149,12 @@ class champss_timing:
             fit_params = ["F0"]
         else:
             self.logger.info(f"Last timing info found: ")
-            self.logger.debug("Timestamp", last_timing_info["timestamp"], layer=1)
-            self.logger.debug("n_obs", len(last_timing_info["files"]), layer=1)
-            self.logger.debug("obs_mjds", last_timing_info["obs_mjds"], layer=1)
-            self.logger.debug("unfreeze_params", last_timing_info["unfreeze_params"], layer=1)
-            self.logger.debug("chi2", last_timing_info["chi2"], layer=1)
-            self.logger.debug("chi2_reduced", last_timing_info["chi2_reduced"], layer=1)
+            self.logger.data("Timestamp", last_timing_info["timestamp"])
+            self.logger.data("n_obs", len(last_timing_info["files"]))
+            self.logger.data("obs_mjds", last_timing_info["obs_mjds"])
+            self.logger.data("unfreeze_params", last_timing_info["unfreeze_params"])
+            self.logger.data("chi2", last_timing_info["chi2"])
+            self.logger.data("chi2_reduced", last_timing_info["chi2_reduced"])
 
             # find last mjd
             last_mjd = max(last_timing_info["obs_mjds"]) 
@@ -184,11 +188,11 @@ class champss_timing:
         try:
             archives_untimed = self.db_get_untimed_archives(archives)
             self.logger.info(f"Timing module input parameters: ")
-            self.logger.debug(f"Timing {mjds} with archives: " + "\n -> " + "\n -> ".join(archives), layer=1)
-            self.logger.debug(f"Fit params: {fit_params}", layer=1)
-            self.logger.debug(f"MJD range: {min(mjds)} - {max(mjds)}", layer=1)
-            self.logger.debug(f"Number of Observations: {len(mjds)} ({len(archives_untimed)} untimed)", layer=1)
-            self.logger.debug(f"Input timing model: {self.path_timing_model}", layer=1)
+            self.logger.data(f"Timing {mjds} with archives: " + "\n -> " + "\n -> ".join(archives))
+            self.logger.data(f"Fit params: {fit_params}")
+            self.logger.data(f"MJD range: {min(mjds)} - {max(mjds)}")
+            self.logger.data(f"Number of Observations: {len(mjds)} ({len(archives_untimed)} untimed)")
+            self.logger.data(f"Input timing model: {self.path_timing_model}")
 
             self.logger.success("======== Running timing modules ========")
             self.logger.level_up()
@@ -279,7 +283,7 @@ class champss_timing:
         # Get PINT objects
         pint_f = pint.f
         pint_t = pint.t
-        pint_bad_resids = pint.self.bad_resids
+        pint_bad_resids = pint.bad_resids
         pint_bad_toas = pint.bad_toas
 
         # Get timing info

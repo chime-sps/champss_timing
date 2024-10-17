@@ -6,13 +6,13 @@ class psrchive_handler():
     def __init__(self, self_super):
         self.exec_handler = self_super.exec_handler
         self.n_pools = self_super.n_pools
-        self.logger = self_super.logger
+        self.logger = self_super.logger.copy()
 
         # Check for whether commands exists
-        self.logger("Initializing PSRCHIVE modules... ")
+        self.logger.debug("Initializing PSRCHIVE modules... ")
         self.cmd_checklist = ["get_bad_channel_list.py", "clfd", "pam", "pat"]
         self.cmd_check()
-        self.logger("Initializing PSRCHIVE modules... Done. ")
+        self.logger.debug("Initializing PSRCHIVE modules... Done. ")
         
     def _get_log_path(self, fs):
         # get parent directory of the first file
