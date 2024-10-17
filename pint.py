@@ -81,7 +81,7 @@ class pint_handler():
         return self.t
 
     
-    def dropout_chi2r_filter(self, threshold=0.7):
+    def dropout_chi2r_filter(self, threshold=1):
         utils.print_info("Running dropout_chi2r_filter, the following PINT output is coming from dropout trials. ")
         
         dropout_chi2rs = []
@@ -111,10 +111,11 @@ class pint_handler():
         # calculate threshold
         dropout_chi2rs = np.array(dropout_chi2rs)
         ref_chi2r = self.f.get_params_dict("all", "quantity")["CHI2R"].value
+        threshold_chi2r = ref_chi2r - median_abs_deviation(np.abs(dropout_chi2rs - ref_chi2r)) * threshold
 
         # filter
-        toas_bad = np.where(dropout_chi2rs < threshold * ref_chi2r)[0]
-        toas_good = np.where(dropout_chi2rs >= threshold * ref_chi2r)[0]
+        toas_bad = np.where(dropout_chi2rs < threshold_chi2r)[0]
+        toas_good = np.where(dropout_chi2rs >= threshold_chi2r)[0]
         
         # get toas resid, err, and mjds
         self.bad_toas = self.t[toas_bad]
