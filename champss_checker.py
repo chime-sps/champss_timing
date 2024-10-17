@@ -1,5 +1,5 @@
-from champss_timing.database import database
-from champss_timing.notification import notification
+from .database import database
+from .notification import notification
 
 import numpy as np
 import os

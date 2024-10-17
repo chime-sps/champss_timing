@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import shutil
 import traceback
 import astropy.units as u
@@ -38,6 +39,7 @@ class champss_timing:
         self.path_db = f"{self.path_psr_dir}/champss_timing.sqlite3.db"
         self.path_pulse_template = f"{self.path_psr_dir}/paas.std"
         self.path_timing_model = f"{self.path_psr_dir}/pulsar.par"
+        self.path_timing_model_bakdir = f"{self.path_psr_dir}/parfile_bak"
         self.path_timing_config = f"{self.path_psr_dir}/champss_timing.config"
         self.path_diagnostic_plot = f"{self.path_psr_dir}/champss_diagnostic.pdf"
         self.info_ars_mjds = []
@@ -82,6 +84,13 @@ class champss_timing:
         self.info_ars_paths = list(self.path_data_archives.values())
         self.info_first_mjd = list(self.path_data_archives.keys())[0]
         self.info_last_mjd = list(self.path_data_archives.keys())[-1]
+            
+        # Check folder exists
+        if not os.path.isdir(self.path_psr_dir):
+            raise FileNotFoundError(f"Directory {self.path_psr_dir} not found for pulsar directory")
+        if not os.path.isdir(self.path_timing_model_bakdir):
+            os.makedirs(self.path_timing_model_bakdir)
+            self.logger.debug(f"Created timing model backup directory {self.path_timing_model_bakdir}")
 
         # Check files exist
         if not os.path.isfile(self.path_pulse_template):
@@ -268,8 +277,9 @@ class champss_timing:
             return {"status": "error"}
 
         # Backup old timing model
-        self.logger.debug(f" Backing up old timing model: {self.path_timing_model} > {self.path_timing_model}.bak{last_timing_info['timestamp']}")
-        shutil.copy(self.path_timing_model, f"{self.path_timing_model}.bak{last_timing_info['timestamp']}")
+        backup_filename = f"{self.path_timing_model_bakdir}/{self.path_timing_model}.{time.strftime('%Y_%m_%d__%H_%M_%S', time.gmtime(last_timing_info['timestamp']))}.bak"
+        self.logger.debug(f" Backing up old timing model: {self.path_timing_model} > {backup_filename}")
+        shutil.copy(self.path_timing_model, f"{backup_filename}")
         self.logger.debug(f" Writing new timing model > {self.path_timing_model}")
         shutil.copy(f"{self.path_timing_model}.timingoutput", self.path_timing_model)
 
