@@ -127,7 +127,7 @@ class timing():
                 if this_pass:
                     f_test_res["params"].append(this_param)
                     f_test_res["p_values"].append(this_p_value)
-                self.logger.debug(f"Testing parameter {this_param}... Done. (passed = {this_pass}, p-value = {this_p_value)")
+                self.logger.debug(f"Testing parameter {this_param}... Done. (passed = {this_pass}, p-value = {this_p_value}")
             
             # Find lowest p-value
             if(len(f_test_res["p_values"]) > 0):
