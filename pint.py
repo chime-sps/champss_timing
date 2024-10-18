@@ -90,7 +90,7 @@ class pint_handler():
         return self.t
 
     
-    def dropout_chi2r_filter(self, threshold=1):
+    def dropout_chi2r_filter(self, threshold=7):
         utils.print_info("Running dropout_chi2r_filter, the following PINT output is coming from dropout trials. ")
         
         dropout_chi2rs = []
@@ -120,7 +120,8 @@ class pint_handler():
 
         # calculate threshold
         dropout_chi2rs = np.array(dropout_chi2rs)
-        ref_chi2r = self_tmp.f.get_params_dict("all", "quantity")["CHI2R"].value
+        # ref_chi2r = self_tmp.f.get_params_dict("all", "quantity")["CHI2R"].value
+        ref_chi2r = np.median(dropout_chi2rs)
         threshold_chi2r = ref_chi2r - median_abs_deviation(np.abs(dropout_chi2rs - ref_chi2r)) * threshold
 
         # filter
@@ -151,7 +152,11 @@ class pint_handler():
         self_additional = copy.deepcopy(self)
         for param in additional_params:
             self_additional.unfreeze(param)
-        self_additional.fit()
+        try:
+            self_additional.fit()
+        except:
+            self.logger.warning("F-test failed. ")
+            return False
 
         # get residuals and rsses
         rss_current = get_rss(self_current.f.resids.time_resids)
@@ -178,7 +183,7 @@ class pint_handler():
             
         # sanity check
         ## check if freq-dot from more complex model is negative
-        if self_additional.m.F1.value >= 0:
+        if self_additional.m.F1.value > 0:
             self.logger.warning("F-test passed, but freq-dot from more complex model is positive. ")
             return False
         ## check if the ra and dec changes are too large
@@ -206,10 +211,26 @@ class pint_handler():
 
         for param in self.m.params:
             self.m[param].frozen = True
+    
+    def get_unfreezed_params(self):
+        if not self.initialized:
+            self.initialize()
+
+        params = []
+        for param in self.m.params:
+            if not self.m[param].frozen:
+                params.append(param)
+
+        return params
+
         
     def fit(self):
         if not self.initialized:
             self.initialize()
+
+        # Sanity check: if F1 > 0, then set it into 0
+        if self.m["F1"].value > 0:
+            self.m["F1"].value = 0
         
         try:
             self.f = pint.fitter.Fitter.auto(self.t, self.m)

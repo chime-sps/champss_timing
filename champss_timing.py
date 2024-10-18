@@ -192,6 +192,14 @@ class champss_timing:
                     if(this_param_id not in fit_params):
                         potential_fit_params.append(this_param_id)
 
+                        # if this_param_id == "RAJ":
+                        #     potential_fit_params.append("DECJ")
+
+                        # if this_param_id == "PMRA":
+                        #     potential_fit_params.append("PMDEC")
+
+                        break # one pair of parameter at a time
+
             if(len(fit_params) == 0):
                 self.logger.error(f"No parameter to fit at n_days={n_days_to_fit}")
                 return {"status": "error"} 
@@ -264,7 +272,7 @@ class champss_timing:
                 
                 # Insert timing info
                 self.logger.debug(f"Saving timing info to database")
-                self.db_insert_timing_info(archives, mjds, fit_params, tim.pint)
+                self.db_insert_timing_info(archives, mjds, tim.pint)
 
                 # Finishing and print summary
                 self.logger.success(f"Timing module finished")
@@ -293,12 +301,13 @@ class champss_timing:
 
         return {"status": "success"}
 
-    def db_insert_timing_info(self, fs, mjds, fit_params, pint):
+    def db_insert_timing_info(self, fs, mjds, pint):
         # Get PINT objects
         pint_f = pint.f
         pint_t = pint.t
         pint_bad_resids = pint.bad_resids
         pint_bad_toas = pint.bad_toas
+        unfreezed_params = pint.get_unfreezed_params()
 
         # Get timing info
         fitted_params = pint_f.get_params_dict("all", "quantity")
@@ -332,7 +341,7 @@ class champss_timing:
         self.db_hdl.insert_timing_info(
             files = archive_ids,
             obs_mjds = mjds,
-            unfreeze_params = fit_params,
+            unfreeze_params = unfreezed_params,
             residuals = {"val": residuals_list, "err": residuals_err_list},
             chi2 = fitted_params["CHI2"].value,
             chi2_reduced = fitted_params["CHI2R"].value,
