@@ -134,11 +134,11 @@ class timing():
                 best_param = f_test_res["params"][f_test_res["p_values"].index(min(f_test_res["p_values"]))]
                 self.pint.unfreeze(best_param)
                 self.logger.debug(f"Best parameter to add: {best_param} due to lowest p-value ")
-        elif(len(potential_params) == 1):
-            if(self.pint.f_test(potential_params)):
-                self.logger.debug(f"F-test passed. Adding parameter {potential_params}... ")
-                for p in potential_params:
-                    self.pint.unfreeze(p)
+        # elif(len(potential_params) == 1):
+        #     if(self.pint.f_test(potential_params)):
+        #         self.logger.debug(f"F-test passed. Adding parameter {potential_params}... ")
+        #         for p in potential_params:
+        #             self.pint.unfreeze(p)
 
         self.logger.debug("Filtering TOAs... ")
         self.pint.filter()
