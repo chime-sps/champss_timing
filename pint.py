@@ -177,21 +177,21 @@ class pint_handler():
         p_value = 1 - f_stats.cdf(float(F), dfn=float(df_current - df_additional), dfd=float(df_additional))
 
         # p-value check
-        self.logger.debug(f"F: {F}, p-value: {p_value}")
+        self.logger.debug(f"Parameters: {additional_params}, F: {F}, p-value: {p_value}")
         if p_value > p_value_threshold: 
-            return False
+            return False, p_value
             
         # sanity check
         ## check if freq-dot from more complex model is negative
         if self_additional.m.F1.value > 0:
             self.logger.warning("F-test passed, but freq-dot from more complex model is positive. ")
-            return False
+            return False, p_value
         ## check if the ra and dec changes are too large
         if np.abs(self_current.m.RAJ.value - self_additional.m.RAJ.value) > beamsize or np.abs(self_current.m.DECJ.value - self_additional.m.DECJ.value) > beamsize:
             self.logger.warning("F-test passed, but ra and dec changes are too large (> 1 beamsize). ")
-            return False
+            return False, p_value
         
-        return True
+        return True, p_value
 
     def freeze(self, param):
         if not self.initialized:

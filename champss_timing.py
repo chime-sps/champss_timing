@@ -198,7 +198,7 @@ class champss_timing:
                         # if this_param_id == "PMRA":
                         #     potential_fit_params.append("PMDEC")
 
-                        break # one pair of parameter at a time
+                        # break # one pair of parameter at a time
 
             if(len(fit_params) == 0):
                 self.logger.error(f"No parameter to fit at n_days={n_days_to_fit}")
