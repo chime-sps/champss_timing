@@ -158,43 +158,43 @@ class pint_handler():
             self.logger.warning("F-test failed. ")
             return False
 
-        # # get residuals and rsses
-        # rss_current = get_rss(self_current.f.resids.time_resids)
-        # rss_additional = get_rss(self_additional.f.resids.time_resids)
+        # get residuals and rsses
+        rss_current = get_rss(self_current.f.resids.time_resids)
+        rss_additional = get_rss(self_additional.f.resids.time_resids)
 
-        # # get number of unfreezed params
-        # n_current = len(self_current.m.free_params)
-        # n_additional = len(self_additional.m.free_params)
+        # get number of unfreezed params
+        n_current = len(self_current.m.free_params)
+        n_additional = len(self_additional.m.free_params)
 
-        # # calculate df
-        # df_current = len(self_current.t) - n_current
-        # df_additional = len(self_additional.t) - n_additional
+        # calculate df
+        df_current = len(self_current.t) - n_current
+        df_additional = len(self_additional.t) - n_additional
 
-        # # calculate f
-        # F = ((rss_current - rss_additional) / (df_current - df_additional)) / (rss_additional / df_additional)
+        # calculate f
+        F = ((rss_current - rss_additional) / (df_current - df_additional)) / (rss_additional / df_additional)
         
-        # # calculate p-value
-        # p_value = 1 - f_stats.cdf(float(F), dfn=float(df_current - df_additional), dfd=float(df_additional))
+        # calculate p-value
+        p_value = 1 - f_stats.cdf(float(F), dfn=float(df_current - df_additional), dfd=float(df_additional))
 
-        def f_test(resid_simple_mode, resid_complex_mode, n_free_params_simple, n_free_params_complex, n_points):
-            def get_rss(resid):
-                return np.sum(resid**2)
+        # def f_test(resid_simple_mode, resid_complex_mode, n_free_params_simple, n_free_params_complex, n_points):
+        #     def get_rss(resid):
+        #         return np.sum(resid**2)
             
-            rss_simple = get_rss(resid_simple_mode)
-            rss_complex = get_rss(resid_complex_mode)
+        #     rss_simple = get_rss(resid_simple_mode)
+        #     rss_complex = get_rss(resid_complex_mode)
 
-            f_stat = ((rss_simple - rss_complex) / (n_free_params_complex - n_free_params_simple)) / (rss_complex / (n_points - n_free_params_complex))
-            p_value = 1 - f_stats.cdf(float(f_stat), float(n_free_params_complex - n_free_params_simple), float(n_points - n_free_params_complex))
+        #     f_stat = ((rss_simple - rss_complex) / (n_free_params_complex - n_free_params_simple)) / (rss_complex / (n_points - n_free_params_complex))
+        #     p_value = 1 - f_stats.cdf(float(f_stat), float(n_free_params_complex - n_free_params_simple), float(n_points - n_free_params_complex))
 
-            return f_stat, p_value
+        #     return f_stat, p_value
         
-        F, p_value = f_test(
-            self_current.f.resids.time_resids, 
-            self_additional.f.resids.time_resids, 
-            len(self_current.m.free_params), 
-            len(self_additional.m.free_params), 
-            len(self_additional.t)
-        )
+        # F, p_value = f_test(
+        #     self_current.f.resids.time_resids, 
+        #     self_additional.f.resids.time_resids, 
+        #     len(self_current.m.free_params), 
+        #     len(self_additional.m.free_params), 
+        #     len(self_additional.t)
+        # )
 
         # p-value check
         self.logger.debug(f"Parameters: {additional_params}, F: {F}, p-value: {p_value}")

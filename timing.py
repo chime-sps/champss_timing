@@ -105,7 +105,7 @@ class timing():
         self.psrchive.get_toas(self.fs, template=f"{self.workspace}/paas.std", output=f"{self.workspace}/pulsar.tim")
         self.logger.debug("Getting TOAs... Done. ")
 
-    def time(self, fit_params="auto", potential_params=[]):
+    def time(self, fit_params="auto"): #, potential_params=[]):
         if not self.initialized:
             raise Exception("Workspace not initialized")
         
@@ -118,27 +118,22 @@ class timing():
             for p in fit_params:
                 self.pint.unfreeze(p)
 
-        if(len(potential_params) > 1):
-            # Run F-test
-            f_test_res = {"params": [], "p_values": []}
-            for this_param in potential_params:
-                self.logger.debug(f"Testing parameter {this_param}... ")
-                this_pass, this_p_value = self.pint.f_test([this_param])
-                if this_pass:
-                    f_test_res["params"].append(this_param)
-                    f_test_res["p_values"].append(this_p_value)
-                self.logger.debug(f"Testing parameter {this_param}... Done. (passed = {this_pass}, p-value = {this_p_value}")
+        # if(len(potential_params) > 1):
+        #     # Run F-test
+        #     f_test_res = {"params": [], "p_values": []}
+        #     for this_param in potential_params:
+        #         self.logger.debug(f"Testing parameter {this_param}... ")
+        #         this_pass, this_p_value = self.pint.f_test([this_param])
+        #         if this_pass:
+        #             f_test_res["params"].append(this_param)
+        #             f_test_res["p_values"].append(this_p_value)
+        #         self.logger.debug(f"Testing parameter {this_param}... Done. (passed = {this_pass}, p-value = {this_p_value}")
             
-            # Find lowest p-value
-            if(len(f_test_res["p_values"]) > 0):
-                best_param = f_test_res["params"][f_test_res["p_values"].index(min(f_test_res["p_values"]))]
-                self.pint.unfreeze(best_param)
-                self.logger.debug(f"Best parameter to add: {best_param} due to lowest p-value ")
-        # elif(len(potential_params) == 1):
-        #     if(self.pint.f_test(potential_params)):
-        #         self.logger.debug(f"F-test passed. Adding parameter {potential_params}... ")
-        #         for p in potential_params:
-        #             self.pint.unfreeze(p)
+        #     # Find lowest p-value
+        #     if(len(f_test_res["p_values"]) > 0):
+        #         best_param = f_test_res["params"][f_test_res["p_values"].index(min(f_test_res["p_values"]))]
+        #         self.pint.unfreeze(best_param)
+        #         self.logger.debug(f"Best parameter to add: {best_param} due to lowest p-value ")
 
         self.logger.debug("Filtering TOAs... ")
         self.pint.filter()

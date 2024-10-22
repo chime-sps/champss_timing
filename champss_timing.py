@@ -184,21 +184,14 @@ class champss_timing:
 
             # get the fit_params
             fit_params = last_timing_info["unfreeze_params"]
-            potential_fit_params = []
+            # potential_fit_params = []
             n_days_to_fit = max(mjds) - min(mjds)
             for this_param_id, this_param_config in self.timing_config["params"].items():
                 # if(this_param_config["min_days"] <= n_days_to_fit and this_param_config["max_days"] > n_days_to_fit):
                 if(this_param_config["min_days"] <= n_days_to_fit):
-                    if(this_param_id not in fit_params):
-                        potential_fit_params.append(this_param_id)
-
-                        # if this_param_id == "RAJ":
-                        #     potential_fit_params.append("DECJ")
-
-                        # if this_param_id == "PMRA":
-                        #     potential_fit_params.append("PMDEC")
-
-                        # break # one pair of parameter at a time
+                    # if(this_param_id not in fit_params):
+                    #     potential_fit_params.append(this_param_id)
+                    fit_params.append(this_param_id)
 
             if(len(fit_params) == 0):
                 self.logger.error(f"No parameter to fit at n_days={n_days_to_fit}")
@@ -210,7 +203,7 @@ class champss_timing:
             self.logger.info(f"Timing module input parameters: ")
             self.logger.data(f"Timing {mjds} with archives: " + "\n -> " + "\n -> ".join(archives))
             self.logger.data(f"Fit params: {fit_params}")
-            self.logger.data(f"Potential Fit params: {potential_fit_params}")
+            # self.logger.data(f"Potential Fit params: {potential_fit_params}")
             self.logger.data(f"MJD range: {min(mjds)} - {max(mjds)}")
             self.logger.data(f"Number of Observations: {len(mjds)} ({len(archives_untimed)} untimed)")
             self.logger.data(f"Input timing model: {self.path_timing_model}")
@@ -268,7 +261,8 @@ class champss_timing:
 
                 # Run timing from PINT
                 self.logger.debug(f" > Timing TOAs")
-                tim.time(fit_params=fit_params, potential_params=potential_fit_params)
+                # tim.time(fit_params=fit_params, potential_params=potential_fit_params)
+                tim.time(fit_params=fit_params)
                 
                 # Insert timing info
                 self.logger.debug(f"Saving timing info to database")
