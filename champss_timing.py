@@ -189,9 +189,9 @@ class champss_timing:
             for this_param_id, this_param_config in self.timing_config["params"].items():
                 # if(this_param_config["min_days"] <= n_days_to_fit and this_param_config["max_days"] > n_days_to_fit):
                 if(this_param_config["min_days"] <= n_days_to_fit):
-                    # if(this_param_id not in fit_params):
-                    #     potential_fit_params.append(this_param_id)
-                    fit_params.append(this_param_id)
+                    if(this_param_id not in fit_params):
+                        # potential_fit_params.append(this_param_id)
+                        fit_params.append(this_param_id)
 
             if(len(fit_params) == 0):
                 self.logger.error(f"No parameter to fit at n_days={n_days_to_fit}")
