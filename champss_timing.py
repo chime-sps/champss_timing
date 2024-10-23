@@ -192,6 +192,7 @@ class champss_timing:
                     if(this_param_id not in fit_params):
                         # potential_fit_params.append(this_param_id)
                         fit_params.append(this_param_id)
+			break # one param a time
 
             if(len(fit_params) == 0):
                 self.logger.error(f"No parameter to fit at n_days={n_days_to_fit}")
