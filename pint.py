@@ -91,7 +91,7 @@ class pint_handler():
         return self.t
 
     
-    def dropout_chi2r_filter(self, threshold=15):
+    def dropout_chi2r_filter(self, threshold=30):
         if len(self.t) < 15:
             return self.t
         
