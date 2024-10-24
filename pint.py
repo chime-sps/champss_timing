@@ -98,7 +98,7 @@ class pint_handler():
         utils.print_info("Running dropout_chi2r_filter, the following PINT output is coming from dropout trials. ")
         
         dropout_chi2rs = []
-        for i in range(len(self.t)-5): # not including the lastest 5 TOA
+        for i in range(len(self.t)):
             self.logger.debug("Dropout filter trial", i, "/", len(self.t), layer=1, end="\r")
             try:
                 # copy self
@@ -137,6 +137,12 @@ class pint_handler():
             # filter
             toas_bad = np.where(dropout_chi2rs < threshold_chi2r)[0]
             toas_good = np.where(dropout_chi2rs >= threshold_chi2r)[0]
+        
+            # do not include the lastest 5 TOAs in bad TOAs
+            for i, toa_i in enumerate(toas_bad):
+                if toa_i >= len(self.t) - 5:
+                    toas_good = np.append(toas_good, toa_i)
+                    toas_bad = np.delete(toas_bad, i)
 
             # sanity check: if there are too many points get filtered out
             if (len(toas_bad) / len(self.t)) < 0.25:
