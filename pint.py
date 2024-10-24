@@ -91,7 +91,7 @@ class pint_handler():
         return self.t
 
     
-    def dropout_chi2r_filter(self, threshold=9):
+    def dropout_chi2r_filter(self, threshold=15):
         if len(self.t) < 15:
             return self.t
         
@@ -122,12 +122,17 @@ class pint_handler():
         self_tmp = copy.deepcopy(self)
         self_tmp.fit()
 
+        # no need to filter if chi2r < 1
+        if self_tmp.f.get_params_dict("all", "quantity")["CHI2R"].value < 1:
+            return self.t
+
         while True:
             # calculate threshold
             dropout_chi2rs = np.array(dropout_chi2rs)
             # ref_chi2r = self_tmp.f.get_params_dict("all", "quantity")["CHI2R"].value
             ref_chi2r = np.median(dropout_chi2rs)
-            threshold_chi2r = ref_chi2r - median_abs_deviation(np.abs(dropout_chi2rs - ref_chi2r)) * threshold
+            # threshold_chi2r = ref_chi2r - median_abs_deviation(np.abs(dropout_chi2rs - ref_chi2r)) * threshold
+            threshold_chi2r = ref_chi2r - median_abs_deviation(np.abs(dropout_chi2rs)) * threshold
 
             # filter
             toas_bad = np.where(dropout_chi2rs < threshold_chi2r)[0]
