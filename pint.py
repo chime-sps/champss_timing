@@ -139,11 +139,11 @@ class pint_handler():
             toas_good = np.where(dropout_chi2rs >= threshold_chi2r)[0]
 
             # sanity check: if there are too many points get filtered out
-            if (len(toas_bad) / len(self.t)) < 0.1:
+            if (len(toas_bad) / len(self.t)) < 0.25:
                 break
 
             threshold += 1
-            self.logger.warning(f"More than 10% of points were filtered out by the dropout filter. Lowering threshold to ref_chi2 - mad * {threshold}")
+            self.logger.warning(f"More than 25% of points were filtered out by the dropout filter. Lowering threshold to ref_chi2 - mad * {threshold}")
         
         # get toas resid, err, and mjds
         self.logger.debug(f"Bad TOAs: {toas_bad}")
