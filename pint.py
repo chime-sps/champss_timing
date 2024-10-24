@@ -139,10 +139,13 @@ class pint_handler():
             toas_good = np.where(dropout_chi2rs >= threshold_chi2r)[0]
         
             # do not include the lastest 5 TOAs in bad TOAs
-            for i, toa_i in enumerate(toas_bad):
-                if toa_i >= len(self.t) - 5:
-                    toas_good = np.append(toas_good, toa_i)
-                    toas_bad = np.delete(toas_bad, i)
+            # for i, toa_i in enumerate(toas_bad):
+            #     if toa_i >= len(self.t) - 5:
+            #         toas_good = np.append(toas_good, toa_i)
+            #         toas_bad = np.delete(toas_bad, i)
+            i_del = np.where(toas_bad >= len(self.t) - 5)[0]
+            toas_good = np.append(toas_good, toas_bad[i_del])
+            toas_bad = np.delete(toas_bad, i_del)
 
             # sanity check: if there are too many points get filtered out
             if (len(toas_bad) / len(self.t)) < 0.25:
