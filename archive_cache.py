@@ -94,8 +94,11 @@ class archive_cache:
         utils.print_success(f"  [update_model] timing model updated for {len(archives)} observations. ")
 
         # update psr_amps in database
-        for ar in archives:
-            self.db_update_psr_amps(ar)
+        for i, ar in enumerate(archives):
+            print(f"  [update_model] updating archive information in database for {i + 1}/{len(archives)}... ")
+            self.db_update_psr_amps(ar, commit=False)
+        print(f"  [update_model] committing changes to database... ")
+        self.db_commit()
         utils.print_success(f"  [update_model] archive information in database updated for {len(archives)} observations. ")
 
         return True
@@ -124,7 +127,7 @@ class archive_cache:
             }
         )
     
-    def db_update_psr_amps(self, filename):
+    def db_update_psr_amps(self, filename, commit=True):
         archive_hdl = archive_utils(filename)
 
         last_archive_info = self.db_hdl.get_archive_info_by_filename(self.utils.get_archive_id(filename))
@@ -135,8 +138,12 @@ class archive_cache:
             filename = self.utils.get_archive_id(filename),
             psr_amps = archive_hdl.get_amps(),
             psr_snr = archive_hdl.get_snr(), 
-            notes = notes
+            notes = notes, 
+            commit = commit
         )
+    
+    def db_commit(self):
+        self.db_hdl.conn.commit()
         
     def cleanup(self):
         if self.db_path is not None: # close if database connection was created here

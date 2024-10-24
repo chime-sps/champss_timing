@@ -98,7 +98,7 @@ class pint_handler():
         utils.print_info("Running dropout_chi2r_filter, the following PINT output is coming from dropout trials. ")
         
         dropout_chi2rs = []
-        for i in range(len(self.t)):
+        for i in range(len(self.t)-5): # not including the lastest 5 TOA
             self.logger.debug("Dropout filter trial", i, "/", len(self.t), layer=1, end="\r")
             try:
                 # copy self
@@ -115,7 +115,7 @@ class pint_handler():
                 dropout_chi2rs.append(f_tmp.get_params_dict("all", "quantity")["CHI2R"].value)
             
             except Exception as e:
-                self.logger.error(f"Dropout trial failed for TOA {i}. ", e)
+                self.logger.warning(f"Dropout trial failed for TOA {i}. ", e)
                 dropout_chi2rs.append(np.inf)
 
         # fit model without dropout
