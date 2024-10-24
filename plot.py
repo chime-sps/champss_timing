@@ -69,6 +69,7 @@ class plot:
 
             # Other
             "fitted_params": {}, 
+            "unfreeze_params": [],
             "mjd_gaps": []
         }
 
@@ -123,13 +124,13 @@ class plot:
         plot_data["resids_err_phase"] = plot_data["resids_err"] / this_F0
         plot_data["bad_resids_phase"] = plot_data["bad_resids"] / this_F0
         plot_data["bad_resids_err_phase"] = plot_data["bad_resids_err"] / this_F0
-
-            
+  
         # stack absolute amplitudes
         plot_data["stacked_amps"] = np.sum(plot_data["amps"], axis=0)
 
-        # fitted parameters
+        # parameters
         plot_data["fitted_params"] = self.timing_info[-1]["fitted_params"]
+        plot_data["unfreeze_params"] = self.timing_info[-1]["unfreeze_params"]
 
         return plot_data
     
@@ -155,6 +156,7 @@ class plot:
         # axs[0, 0].set_yticklabels(axs[0, 0].get_yticks(), rotation=90, fontdict={"verticalalignment": "center"})
         axs[0, 0].set_xticks([])
         axs[0, 0].set_yticks([])
+        axs[0, 0].set_xlim(0, len(plot_data["stacked_amps"]) * 2)
         axs[0, 0].set_title("Stacked Profile")
 
         # plot amps vertically across 3 grids
@@ -271,7 +273,10 @@ class plot:
         # Plot fitted_params as table
         table_data = []
         for key, value in plot_data["fitted_params"].items():
-            table_data.append([key, value])
+            if key in plot_data["unfreeze_params"]:
+                table_data.append(["◼︎ " + key, value])
+            else:
+                table_data.append(["◻︎ " + key, value])
         axs[0, 4].remove()
         axs[1, 4].remove()
         axs[2, 4].remove()
@@ -279,7 +284,7 @@ class plot:
         table_gs = axs[0, 3].get_gridspec()
         axs_table = fig.add_subplot(table_gs[:, 4])
         axs_table.axis("off")
-        axs_table.table(cellText=table_data, colLabels=["Parameter", "Value"], cellLoc="center", loc="center", colLoc="center")
+        axs_table.table(cellText=table_data, colLabels=["Parameter", "Value"], loc="center", cellLoc="left", colLoc="left")
         axs_table.set_title("Fitted Model Parameters")
 
         # Add date to the right bottom corner

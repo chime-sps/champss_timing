@@ -12,6 +12,7 @@ import numpy as np
 import shutil
 import time
 import copy
+import traceback
 
 from .utils import utils
 
@@ -90,7 +91,10 @@ class pint_handler():
         return self.t
 
     
-    def dropout_chi2r_filter(self, threshold=7):
+    def dropout_chi2r_filter(self, threshold=9):
+        if len(self.t) < 15:
+            return self.t
+        
         utils.print_info("Running dropout_chi2r_filter, the following PINT output is coming from dropout trials. ")
         
         dropout_chi2rs = []
@@ -118,17 +122,26 @@ class pint_handler():
         self_tmp = copy.deepcopy(self)
         self_tmp.fit()
 
-        # calculate threshold
-        dropout_chi2rs = np.array(dropout_chi2rs)
-        # ref_chi2r = self_tmp.f.get_params_dict("all", "quantity")["CHI2R"].value
-        ref_chi2r = np.median(dropout_chi2rs)
-        threshold_chi2r = ref_chi2r - median_abs_deviation(np.abs(dropout_chi2rs - ref_chi2r)) * threshold
+        while True:
+            # calculate threshold
+            dropout_chi2rs = np.array(dropout_chi2rs)
+            # ref_chi2r = self_tmp.f.get_params_dict("all", "quantity")["CHI2R"].value
+            ref_chi2r = np.median(dropout_chi2rs)
+            threshold_chi2r = ref_chi2r - median_abs_deviation(np.abs(dropout_chi2rs - ref_chi2r)) * threshold
 
-        # filter
-        toas_bad = np.where(dropout_chi2rs < threshold_chi2r)[0]
-        toas_good = np.where(dropout_chi2rs >= threshold_chi2r)[0]
+            # filter
+            toas_bad = np.where(dropout_chi2rs < threshold_chi2r)[0]
+            toas_good = np.where(dropout_chi2rs >= threshold_chi2r)[0]
+
+            # sanity check: if there are too many points get filtered out
+            if (len(toas_bad) / len(self.t)) < 0.1:
+                break
+
+            threshold += 1
+            self.logger.warning(f"More than 10% of points were filtered out by the dropout filter. Lowering threshold to ref_chi2 - mad * {threshold}")
         
         # get toas resid, err, and mjds
+        self.logger.debug(f"Bad TOAs: {toas_bad}")
         self.bad_toas = self.t[toas_bad]
         self.bad_resids = Residuals(self.t, self.m).time_resids[toas_bad]
         self.t = self.t[toas_good]
@@ -146,6 +159,7 @@ class pint_handler():
 
         # fit current model
         self_current = copy.deepcopy(self)
+        self_current.dropout_chi2r_filter()
         self_current.fit()
 
         # fit model with additional params
@@ -153,10 +167,11 @@ class pint_handler():
         for param in additional_params:
             self_additional.unfreeze(param)
         try:
+            self_additional.dropout_chi2r_filter()
             self_additional.fit()
         except:
             self.logger.warning("F-test failed. ")
-            return False
+            return False, 1.0
 
         # get residuals and rsses
         rss_current = get_rss(self_current.f.resids.time_resids)
@@ -176,42 +191,51 @@ class pint_handler():
         # calculate p-value
         p_value = 1 - f_stats.cdf(float(F), dfn=float(df_current - df_additional), dfd=float(df_additional))
 
-        # def f_test(resid_simple_mode, resid_complex_mode, n_free_params_simple, n_free_params_complex, n_points):
-        #     def get_rss(resid):
-        #         return np.sum(resid**2)
-            
-        #     rss_simple = get_rss(resid_simple_mode)
-        #     rss_complex = get_rss(resid_complex_mode)
-
-        #     f_stat = ((rss_simple - rss_complex) / (n_free_params_complex - n_free_params_simple)) / (rss_complex / (n_points - n_free_params_complex))
-        #     p_value = 1 - f_stats.cdf(float(f_stat), float(n_free_params_complex - n_free_params_simple), float(n_points - n_free_params_complex))
-
-        #     return f_stat, p_value
-        
-        # F, p_value = f_test(
-        #     self_current.f.resids.time_resids, 
-        #     self_additional.f.resids.time_resids, 
-        #     len(self_current.m.free_params), 
-        #     len(self_additional.m.free_params), 
-        #     len(self_additional.t)
-        # )
-
         # p-value check
         self.logger.debug(f"Parameters: {additional_params}, F: {F}, p-value: {p_value}")
         if p_value > p_value_threshold: 
             return False, p_value
             
-        # sanity check
-        ## check if freq-dot from more complex model is negative
+        # # sanity check
+        # ## check if freq-dot from more complex model is negative
         # if self_additional.m.F1.value > 0:
         #     self.logger.warning("F-test passed, but freq-dot from more complex model is positive. ")
         #     return False, p_value
-        ## check if the ra and dec changes are too large
-        if np.abs(self_current.m.RAJ.value - self_additional.m.RAJ.value) > beamsize or np.abs(self_current.m.DECJ.value - self_additional.m.DECJ.value) > beamsize:
-            self.logger.warning("F-test passed, but ra and dec changes are too large (> 1 beamsize). ")
-            return False, p_value
+        # ## check if the ra and dec changes are too large
+        # if np.abs(self_current.m.RAJ.value - self_additional.m.RAJ.value) > beamsize or np.abs(self_current.m.DECJ.value - self_additional.m.DECJ.value) > beamsize:
+        #     self.logger.warning("F-test passed, but ra and dec changes are too large (> 1 beamsize). ")
+        #     return False, p_value
         
         return True, p_value
+    
+    def trial_fit(self, additional_params):
+        utils.print_info("Running trial fit, the following PINT output is not comming from real fit. ")
+
+        # fit current model
+        self_current = copy.deepcopy(self)
+        self_current.dropout_chi2r_filter()
+        self_current.fit()
+
+        # fit model with additional params
+        self_additional = copy.deepcopy(self)
+        self_additional.dropout_chi2r_filter()
+        for param in additional_params:
+            self_additional.unfreeze(param)
+        try:
+            self_additional.fit()
+        except:
+            self.logger.warning("Trial fit failed. ")
+            return False
+        
+        # sanity check: check if new chi2 is better
+        # chi2r_current = self_current.f.get_params_dict("all", "quantity")["CHI2R"].value
+        # chi2r_additional = self_current.f.get_params_dict("all", "quantity")["CHI2R"].value
+
+        # if chi2r_current <= chi2r_additional:
+        #     return False
+        
+        return True
+
 
     def freeze(self, param):
         if not self.initialized:
@@ -249,8 +273,8 @@ class pint_handler():
             self.initialize()
 
         # Sanity check: if F1 > 0, then set it into 0
-        if self.m["F1"].value > 0:
-            self.m["F1"].value = 0
+        # if self.m["F1"].value > 0:
+        #     self.m["F1"].value = 0
         
         try:
             self.f = pint.fitter.Fitter.auto(self.t, self.m)
@@ -258,11 +282,15 @@ class pint_handler():
             # self.f.print_summary()
             self.logger.info(self.f.get_summary())
         except Exception as e:
-            self.logger.error("Fitting failed. ", e)
-            self.f = {
-                "fail": True, 
-                "error": e
-            }
+            self.logger.error("Fitting failed. ")
+            self.logger.error("Error", e)
+            self.logger.error("Parameters", self.get_unfreezed_params())
+            self.logger.error("Please resolve this error manually. ")
+            # self.f = {
+            #     "fail": True, 
+            #     "error": e
+            # }
+            raise Exception("Fitting failed. Please resolve this error manually. ", e)
 
     def plot(self):
         if not self.initialized:
