@@ -142,7 +142,7 @@ class plot:
 
         return rounded_ticks
     
-    def plot(self, savefig=None):
+    def diagnostic(self, savefig=None):
         plot_data = self.get_plot_data()
 
         # create 4x5 grid of plots

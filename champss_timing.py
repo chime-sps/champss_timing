@@ -128,7 +128,7 @@ class champss_timing:
 
                 # Create diagnostic plot
                 self.logger.info(f"Creating diagnostic plot")
-                plot(db_hdl=self.db_hdl).plot(savefig=self.path_diagnostic_plot)
+                plot(db_hdl=self.db_hdl).diagnostic(savefig=self.path_diagnostic_plot)
 
                 # Run checker
                 champss_checker(self.path_psr_dir, self.db_hdl, self.psr_id).check()
