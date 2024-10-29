@@ -113,7 +113,7 @@ class champss_timing:
         n_timed = 0
         while True:
             timing_res = self.timing()
-            if(timing_res["status"] != "success"):
+            if timing_res["status"] != "success":
                 if timing_res["status"] == "error":
                     raise Exception("Timing failed. ")
 

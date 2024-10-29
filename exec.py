@@ -1,17 +1,27 @@
 import subprocess
 import multiprocessing
 import tqdm
+import os
 import random
 
 from .utils import utils
 
 class exec():
-    def __init__(self, n_pools=4, log=""):
+    def __init__(self, n_pools="auto", log=""):
         self.cmds = []
         self.cmds_finished = []
         self.log = log
         self.n_pools = n_pools
         self.res = None
+
+        if self.n_pools == "auto":
+            # Try if slurm environment
+            try:
+                self.n_pools = int(os.environ["SLURM_CPUS_PER_TASK"])
+                print(f"SLURM environment detected. Using {self.n_pools} CPUs.")
+            except:
+                self.n_pools = multiprocessing.cpu_count()
+                print(f"Using {self.n_pools} CPUs.")
 
     def _exec(self, cmd, log=""):
         # Run the command
