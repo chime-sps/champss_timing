@@ -26,6 +26,7 @@ class pint_handler():
         self.logger = self_super.logger.copy()
         self.m, self.t = False, False
         self.f = False
+        self.f_status = None
         self.prefit_resids = False
         self.bad_toas = []
         self.bad_resids = []
@@ -291,7 +292,7 @@ class pint_handler():
 
         return False
         
-    def fit(self):
+    def fit(self, raise_exception=True):
         if not self.initialized:
             self.initialize()
 
@@ -299,21 +300,23 @@ class pint_handler():
         # if self.m["F1"].value > 0:
         #     self.m["F1"].value = 0
         
+        self.f = pint.fitter.Fitter.auto(self.t, self.m)
         try:
-            self.f = pint.fitter.Fitter.auto(self.t, self.m)
             self.f.fit_toas()
-            # self.f.print_summary()
             self.logger.info(self.f.get_summary())
+            self.f_status = True
         except Exception as e:
-            self.logger.error("Fitting failed. ")
-            self.logger.error("Error", e)
-            self.logger.error("Parameters", self.get_unfreezed_params())
-            self.logger.error("Please resolve this error manually. ")
+            self.logger.warning("Fitting failed. ")
+            self.logger.warning("Error", e)
+            self.logger.warning("Parameters", self.get_unfreezed_params())
+            self.logger.warning("Timing Skipped. If this warning persists, it must be resolved manually.")
             # self.f = {
             #     "fail": True, 
             #     "error": e
             # }
-            raise Exception("Fitting failed. Please resolve this error manually. ", e)
+            self.f_status = False
+            if raise_exception:
+                raise Exception("Fitting failed. Please resolve this error manually. ", e)
 
     def plot(self):
         if not self.initialized:

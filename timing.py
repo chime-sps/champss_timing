@@ -158,7 +158,7 @@ class timing():
         self.pint.filter()
 
         self.logger.debug("Fitting TOAs... ")
-        self.pint.fit()
+        self.pint.fit(raise_exception=False)
 
         self.logger.debug("Plotting residuals... ")
         self.pint.plot()

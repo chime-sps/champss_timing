@@ -327,6 +327,11 @@ class champss_timing:
         bad_residuals_err_list = [float(this_resid_err) for this_resid_err in bad_residuals_err]
         bad_toa_mjds_list = [float(this_mjd) for this_mjd in bad_residual_mjds]
 
+        # Prepare notes
+        notes = {"remark": []}
+        if not pint.f_status:
+            notes["remark"].append("FITTING_FAILED")
+
         # Get archive ids
         archive_ids = []
         for f in fs:
