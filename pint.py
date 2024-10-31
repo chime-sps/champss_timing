@@ -74,9 +74,11 @@ class pint_handler():
 
         return self.t
 
-    def error_filter(self, threshold=0.5):
+    def error_filter(self, threshold=0.05):
         # get error_ok
         threshold_phase = threshold * (1 / self.m.F0.value) * u.s
+        if threshold_phase < 5000 * u.s:
+            threshold_phase = 5000 * u.s
         error_ok = self.t.get_errors() < threshold_phase.to(u.us)
 
         # filter
@@ -92,8 +94,8 @@ class pint_handler():
 
     
     def dropout_chi2r_filter(self, threshold=30):
-        if len(self.t) < 15:
-            return self.t
+        # if len(self.t) < 10:
+        #     return self.t
         
         utils.print_info("Running dropout_chi2r_filter, the following PINT output is coming from dropout trials. ")
         
@@ -138,14 +140,10 @@ class pint_handler():
             toas_bad = np.where(dropout_chi2rs < threshold_chi2r)[0]
             toas_good = np.where(dropout_chi2rs >= threshold_chi2r)[0]
         
-            # do not include the lastest 5 TOAs in bad TOAs
-            # for i, toa_i in enumerate(toas_bad):
-            #     if toa_i >= len(self.t) - 5:
-            #         toas_good = np.append(toas_good, toa_i)
-            #         toas_bad = np.delete(toas_bad, i)
-            i_del = np.where(toas_bad >= len(self.t) - 5)[0]
-            toas_good = np.append(toas_good, toas_bad[i_del])
-            toas_bad = np.delete(toas_bad, i_del)
+            # # do not include the lastest 5 TOAs in bad TOAs
+            # i_del = np.where(toas_bad >= len(self.t) - 5)[0]
+            # toas_good = np.append(toas_good, toas_bad[i_del])
+            # toas_bad = np.delete(toas_bad, i_del)
 
             # sanity check: if there are too many points get filtered out
             if (len(toas_bad) / len(self.t)) < 0.25:
@@ -280,7 +278,16 @@ class pint_handler():
                 params.append(param)
 
         return params
+    
+    def check_toa_gaps(self, latest_n_days=2, threshold=15):
+        mjds = self.t.get_mjds().value
+        mjds.sort()
+        mjds = mjds[-latest_n_days:]
 
+        if np.max(np.diff(mjds)) > threshold:
+            return True
+
+        return False
         
     def fit(self):
         if not self.initialized:

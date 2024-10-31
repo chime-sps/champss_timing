@@ -50,6 +50,7 @@ class plot:
             "resids_phase": [], 
             "resids_err": [], 
             "resids_err_phase": [], 
+            "rms": [], 
 
             # Bad Residuals
             "bad_resids": [], 
@@ -98,6 +99,9 @@ class plot:
                 plot_data["amps_normalized"].append(plot_data["amps"][-1])
                 plot_data["amps_normalized"][-1] = np.array(plot_data["amps_normalized"][-1]) / max(plot_data["amps_normalized"][-1])
                 plot_data["amps_normalized"][-1] = plot_data["amps_normalized"][-1] - min(plot_data["amps_normalized"][-1])
+
+                # get rms
+                plot_data["rms"].append(np.sqrt(np.mean(np.array(this_timing["residuals"]["val"])**2)))
             last_mjd = max(this_timing["obs_mjds"])
         
         # get residuals
@@ -141,6 +145,11 @@ class plot:
             rounded_ticks.append(round(this_tick, n))
 
         return rounded_ticks
+
+    def _format_y_axis(self, ax):
+        for label in ax.get_ymajorticklabels():
+            label.set_rotation(90)
+            label.set_verticalalignment("center")
     
     def diagnostic(self, savefig=None):
         plot_data = self.get_plot_data()
@@ -195,18 +204,25 @@ class plot:
         ## plot residuals
         axs_resids.errorbar(plot_data["resid_mjds"], plot_data["resids_phase"], plot_data["resids_err_phase"], fmt="x", c="k", capsize=3, label="Fitted")
         ## plot residuals for bad toas
-        if len(plot_data["bad_toa_mjds"]) > 0:
-            axs_resids.errorbar(plot_data["bad_toa_mjds"], plot_data["bad_resids_phase"], plot_data["bad_resids_err_phase"], fmt="x", c="r", capsize=3, label="Bad TOAs")
+        # if len(plot_data["bad_toa_mjds"]) > 0:
+            # axs_resids.errorbar(plot_data["bad_toa_mjds"], plot_data["bad_resids_phase"], plot_data["bad_resids_err_phase"], fmt="x", c="r", capsize=3, label="Bad TOAs")
+        lim_0, lim_1 = axs_resids.get_ylim()
+        lim_0, lim_1 = (-max([np.abs(lim_0), np.abs(lim_1)]), max([np.abs(lim_0), np.abs(lim_1)]))
+        axs_resids.set_ylim(lim_0, lim_1)
+        for i in range(len(plot_data["bad_toa_mjds"])):
+            if plot_data["bad_resids_phase"][i] > 0:
+                axs_resids.text(plot_data["bad_toa_mjds"][i], lim_1, f"{round(plot_data['bad_resids_phase'][i], 2)} → ", c="red", label="Bad TOAs", horizontalalignment="center", verticalalignment="top", rotation=90)
+            else:
+                axs_resids.text(plot_data["bad_toa_mjds"][i], lim_0, f" ← {round(plot_data['bad_resids_phase'][i], 2)}", c = "red", label="Bad TOAs", horizontalalignment="center", verticalalignment="bottom", rotation=90)
+        axs_resids.axhline(y=0, color="k", linestyle="--", alpha=0.25)
         axs_resids.set_xlabel("MJD")
         axs_resids.set_ylabel("Timing Residuals (phase)")
-        axs_resids.set_yticklabels(self._round_axis(axs_resids.get_yticks(), 5), rotation=90, fontdict={"verticalalignment": "center"})
+        self._format_y_axis(axs_resids)
         axs_resids.set_title("Diagnostic Plots")
         ## fill mjd gaps
-        lim_0, lim_1 = axs_resids.get_ylim()
-        axs_resids.set_ylim(lim_0, lim_1)
         for this_gap in plot_data["mjd_gaps"]:
             axs_resids.fill_between(this_gap, lim_0, lim_1, color="gray", alpha=0.10, label="No Observation")
-        self.__legend_without_duplicate_labels(axs_resids)
+        # self.__legend_without_duplicate_labels(axs_resids)
 
         # plot chi2r horizontally across 2 grids
         ## remove the underlying Axes
@@ -222,13 +238,13 @@ class plot:
         # axs_chi2r.set_title("Reduced Chi2")
         axs_chi2r.set_xlabel("MJD")
         axs_chi2r.set_ylabel("Reduced Chi2")
-        axs_chi2r.set_yticklabels(self._round_axis(axs_chi2r.get_yticks(), 2), rotation=90, fontdict={"verticalalignment": "center"})
+        self._format_y_axis(axs_chi2r)
         ## fill mjd gaps
         lim_0, lim_1 = axs_chi2r.get_ylim()
         axs_chi2r.set_ylim(lim_0, lim_1)
         for this_gap in plot_data["mjd_gaps"]:
             axs_chi2r.fill_between(this_gap, lim_0, lim_1, color="gray", alpha=0.10)
-        self.__legend_without_duplicate_labels(axs_chi2r)
+        # self.__legend_without_duplicate_labels(axs_chi2r)
 
         # plot n_params horizontally across 2 grids
         ## remove the underlying Axes
@@ -248,7 +264,26 @@ class plot:
         axs_n_params.set_ylim(lim_0, lim_1)
         for this_gap in plot_data["mjd_gaps"]:
             axs_n_params.fill_between(this_gap, lim_0, lim_1, color="gray", alpha=0.10)
-        self.__legend_without_duplicate_labels(axs_n_params)
+        # self.__legend_without_duplicate_labels(axs_n_params)
+
+        # # plot rms horizontally across 2 grids
+        # axs[3, 1].remove()
+        # axs[3, 2].remove()
+        # axs[3, 3].remove()
+        # ## combine the 2 grids
+        # rms_gs = axs[3, 1].get_gridspec()
+        # axs_rms = fig.add_subplot(rms_gs[3, 1:4])
+        # axs_rms.plot(plot_data["mjds"], plot_data["rms"], "kx", label="RMS")
+        # # axs_rms.set_title("RMS")
+        # axs_rms.set_xlabel("MJD")
+        # axs_rms.set_ylabel("RMS")
+        # self._format_y_axis(axs_rms)
+        # ## fill mjd gaps
+        # lim_0, lim_1 = axs_rms.get_ylim()
+        # axs_rms.set_ylim(lim_0, lim_1)
+        # for this_gap in plot_data["mjd_gaps"]:
+        #     axs_rms.fill_between(this_gap, lim_0, lim_1, color="gray", alpha=0.10)
+        # # self.__legend_without_duplicate_labels(axs_rms)
         
         # plot snr horizontally across 2 grids
         ## remove the underlying Axes
@@ -262,13 +297,13 @@ class plot:
         # axs_snr.set_title("SNR")
         axs_snr.set_xlabel("MJD")
         axs_snr.set_ylabel("Signal to Noise Ratio")
-        axs_snr.set_yticklabels(self._round_axis(axs_snr.get_yticks(), 2), rotation=90, fontdict={"verticalalignment": "center"})
+        self._format_y_axis(axs_snr)
         ## fill mjd gaps
         lim_0, lim_1 = axs_snr.get_ylim()
         axs_snr.set_ylim(lim_0, lim_1)
         for this_gap in plot_data["mjd_gaps"]:
             axs_snr.fill_between(this_gap, lim_0, lim_1, color="gray", alpha=0.10)
-        self.__legend_without_duplicate_labels(axs_snr)
+        # self.__legend_without_duplicate_labels(axs_snr)
 
         # Plot fitted_params as table
         table_data = []
@@ -284,11 +319,14 @@ class plot:
         table_gs = axs[0, 3].get_gridspec()
         axs_table = fig.add_subplot(table_gs[:, 4])
         axs_table.axis("off")
-        axs_table.table(cellText=table_data, colLabels=["Parameter", "Value"], loc="center", cellLoc="left", colLoc="left")
+        axs_table_hdl = axs_table.table(cellText=table_data, colLabels=["Parameter", "Value"], loc="center", cellLoc="left", colLoc="left")
+        axs_table_hdl.auto_set_font_size(False)
+        axs_table_hdl.set_fontsize(8)
+        axs_table_hdl.scale(1.3, 1.3)
         axs_table.set_title("Fitted Model Parameters")
 
         # Add date to the right bottom corner
-        fig.text(0.999, 0.001, f"PSR {plot_data['fitted_params']['PSR']} | {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", fontsize=10, ha="right")
+        fig.text(0.999, 0.001, f"PSR {plot_data['fitted_params']['PSR']} | {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", fontsize=10, ha="right", va="bottom")
 
         # Tight layout
         fig.tight_layout()     

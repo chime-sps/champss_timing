@@ -119,6 +119,9 @@ class timing():
             for p in fit_params:
                 self.pint.unfreeze(p)
 
+        if(self.pint.check_toa_gaps()):
+            potential_params = [] # Not adding parameter after a huge gap
+        
         if(len(potential_params) > 1):
             # Run F-test
             f_test_res = {"params": [], "p_values": []}
