@@ -140,10 +140,12 @@ class pint_handler():
             toas_bad = np.where(dropout_chi2rs < threshold_chi2r)[0]
             toas_good = np.where(dropout_chi2rs >= threshold_chi2r)[0]
         
-            # # do not include the lastest 5 TOAs in bad TOAs
-            # i_del = np.where(toas_bad >= len(self.t) - 5)[0]
-            # toas_good = np.append(toas_good, toas_bad[i_del])
-            # toas_bad = np.delete(toas_bad, i_del)
+            # do not include the lastest 5 TOAs in bad TOAs if there's a huge gap in the lastest 5 TOAs
+            if self.check_toa_gaps(latest_n_days=5, threshold=30):
+                self.logger.warning("Huge gap ( > 30 days) in the lastest 5 TOAs. Do not filter the lastest 5 TOAs out since the model might not be able to fit the gap. ")
+                i_del = np.where(toas_bad >= len(self.t) - 5)[0]
+                toas_good = np.append(toas_good, toas_bad[i_del])
+                toas_bad = np.delete(toas_bad, i_del)
 
             # sanity check: if there are too many points get filtered out
             if (len(toas_bad) / len(self.t)) < 0.25:
