@@ -122,7 +122,7 @@ class timing():
         if self.pint.check_toa_gaps():
             potential_params = [] # Not adding parameter after a huge gap
         
-        if len(potential_params) > 1:
+        if len(potential_params) > 0:
             # Run F-test
             f_test_res = {"params": [], "p_values": []}
             for i in range(len(potential_params)):

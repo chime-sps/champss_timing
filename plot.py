@@ -60,8 +60,10 @@ class plot:
 
             # Diagnostic Data
             "chi2r": [], 
-            "n_params": [], 
             "snr": [], 
+            "n_params": [], 
+            "params_x": [], 
+            "params_y": [], 
 
             # Amplitudes
             "amps": [], 
@@ -80,8 +82,12 @@ class plot:
             for i in i_range:
                 plot_data["mjds"].append(this_timing["obs_mjds"][i])
                 plot_data["chi2r"].append(this_timing["chi2_reduced"])
-                plot_data["n_params"].append(len(this_timing["unfreeze_params"]))
                 plot_data["snr"].append(self.archive_info_file_inxed[this_timing["files"][i]]["psr_snr"])
+
+                plot_data["n_params"].append(len(this_timing["unfreeze_params"]))
+                for this_param in this_timing["unfreeze_params"]:
+                    plot_data["params_x"].append(this_timing["obs_mjds"][i])
+                    plot_data["params_y"].append(this_param)
 
                 # Find mjd gaps and add blanks to amplitude for no observation days
                 if len(plot_data["mjds"]) > 1:
@@ -248,6 +254,26 @@ class plot:
             axs_chi2r.fill_between(this_gap, lim_0, lim_1, color="gray", alpha=0.10)
         # self.__legend_without_duplicate_labels(axs_chi2r)
 
+        # # plot n_params horizontally across 2 grids
+        # ## remove the underlying Axes
+        # axs[2, 1].remove()
+        # axs[2, 2].remove()
+        # axs[2, 3].remove()
+        # ## combine the 2 grids
+        # n_params_gs = axs[2, 1].get_gridspec()
+        # axs_n_params = fig.add_subplot(n_params_gs[2, 1:4])
+        # axs_n_params.plot(plot_data["mjds"], plot_data["n_params"], "kx", label="Nparams")
+        # # axs_n_params.set_title("N Params")
+        # axs_n_params.set_xlabel("MJD")
+        # axs_n_params.set_ylabel("Number of Parameters Fitted")
+        # axs_n_params.set_yticklabels(self._round_axis(axs_n_params.get_yticks(), 1), rotation=90, fontdict={"verticalalignment": "center"})
+        # ## fill mjd gaps
+        # lim_0, lim_1 = axs_n_params.get_ylim()
+        # axs_n_params.set_ylim(lim_0, lim_1)
+        # for this_gap in plot_data["mjd_gaps"]:
+        #     axs_n_params.fill_between(this_gap, lim_0, lim_1, color="gray", alpha=0.10)
+        # # self.__legend_without_duplicate_labels(axs_n_params)
+
         # plot n_params horizontally across 2 grids
         ## remove the underlying Axes
         axs[2, 1].remove()
@@ -256,11 +282,12 @@ class plot:
         ## combine the 2 grids
         n_params_gs = axs[2, 1].get_gridspec()
         axs_n_params = fig.add_subplot(n_params_gs[2, 1:4])
-        axs_n_params.plot(plot_data["mjds"], plot_data["n_params"], "kx", label="Nparams")
+        axs_n_params.plot(plot_data["params_x"], plot_data["params_y"], "kx", label="Nparams")
         # axs_n_params.set_title("N Params")
         axs_n_params.set_xlabel("MJD")
         axs_n_params.set_ylabel("Number of Parameters Fitted")
-        axs_n_params.set_yticklabels(self._round_axis(axs_n_params.get_yticks(), 1), rotation=90, fontdict={"verticalalignment": "center"})
+        # axs_n_params.set_yticklabels(self._round_axis(axs_n_params.get_yticks(), 1), rotation=90, fontdict={"verticalalignment": "center"})
+        self._format_y_axis(axs_n_params)
         ## fill mjd gaps
         lim_0, lim_1 = axs_n_params.get_ylim()
         axs_n_params.set_ylim(lim_0, lim_1)
