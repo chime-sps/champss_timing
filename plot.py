@@ -203,12 +203,14 @@ class plot:
         axs_resids = fig.add_subplot(resids_gs[0, 1:4])
         ## plot residuals
         axs_resids.errorbar(plot_data["resid_mjds"], plot_data["resids_phase"], plot_data["resids_err_phase"], fmt="x", c="k", capsize=3, label="Fitted")
+        ## set axis limits
+        lim_0, lim_1 = axs_resids.get_ylim()
+        lim_0, lim_1 = (-max([np.abs(lim_0), np.abs(lim_1)]), max([np.abs(lim_0), np.abs(lim_1)]))
+        if lim_1 < 0.01: lim_0, lim_1 = (-0.01, 0.01)
+        axs_resids.set_ylim(lim_0, lim_1)
         ## plot residuals for bad toas
         # if len(plot_data["bad_toa_mjds"]) > 0:
             # axs_resids.errorbar(plot_data["bad_toa_mjds"], plot_data["bad_resids_phase"], plot_data["bad_resids_err_phase"], fmt="x", c="r", capsize=3, label="Bad TOAs")
-        lim_0, lim_1 = axs_resids.get_ylim()
-        lim_0, lim_1 = (-max([np.abs(lim_0), np.abs(lim_1)]), max([np.abs(lim_0), np.abs(lim_1)]))
-        axs_resids.set_ylim(lim_0, lim_1)
         for i in range(len(plot_data["bad_toa_mjds"])):
             if plot_data["bad_resids_phase"][i] > 0:
                 axs_resids.text(plot_data["bad_toa_mjds"][i], lim_1, f"{round(plot_data['bad_resids_phase'][i], 2)} → ", c="red", label="Bad TOAs", horizontalalignment="center", verticalalignment="top", rotation=90)
