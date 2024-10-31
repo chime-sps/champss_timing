@@ -113,16 +113,16 @@ class timing():
         self.logger.debug("Initializing PINT handler... ")
         self.pint.initialize()
 
-        if(fit_params != "auto"):
+        if fit_params != "auto":
             self.logger.debug(f"Unfreezing parameters... {fit_params}", layer=1)
             self.pint.freeze_all()
             for p in fit_params:
                 self.pint.unfreeze(p)
 
-        if(self.pint.check_toa_gaps()):
+        if self.pint.check_toa_gaps():
             potential_params = [] # Not adding parameter after a huge gap
         
-        if(len(potential_params) > 1):
+        if len(potential_params) > 1:
             # Run F-test
             f_test_res = {"params": [], "p_values": []}
             for i in range(len(potential_params)):
@@ -167,19 +167,6 @@ class timing():
         self.pint.save()
 
         self.logger.debug("Done. ")
-
-    # def update_model(self): # optional. 
-    #     if not self.initialized:
-    #         raise Exception("Workspace not initialized")
-        
-    #     # Remove TZRSITE to fix a problem with psrchive for CHIME observations
-    #     open(f"{self.workspace}/pulsar.par.pam", "w").write(
-    #         open(f"{self.workspace}/pulsar.par").read().replace("TZRSITE", "# TZRSITE")
-    #     )
-        
-    #     self.logger.debug("Updating timing model for scrunched archives... ")
-    #     self.psrchive.update_model(self.fs, f"{self.workspace}/pulsar.par.pam")
-    #     self.logger.debug("Updating timing model for scrunched archives... Done. ")
 
     def __enter__(self):
         self.initialize()
