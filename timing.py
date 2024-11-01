@@ -119,7 +119,10 @@ class timing():
             for p in fit_params:
                 self.pint.unfreeze(p)
 
-        if self.pint.check_toa_gaps():
+        if self.pint.check_toa_gaps(latest_n_days=3, threshold=15):
+            potential_params = [] # Not adding parameter after a huge gap
+
+        if self.pint.check_toa_gaps(latest_n_days=5, threshold=30):
             potential_params = [] # Not adding parameter after a huge gap
         
         if len(potential_params) > 0:

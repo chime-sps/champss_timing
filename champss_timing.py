@@ -73,8 +73,8 @@ class champss_timing:
         self.db_hdl.initialize()
         
         # Check number of data archives
-        if len(self.path_data_archives) < 10:
-            raise ValueError("No enough data archives to perform timing (at least 10 needed)")
+        if len(self.path_data_archives) < 5:
+            raise ValueError("No enough data archives to perform timing (at least 5 needed)")
 
         # Sort data archives by MJD
         self.path_data_archives = {k: v for k, v in sorted(self.path_data_archives.items(), key=lambda item: item[0])}
@@ -153,7 +153,7 @@ class champss_timing:
         archives = []
         if last_timing_info["timestamp"] == 0:
             self.logger.info("No timing info found, starting from scratch. ")
-            mjds = list(self.path_data_archives.keys())[0:10]
+            mjds = list(self.path_data_archives.keys())[0:5]
             archives = [self.path_data_archives[mjd] for mjd in mjds]
             fit_params = ["F0"]
             potential_fit_params = []
