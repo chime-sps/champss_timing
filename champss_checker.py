@@ -51,6 +51,15 @@ class champss_checker:
             return {"level": 1, "message": "The last residual is larger than 1.25 of the median in the last 7 days."}
         
         return {"level": 0, "message": "Residual is normal."}
+
+    def check_fitting_failure(self):
+        if len(self.timing_info) > 3:
+            if ("FITTING_FAILED" in self.timing_info[-1]["notes"]["remark"]
+            and "FITTING_FAILED" in self.timing_info[-2]["notes"]["remark"]
+            and "FITTING_FAILED" in self.timing_info[-3]["notes"]["remark"]):
+                return {"level": 2, "message": "All PINT fittings failed in last 3 days. "}
+        
+        return {"level": 0, "message": "Fitting status is normal."}
     
     def send_notification(self, check_result):
         if check_result["level"] == 0:
@@ -61,6 +70,9 @@ class champss_checker:
             self.noti_hdl.send_urgent_message("=== Checker Important Warning === \n" + check_result["message"] + "\n=======================", psr_id = self.psr_id)
     
     def check(self):
+        print("Checking fitting status...")
+        self.send_notification(self.check_fitting_failure())
+
         print("Checking timing residuals...")
         self.send_notification(self.check_chi2r())
 

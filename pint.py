@@ -26,6 +26,7 @@ class pint_handler():
         self.logger = self_super.logger.copy()
         self.m, self.t = False, False
         self.f = False
+        self.f_status = None
         self.prefit_resids = False
         self.bad_toas = []
         self.bad_resids = []
@@ -120,7 +121,7 @@ class pint_handler():
                 self.logger.warning(f"Dropout trial failed for TOA {i}. ", e)
                 dropout_chi2rs.append(np.inf)
 
-        # fit model without dropout
+        # # fit model without dropout
         self_tmp = copy.deepcopy(self)
         self_tmp.fit()
 
@@ -140,12 +141,17 @@ class pint_handler():
             toas_bad = np.where(dropout_chi2rs < threshold_chi2r)[0]
             toas_good = np.where(dropout_chi2rs >= threshold_chi2r)[0]
         
-            # do not include the lastest 5 TOAs in bad TOAs if there's a huge gap in the lastest 5 TOAs
-            if self.check_toa_gaps(latest_n_days=5, threshold=30):
-                self.logger.warning("Huge gap ( > 30 days) in the lastest 5 TOAs. Do not filter the lastest 5 TOAs out since the model might not be able to fit the gap. ")
-                i_del = np.where(toas_bad >= len(self.t) - 5)[0]
+            # do not include the lastest 3 TOAs in bad TOAs if there's a huge gap in the lastest 3 TOAs
+            if self.check_toa_gaps(latest_n_days=3, threshold=30):
+                self.logger.warning("Huge gap ( > 30 days) in the lastest 3 TOAs. Do not filter the lastest 3 TOAs out since the model might not be able to fit the gap. ")
+                i_del = np.where(toas_bad >= len(self.t) - 3)[0]
                 toas_good = np.append(toas_good, toas_bad[i_del])
                 toas_bad = np.delete(toas_bad, i_del)
+
+            # # do not include the lastest 1 TOAs in bad TOAs
+            # i_del = np.where(toas_bad >= len(self.t) - 1)[0]
+            # toas_good = np.append(toas_good, toas_bad[i_del])
+            # toas_bad = np.delete(toas_bad, i_del)
 
             # sanity check: if there are too many points get filtered out
             if (len(toas_bad) / len(self.t)) < 0.25:
@@ -291,7 +297,7 @@ class pint_handler():
 
         return False
         
-    def fit(self):
+    def fit(self, raise_exception=True):
         if not self.initialized:
             self.initialize()
 
@@ -299,21 +305,23 @@ class pint_handler():
         # if self.m["F1"].value > 0:
         #     self.m["F1"].value = 0
         
+        self.f = pint.fitter.Fitter.auto(self.t, self.m)
         try:
-            self.f = pint.fitter.Fitter.auto(self.t, self.m)
             self.f.fit_toas()
-            # self.f.print_summary()
             self.logger.info(self.f.get_summary())
+            self.f_status = True
         except Exception as e:
-            self.logger.error("Fitting failed. ")
-            self.logger.error("Error", e)
-            self.logger.error("Parameters", self.get_unfreezed_params())
-            self.logger.error("Please resolve this error manually. ")
+            self.logger.warning("Fitting failed. ")
+            self.logger.warning("Error", e)
+            self.logger.warning("Parameters", self.get_unfreezed_params())
+            self.logger.warning("Timing Skipped. If this warning persists, it must be resolved manually.")
             # self.f = {
             #     "fail": True, 
             #     "error": e
             # }
-            raise Exception("Fitting failed. Please resolve this error manually. ", e)
+            self.f_status = False
+            if raise_exception:
+                raise Exception("Fitting failed. Please resolve this error manually. ", e)
 
     def plot(self):
         if not self.initialized:

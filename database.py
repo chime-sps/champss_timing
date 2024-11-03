@@ -246,6 +246,9 @@ class database:
         if "fitted_summary" not in formatted_info["notes"]:
             formatted_info["notes"]["fitted_summary"] = "NO_SUMMARY_PROVIDED"
 
+        if "remark" not in formatted_info["notes"]:
+            formatted_info["notes"]["remark"] = []
+
         return formatted_info
     
     def insert_archive_info(self, filename, psr_amps, psr_snr, notes, timestamp="auto", commit=True):
