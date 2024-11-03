@@ -44,7 +44,7 @@ class database:
             print(f"Readonly temporary database created at {self.psr_db}")
 
             # open the temporary database in readonly mode
-            self.conn = sqlite3.connect("file://" + self.psr_db + "?mode=ro", uri=True)
+            self.conn = sqlite3.connect("file://" + self.psr_db + "?mode=ro", uri=True, check_same_thread=False)
         else:
             self.psr_db = psr_db
             self.conn = sqlite3.connect(self.psr_db)

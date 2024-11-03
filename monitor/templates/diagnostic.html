@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+
+{% block title %}Diagnostic information for {{source_id}}{% endblock %}
+
+{% block content %}
+    <h3>{{ source_id }} <small style="font-size: 0.5em;">Last updated on {{ sources[source_id].get_last_updated() }}</small></h3>
+
+    <div class="row">
+        <div class="col-md-6">
+            <pre style="font-size: 0.70em;">{{ sources[source_id].get_parfile() }}</pre>
+        </div>
+        <div class="col-md-6">
+            <iframe src="data:application/pdf;base64,{{ sources[source_id].get_diagnostic_pdf()|safe }}" style="width: 100%; aspect-ratio: 1.77;"></iframe>
+        </div>
+        <br>
+        <hr>
+        <div class="col-md-6">
+            <h5>Statistics</h5>
+            {% for param in sources[source_id].get_statistics(): %}
+                <div style="width: 100%; height: 300px; border: solid 1px black; margin-bottom: 15px; ">
+                    <div id="stat_{{ param }}" style="width: 100%; height: 100%; "></div>
+                </div>
+                <script>
+                    var trace = {
+                        x: {{ sources[source_id].get_statistics()[param]["mjd"] | safe}},
+                        y: {{ sources[source_id].get_statistics()[param]["val"] | safe}},
+                        mode: 'markers',
+                        type: 'scatter',
+                        marker: {
+                            color: 'black'
+                        }
+                    };
+                    var layout = {
+                        title: '{{ param }}',
+                        xaxis: {
+                            title: 'MJD',
+                            showline: true,
+                            showgrid: true,
+                            zeroline: true
+                        },
+                        yaxis: {
+                            title: '{{ param }}',
+                            showline: true,
+                            showgrid: true,
+                            zeroline: true
+                        },
+                        showlegend: false,
+                        margin: {'t':50,'l':110,'b':60,'r':40}
+                    };
+                    Plotly.newPlot('stat_{{ param }}', [trace], layout);
+                </script>
+            {% endfor %}
+        </div>
+        <div class="col-md-6">
+            <h5>Fitted Parameters</h5>
+            {% for param in sources[source_id].get_parameter_info(): %}
+                <div style="width: 100%; height: 300px; border: solid 1px black; margin-bottom: 15px; ">
+                    <div id="param_{{ param }}" style="width: 100%; height: 100%; "></div>
+                </div>
+                <script>
+                    var trace = {
+                        x: {{ sources[source_id].get_parameter_info()[param]["mjd"] | safe}},
+                        y: {{ sources[source_id].get_parameter_info()[param]["val"] | safe}},
+                        mode: 'markers',
+                        type: 'scatter',
+                        marker: {
+                            color: 'black'
+                        }
+                    };
+                    var layout = {
+                        title: '{{ param }}',
+                        xaxis: {
+                            title: 'MJD',
+                            showline: true,
+                            showgrid: true,
+                            zeroline: true
+                        },
+                        yaxis: {
+                            title: '{{ param }}',
+                            showline: true,
+                            showgrid: true,
+                            zeroline: true
+                        },
+                        showlegend: false,
+                        margin: {'t':50,'l':110,'b':60,'r':40}
+                    };
+                    Plotly.newPlot('param_{{ param }}', [trace], layout);
+                </script>
+            {% endfor %}
+        </div>
+    </div>
+    
+{% endblock %}
