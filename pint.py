@@ -121,12 +121,19 @@ class pint_handler():
                 self.logger.warning(f"Dropout trial failed for TOA {i}. ", e)
                 dropout_chi2rs.append(np.inf)
 
-        # # fit model without dropout
+        # fit model without dropout
         self_tmp = copy.deepcopy(self)
-        self_tmp.fit()
+        try:
+            self_tmp.fit()
+            # no need to filter if chi2r < 1
+            if self_tmp.f.get_params_dict("all", "quantity")["CHI2R"].value < 1:
+                return self.t
+        except Exception as e:
+            self.logger.warning(f"Trial fit in dropout filter failed. ", e)
 
-        # no need to filter if chi2r < 1
-        if self_tmp.f.get_params_dict("all", "quantity")["CHI2R"].value < 1:
+        # If all chi2rs are the same value
+        if np.all(np.array(dropout_chi2rs) == dropout_chi2rs[0]):
+            self.logger.warning(f"Chi2r for all dropout trials are the same ({dropout_chi2rs[0]}). Not TOA will be removed. ")
             return self.t
 
         while True:

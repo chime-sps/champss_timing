@@ -164,7 +164,7 @@ class plot:
         fig, axs = plt.subplots(4, 5, figsize=(20, 11.25))
 
         # plot stacked amps
-        axs[0, 0].plot(np.tile(plot_data["stacked_amps"], 2), color="k")
+        axs[0, 0].plot(np.tile(plot_data["stacked_amps"], 2), color="k", lw=0.5)
         # axs[0, 0].set_title("Stacked Profile")
         # axs[0, 0].set_xlabel("Phase")
         # axs[0, 0].set_ylabel("Amplitude")
