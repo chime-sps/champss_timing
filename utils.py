@@ -2,6 +2,7 @@ import random
 import datetime
 import traceback
 from hashlib import md5
+import os
 
 from .notification import notification
 
@@ -26,3 +27,16 @@ class utils:
     
     def get_archive_id(archive):
         return archive.split("/")[-1].split(".")[0]
+
+    def no_overwriting_name(name):
+        name_ = name
+        i = 0
+
+        while os.path.exists(name_):
+            i += 1
+            if "." in name:
+                name_ = f"{name.split('.')[0]}_{i}.{name.split('.')[1]}"
+            else:
+                name_ = f"{name}_{i}"
+
+        return name_

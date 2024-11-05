@@ -44,7 +44,6 @@ class pint_handler():
 
         # Set initialized
         self.initialized = True
-    
 
     def filter(self, error=True, dropout=True):
         # MAD filter
