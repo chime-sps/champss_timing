@@ -94,6 +94,7 @@ class pint_handler():
             self.logger.warning(f"More than 10% of points were filtered out by the error filter. Lowering threshold to {threshold}")
 
         # get toas and mjds
+        self.logger.debug(f"Bad TOAs: {toas_bad}")
         self.bad_toas = self.t[toas_bad]
         self.bad_resids = self.prefit_resids.time_resids[toas_bad]
         self.t = self.t[toas_good]
@@ -126,7 +127,7 @@ class pint_handler():
             
             except Exception as e:
                 self.logger.warning(f"Dropout trial failed for TOA {i}. ", e)
-                dropout_chi2rs.append(np.inf)
+                dropout_chi2rs.append(1e64)
 
         # fit model without dropout
         self_tmp = copy.deepcopy(self)
@@ -323,10 +324,10 @@ class pint_handler():
             self.f = pint.fitter.Fitter.auto(self.t, self.m)
         except Exception as e:
             self.logger.warning("Failed to initialize fitter. ")
-            self.logger.warning("Error", e)
-            self.logger.warning("Parameters", self.get_unfreezed_params())
-            self.logger.warning("TOAs", self.t)
-            self.logger.warning("Model", self.m)
+            self.logger.warning("Error:", e)
+            self.logger.warning("Parameters:", self.get_unfreezed_params())
+            self.logger.warning("Model:", self.m)
+            self.logger.warning("TOAs:", self.t)
             raise Exception("Fitting failed. Please resolve this error manually. ", e)
 
         try:
