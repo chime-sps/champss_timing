@@ -75,15 +75,23 @@ class pint_handler():
         return self.t
 
     def error_filter(self, threshold=0.05):
-        # get error_ok
-        threshold_phase = threshold * (1 / self.m.F0.value) * u.s
-        if threshold_phase < 5000 * u.s:
-            threshold_phase = 5000 * u.s
-        error_ok = self.t.get_errors() < threshold_phase.to(u.us)
+        while True:
+            # get error_ok
+            threshold_phase = threshold * (1 / self.m.F0.value) * u.s
+            if threshold_phase < 5000 * u.s:
+                threshold_phase = 5000 * u.s
+            error_ok = self.t.get_errors() < threshold_phase.to(u.us)
 
-        # filter
-        toas_bad = np.where(error_ok == False)[0]
-        toas_good = np.where(error_ok == True)[0]
+            # filter
+            toas_bad = np.where(error_ok == False)[0]
+            toas_good = np.where(error_ok == True)[0]
+
+            # do not filter out more than 10% of points
+            if len(toas_bad) / len(error_ok) < 0.10:
+                break
+
+            threshold += 0.05
+            self.logger.warning(f"More than 10% of points were filtered out by the error filter. Lowering threshold to {threshold}")
 
         # get toas and mjds
         self.bad_toas = self.t[toas_bad]
