@@ -12,6 +12,14 @@ class dir_loader():
         self.load_sources()
         print(f"{len(self.sources)} sources loaded")
 
+    def initialize(self):
+        for source in self.sources:
+            source.initialize()
+
+    def cleanup(self):
+        for source in self.sources:
+            source.cleanup()
+
     def load_sources(self):
         for source_dir in glob.glob(self.psr_dir + "/*"):
             db = source_dir + "/champss_timing.sqlite3.db"
@@ -42,3 +50,11 @@ class dir_loader():
     # Handle with loop
     def __iter__(self):
         return iter(self.sources)
+
+    def __enter__(self):
+        self.initialize()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.cleanup()
+        return False

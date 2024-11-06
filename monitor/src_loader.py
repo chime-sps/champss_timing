@@ -10,8 +10,13 @@ class src_loader():
         self.pdf = source_dir + "/champss_diagnostic.pdf"
         self.psr_id = source_dir.split("/")[-1]
 
+    def initialize(self):
         # Load database
         self.db.initialize()
+
+    def cleanup(self):
+        # Close database
+        self.db.close()
 
     def get_resids(self):
         timing_info = self.db.get_last_timing_info()

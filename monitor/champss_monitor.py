@@ -26,8 +26,5 @@ def diagnostic(source_id):
 def run(psr_dir, port):
     global app
 
-    # Load sources
-    app.sources = dir_loader.dir_loader(psr_dir)
-
-    # Run app
-    app.run(port = port)
+    with dir_loader.dir_loader(psr_dir) as app.sources:
+        app.run(port = port)
