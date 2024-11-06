@@ -318,8 +318,17 @@ class pint_handler():
         # Sanity check: if F1 > 0, then set it into 0
         # if self.m["F1"].value > 0:
         #     self.m["F1"].value = 0
-        
-        self.f = pint.fitter.Fitter.auto(self.t, self.m)
+
+        try:
+            self.f = pint.fitter.Fitter.auto(self.t, self.m)
+        except Exception as e:
+            self.logger.warning("Failed to initialize fitter. ")
+            self.logger.warning("Error", e)
+            self.logger.warning("Parameters", self.get_unfreezed_params())
+            self.logger.warning("TOAs", self.t)
+            self.logger.warning("Model", self.m)
+            raise Exception("Fitting failed. Please resolve this error manually. ", e)
+
         try:
             self.f.fit_toas()
             self.logger.info(self.f.get_summary())
