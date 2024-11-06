@@ -1,22 +1,35 @@
 import datetime
 import base64
 import numpy as np
+import hashlib
 from champss_timing.database import database
 
 class src_loader():
     def __init__(self, source_dir):
         self.source_dir = source_dir
-        self.db = database(source_dir + "/champss_timing.sqlite3.db", readonly = True)
+        self.db = None
+        self.db_md5 = None
         self.pdf = source_dir + "/champss_diagnostic.pdf"
         self.psr_id = source_dir.split("/")[-1]
 
-    def initialize(self):
-        # Load database
+    def connect_db(self):
+        self.db = database(self.source_dir + "/champss_timing.sqlite3.db", readonly=True)
         self.db.initialize()
+
+    def initialize(self):
+        # Get md5
+        self.db_md5 = self.get_db_md5()
+
+        # Load database
+        self.connect_db()
 
     def cleanup(self):
         # Close database
         self.db.close()
+
+    def get_db_md5(self):
+        with open(self.source_dir + "/champss_timing.sqlite3.db", "rb") as f:
+            return hashlib.md5(f.read()).hexdigest()
 
     def get_resids(self):
         timing_info = self.db.get_last_timing_info()
@@ -68,7 +81,14 @@ class src_loader():
         # return in YYYY-MM-DD 
         return datetime.datetime.utcfromtimestamp(self.db.get_last_timing_info()["timestamp"]).strftime('%Y-%m-%d')
     
-    def get_diagnostic_pdf(self):
+    def get_diagnostic_pdf_base64(self):
         with open(self.pdf, "rb") as f:
             return base64.b64encode(f.read()).decode("utf-8")
-    
+
+    def update_checker(self):
+        this_db_md5 = self.get_db_md5()
+        if this_db_md5 != self.db_md5:
+            self.db.close()
+            self.db_md5 = this_db_md5
+            self.connect_db()
+            print(f"Database {self.psr_id} updated")

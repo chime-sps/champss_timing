@@ -1,12 +1,14 @@
 import glob
 import os
+import threading
 
 from .src_loader import src_loader
 
 class dir_loader():
-    def __init__(self, psr_dir):
+    def __init__(self, psr_dir, app):
         self.psr_dir = psr_dir
         self.sources = []
+        self.update_checker_thread = None
 
         # Load sources
         self.load_sources()
@@ -16,9 +18,23 @@ class dir_loader():
         for source in self.sources:
             source.initialize()
 
+        # Start update checker
+        self.update_checker_thread = threading.Thread(target = self.update_checker)
+        self.update_checker_thread.start()
+
     def cleanup(self):
         for source in self.sources:
             source.cleanup()
+
+        # Stop update checker
+        self.update_checker_thread.join()
+
+    def update_checker(self):
+        while True:
+            print("Checking for updates...")
+            for source in self.sources:
+                source.update_checker()
+            threading.Event().wait(5)
 
     def load_sources(self):
         for source_dir in glob.glob(self.psr_dir + "/*"):
@@ -31,10 +47,15 @@ class dir_loader():
 
             # Check if db and pdf exists
             if not os.path.exists(db) or not os.path.exists(pdf):
+                print(f"Skipping {source_dir} due to missing files")
                 continue
                 
             # Add sources to dictionary
+            print(f"Adding {source_dir} to sources")
             self.sources.append(src_loader(source_dir))
+
+        # Sort sources by psr_id
+        self.sources.sort(key = lambda x: x.psr_id)
 
     def get_sources(self):
         return self.sources

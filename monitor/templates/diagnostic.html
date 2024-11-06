@@ -3,22 +3,32 @@
 {% block title %}Diagnostic information for {{source_id}}{% endblock %}
 
 {% block content %}
-    <h3>{{ source_id }} <small style="font-size: 0.5em;">Last updated on {{ sources[source_id].get_last_updated() }}</small></h3>
+
 
     <div class="row">
-        <div class="col-md-6">
+        <div class="col-md-4">
+            <h3>{{ source_id }} <small style="font-size: 0.5em;">Last updated on {{ sources[source_id].get_last_updated() }}</small></h3>
             <pre style="font-size: 0.70em;">{{ sources[source_id].get_parfile() }}</pre>
         </div>
-        <div class="col-md-6">
-            <iframe src="data:application/pdf;base64,{{ sources[source_id].get_diagnostic_pdf()|safe }}" style="width: 100%; aspect-ratio: 1.77;"></iframe>
+        <div class="col-md-8">
+            <div id="diagnostic_pdf_div">
+                <div class="card">
+                    <div class="card-body">
+                        <object id="diagnostic_pdf" data="{{ request.base_url }}/pdf" type="application/pdf" style="width: 100%; aspect-ratio: 1.77; border: 0; border-radius: 5px; "></object>
+                    </div>
+                </div>
+            </div>
         </div>
-        <br>
-        <hr>
+        <hr style="margin-top: 15px; ">
         <div class="col-md-6">
             <h5>Statistics</h5>
             {% for param in sources[source_id].get_statistics(): %}
-                <div style="width: 100%; height: 300px; border: solid 1px black; margin-bottom: 15px; ">
-                    <div id="stat_{{ param }}" style="width: 100%; height: 100%; "></div>
+                <div class="card" style="margin-bottom: 15px; ">
+                    <div class="card-body" style="padding: 3px; ">
+                        <div style="width: 100%; height: 300px; ">
+                            <div id="stat_{{ param }}" style="width: 100%; height: 100%; "></div>
+                        </div>
+                    </div>
                 </div>
                 <script>
                     var trace = {
@@ -54,8 +64,12 @@
         <div class="col-md-6">
             <h5>Fitted Parameters</h5>
             {% for param in sources[source_id].get_parameter_info(): %}
-                <div style="width: 100%; height: 300px; border: solid 1px black; margin-bottom: 15px; ">
-                    <div id="param_{{ param }}" style="width: 100%; height: 100%; "></div>
+                <div class="card" style="margin-bottom: 15px; ">
+                    <div class="card-body" style="padding: 3px; ">
+                        <div style="width: 100%; height: 300px; ">
+                            <div id="param_{{ param }}" style="width: 100%; height: 100%; "></div>
+                        </div>
+                    </div>
                 </div>
                 <script>
                     var trace = {
@@ -89,5 +103,27 @@
             {% endfor %}
         </div>
     </div>
+
+    <script>
+        function diagnostic_pdf_fullscreen() {
+            if ($("#diagnostic_pdf_div").attr("style")) {
+                $("#diagnostic_pdf_div").removeAttr("style");
+                return;
+            }
+            $("#diagnostic_pdf_div").css("width", "100%");
+            $("#diagnostic_pdf_div").css("height", "100%");
+            $("#diagnostic_pdf_div").css("position", "fixed");
+            $("#diagnostic_pdf_div").css("top", "0");
+            $("#diagnostic_pdf_div").css("left", "0");
+            $("#diagnostic_pdf_div").css("padding", "50px");
+            $("#diagnostic_pdf_div").css("z-index", "1000");
+            $("#diagnostic_pdf_div").css("backdrop-filter", "blur(10px)");
+            $("#diagnostic_pdf_div").css("background-color", "rgba(255, 255, 255, 0.75)");
+        }
+
+        $("#diagnostic_pdf_div").on("click", function() {
+            diagnostic_pdf_fullscreen();
+        });
+    </script>
     
 {% endblock %}
