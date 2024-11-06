@@ -38,8 +38,8 @@ class psrchive_handler():
         return True
 
     def zap_bad_channel(self, fs, ext=""):
-        # Scrunch pols
-        self.scrunch(fs, scrunch_flag="p", overwrite=True)
+        # Scrunch pols (clfd requires pam -p first)
+        self.scrunch(fs, scrunch_flag="p", ext="", overwrite=True)
 
         # get_bad_channel_list.py
         output_files = []
@@ -78,10 +78,11 @@ class psrchive_handler():
         output_files = []
         exec_hlr = self.exec_handler(n_pools=self.n_pools, log=self._get_log_path(fs) + "/pam.log")
         for f in fs:
-            output_files.append(f"{f}{ext}.{scrunch_flag}")
             if overwrite:
+                output_files.append(f)
                 exec_hlr.append(f"pam -m -{scrunch_flag} {f}{ext}")
             else:
+                output_files.append(f"{f}{ext}.{scrunch_flag}")
                 exec_hlr.append(f"pam -e {ext}.{scrunch_flag} -{scrunch_flag} {f}{ext}")
         exec_hlr.run()
 
@@ -89,8 +90,8 @@ class psrchive_handler():
         if not self.file_check(output_files):
             raise Exception("Failed to scrunch")
 
-        # if(not exec_hlr.check()):
-        #     raise Exception("Failed to scrunch")
+        if(not exec_hlr.check()):
+            raise Exception("Failed to scrunch")
         
         return True
     

@@ -35,7 +35,7 @@ class utils:
         while os.path.exists(name_):
             i += 1
             if "." in name:
-                name_ = f"{name.split('.')[0]}_{i}.{name.split('.')[1]}"
+                name_ = f"{'.'.join(name.split('.')[:-1])}_{i}.{name.split('.')[-1]}"
             else:
                 name_ = f"{name}_{i}"
 
