@@ -5,12 +5,41 @@
 
 {% block content %}
             {% for this_source in sources %}
-                <div class="card" style="margin-bottom: 15px; ">
+<div class="card" style="margin-bottom: 15px; " xmlns="http://www.w3.org/1999/html">
                     <div class="card-body">
-                        <div onclick="window.location.href='/diagnostic/{{this_source.psr_id}}';" style="cursor:pointer;">
+                        <div id="div_{{this_source.psr_id_esc}}" style="cursor:pointer;">
                             <small style="float: right; ">Updated on {{this_source.get_last_updated()}}</small>
                             <h4 style="margin-bottom: 0;">{{this_source.psr_id}}</h4>
-                            <div id="resids_{{this_source.psr_id}}" style="width:100%;height:3em;"></div>
+
+                            <div class="collapse" id="diagnostic_pdf_{{this_source.psr_id_esc}}">
+                                <br>
+                                <center></center><small>Double-click to view full diagnostic information.</small></center>
+                                <object id="diagnostic_pdf" data="/diagnostic/{{this_source.psr_id}}/pdf" type="application/pdf" style="width: 100%; aspect-ratio: 1.77; border: 0; border-radius: 5px; "></object>
+                            </div>
+
+                            <div id="resids_{{this_source.psr_id_esc}}" style="width:100%;height:5em;"></div>
+
+                            <script>
+                                // $('#div_{{this_source.psr_id_esc}}').on('click', function() {
+                                //     // If already open, go to top of page
+                                //     if ($('#diagnostic_pdf_{{this_source.psr_id_esc}}').hasClass('show')) {
+                                //         $('.collapse').collapse('hide');
+                                //         return
+                                //     }
+                                //
+                                //     $('.collapse').collapse('hide');
+                                //     $('#diagnostic_pdf_{{this_source.psr_id_esc}}').collapse('toggle');
+                                //     console.log('clicked');
+                                // });
+                                //
+                                // $('#div_{{this_source.psr_id_esc}}').on('dblclick', function() {
+                                //     window.location.href='/diagnostic/{{this_source.psr_id}}';
+                                // });
+
+                                $('#div_{{this_source.psr_id_esc}}').on('click', function() {
+                                    window.location.href='/diagnostic/{{this_source.psr_id}}';
+                                });
+                            </script>
 
                             <script>
                                 var resids = {{this_source.get_resids() | safe}};
@@ -60,10 +89,11 @@
                                         width: 1
                                     }
                                 };
-                                Plotly.newPlot('resids_{{this_source.psr_id}}', [zero_line, resids_plot], resids_layout);
+                                Plotly.newPlot('resids_{{this_source.psr_id_esc}}', [zero_line, resids_plot], resids_layout);
                             </script>
                         </div>
                     </div>
                 </div>
             {% endfor %}
+            <div id="test"></div>
 {% endblock %}

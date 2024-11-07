@@ -11,6 +11,7 @@ class src_loader():
         self.db_md5 = None
         self.pdf = source_dir + "/champss_diagnostic.pdf"
         self.psr_id = source_dir.split("/")[-1]
+        self.psr_id_esc = self.psr_id.replace("+", "p").replace("-", "m")
 
     def connect_db(self):
         self.db = database(self.source_dir + "/champss_timing.sqlite3.db", readonly=True)
