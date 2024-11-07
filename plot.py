@@ -229,7 +229,9 @@ class plot:
         axs_resids.set_title("Diagnostic Plots")
         ## fill mjd gaps
         for this_gap in plot_data["mjd_gaps"]:
-            axs_resids.fill_between(this_gap, lim_0, lim_1, color="gray", alpha=0.10, label="No Observation")
+            axs_resids.fill_between(this_gap, lim_0, lim_1, color="gray", alpha=0.10, label="No Observation")    
+        ## scientific notation for y-axis
+        axs_resids.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
         # self.__legend_without_duplicate_labels(axs_resids)
 
         # plot chi2r horizontally across 2 grids
