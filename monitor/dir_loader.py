@@ -1,11 +1,13 @@
 import glob
 import os
+import time
 import threading
 
 from .src_loader import src_loader
 
 class dir_loader():
-    def __init__(self, psr_dir):
+    def __init__(self, psr_dir, app):
+        self.app = app
         self.psr_dir = psr_dir
         self.sources = []
         self.update_checker_thread = None
@@ -27,14 +29,19 @@ class dir_loader():
             source.cleanup()
 
         # Stop update checker
-        self.update_checker_thread.join()
+        self.update_checker_thread.join(3)
 
     def update_checker(self):
         while True:
-            print("Checking for updates...")
-            for source in self.sources:
-                source.update_checker()
-            threading.Event().wait(5)
+            if time.time() - self.app.last_request < 300:
+                print("Checking for updates...")
+                for source in self.sources:
+                    source.update_checker()
+
+            if time.time() - self.app.last_request < 30:
+                threading.Event().wait(5)
+            else:
+                threading.Event().wait(30)
 
     def load_sources(self):
         for source_dir in glob.glob(self.psr_dir + "/*"):

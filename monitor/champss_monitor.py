@@ -3,10 +3,18 @@ from flask import Response
 from flask import render_template
 from flask import request
 
+import time
 from . import dir_loader
 
 app = Flask(__name__)
 app.sources = None
+app.last_request = 0
+
+@app.after_request
+def after_request(response):
+    global app
+    app.last_request = time.time()
+    return response
 
 @app.route('/')
 def main():
@@ -46,5 +54,5 @@ def run(psr_dir, port, debug=False):
         app.debug = True
         app.config.update(DEBUG=True)
 
-    with dir_loader.dir_loader(psr_dir) as app.sources:
+    with dir_loader.dir_loader(psr_dir, app) as app.sources:
         app.run(port = port)
