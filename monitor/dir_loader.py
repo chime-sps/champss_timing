@@ -5,7 +5,7 @@ import threading
 from .src_loader import src_loader
 
 class dir_loader():
-    def __init__(self, psr_dir, app):
+    def __init__(self, psr_dir):
         self.psr_dir = psr_dir
         self.sources = []
         self.update_checker_thread = None

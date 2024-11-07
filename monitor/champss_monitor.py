@@ -16,6 +16,14 @@ def main():
         request=request
     )
 
+@app.route('/login')
+def login():
+    return render_template(
+        'login.html',
+        sources=app.sources,
+        request=request
+    )
+
 @app.route('/diagnostic/<source_id>')
 def diagnostic(source_id):
     return render_template(
