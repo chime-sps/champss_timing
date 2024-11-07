@@ -42,6 +42,6 @@ class utils:
 
     def get_version_hash():
         try:
-            return subprocess.check_output(['git', '-C', os.path.dirname(os.path.realpath(__file__)), 'rev-parse', 'HEAD']).decode().strip()
+            return subprocess.check_output(['git', '-C', os.path.dirname(os.path.realpath(__file__)), 'rev-parse', '--short', 'HEAD']).decode().strip()
         except:
             return "unknown"
