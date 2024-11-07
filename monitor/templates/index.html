@@ -4,96 +4,102 @@
 {% block title %}CHAMPSS Timing Monitor{% endblock %}
 
 {% block content %}
-            {% for this_source in sources %}
-<div class="card" style="margin-bottom: 15px; " xmlns="http://www.w3.org/1999/html">
+    <div class="row">
+        {% for this_source in sources %}
+            <div class="col-lg-6" id="div_{{this_source.psr_id_esc}}" style="cursor:pointer;">
+                <div class="card" style="margin-bottom: 15px; " xmlns="http://www.w3.org/1999/html">
                     <div class="card-body">
-                        <div id="div_{{this_source.psr_id_esc}}" style="cursor:pointer;">
-                            <small style="float: right; ">Updated on {{this_source.get_last_updated()}}</small>
-                            <h4 style="margin-bottom: 0;">{{this_source.psr_id}}</h4>
+                        <small style="float: right; ">Updated on {{this_source.get_last_updated()}}</small>
+                        <h4 style="margin-bottom: 0;">{{this_source.psr_id}}</h4>
 
-                            <div class="collapse" id="diagnostic_pdf_{{this_source.psr_id_esc}}">
-                                <br>
-                                <center></center><small>Double-click to view full diagnostic information.</small></center>
-                                <object id="diagnostic_pdf" data="/diagnostic/{{this_source.psr_id}}/pdf" type="application/pdf" style="width: 100%; aspect-ratio: 1.77; border: 0; border-radius: 5px; "></object>
-                            </div>
-
-                            <div id="resids_{{this_source.psr_id_esc}}" style="width:100%;height:5em;"></div>
-
-                            <script>
-                                // $('#div_{{this_source.psr_id_esc}}').on('click', function() {
-                                //     // If already open, go to top of page
-                                //     if ($('#diagnostic_pdf_{{this_source.psr_id_esc}}').hasClass('show')) {
-                                //         $('.collapse').collapse('hide');
-                                //         return
-                                //     }
-                                //
-                                //     $('.collapse').collapse('hide');
-                                //     $('#diagnostic_pdf_{{this_source.psr_id_esc}}').collapse('toggle');
-                                //     console.log('clicked');
-                                // });
-                                //
-                                // $('#div_{{this_source.psr_id_esc}}').on('dblclick', function() {
-                                //     window.location.href='/diagnostic/{{this_source.psr_id}}';
-                                // });
-
-                                $('#div_{{this_source.psr_id_esc}}').on('click', function() {
-                                    window.location.href='/diagnostic/{{this_source.psr_id}}';
-                                });
-                            </script>
-
-                            <script>
-                                var resids = {{this_source.get_resids() | safe}};
-                                var resids_plot = {
-                                    x: resids["mjd"],
-                                    y: resids["val"],
-                                    error_y: {
-                                        type: 'data',
-                                        array: resids["err"],
-                                        visible: true
-                                    },
-                                    mode: 'markers',
-                                    type: 'scatter',
-                                    marker: {
-                                        color: 'black',
-                                        size: 5
-                                    }
-                                };
-                                var resids_layout = {
-                                    // title: 'Residuals for {{this_source.psr_id}}',
-                                    xaxis: {
-                                        // title: 'MJD',
-                                        showticklabels: false,
-                                        showline: false,
-                                        showgrid: false,
-                                        zeroline: true
-                                    },
-                                    yaxis: {
-                                        // title: 'Residual (us)',
-                                        showticklabels: false,
-                                        showline: false,
-                                        showgrid: false,
-                                        zeroline: true
-                                    },
-                                    showlegend: false,
-                                    margin: {'t':0,'l':0,'b':0,'r':0}
-                                };
-
-                                // Add a line at y=0
-                                var zero_line = {
-                                    x: [resids["mjd"][0], resids["mjd"][resids["mjd"].length-1]],
-                                    y: [0, 0],
-                                    mode: 'lines',
-                                    type: 'scatter',
-                                    line: {
-                                        color: 'grey',
-                                        width: 1
-                                    }
-                                };
-                                Plotly.newPlot('resids_{{this_source.psr_id_esc}}', [zero_line, resids_plot], resids_layout);
-                            </script>
+                        <div class="collapse" id="diagnostic_pdf_{{this_source.psr_id_esc}}">
+                            <br>
+                            <center></center><small>Double-click to view full diagnostic information.</small></center>
+                            <object id="diagnostic_pdf" data="/diagnostic/{{this_source.psr_id}}/pdf" type="application/pdf" style="width: 100%; aspect-ratio: 1.77; border: 0; border-radius: 5px; "></object>
                         </div>
+
+                        <div id="resids_{{this_source.psr_id_esc}}" style="width:100%;height:5em;"></div>
+
+                        <script>
+                            // $('#div_{{this_source.psr_id_esc}}').on('click', function() {
+                            //     // If already open, go to top of page
+                            //     if ($('#diagnostic_pdf_{{this_source.psr_id_esc}}').hasClass('show')) {
+                            //         $('.collapse').collapse('hide');
+                            //         return
+                            //     }
+                            //
+                            //     $('.collapse').collapse('hide');
+                            //     $('#diagnostic_pdf_{{this_source.psr_id_esc}}').collapse('toggle');
+                            //     console.log('clicked');
+                            // });
+                            //
+                            // $('#div_{{this_source.psr_id_esc}}').on('dblclick', function() {
+                            //     window.location.href='/diagnostic/{{this_source.psr_id}}';
+                            // });
+
+                            $('#div_{{this_source.psr_id_esc}}').on('click', function() {
+                                window.location.href='/diagnostic/{{this_source.psr_id}}';
+                            });
+                        </script>
+
+                        <script>
+                            var resids = {{this_source.get_resids() | safe}};
+                            var resids_plot = {
+                                x: resids["mjd"],
+                                y: resids["val"],
+                                error_y: {
+                                    type: 'data',
+                                    array: resids["err"],
+                                    visible: true
+                                },
+                                mode: 'markers',
+                                type: 'scatter',
+                                marker: {
+                                    color: 'black',
+                                    size: 5
+                                }
+                            };
+                            var resids_layout = {
+                                // title: 'Residuals for {{this_source.psr_id}}',
+                                xaxis: {
+                                    // title: 'MJD',
+                                    showticklabels: false,
+                                    showline: false,
+                                    showgrid: false,
+                                    zeroline: true
+                                },
+                                yaxis: {
+                                    // title: 'Residual (us)',
+                                    showticklabels: false,
+                                    showline: false,
+                                    showgrid: false,
+                                    zeroline: true
+                                },
+                                showlegend: false,
+                                margin: {'t':0,'l':0,'b':0,'r':0}
+                            };
+
+                            var zero_line = {
+                                x: [resids["mjd"][0], resids["mjd"][resids["mjd"].length-1]],
+                                y: [0, 0],
+                                mode: 'lines',
+                                type: 'scatter',
+                                line: {
+                                    color: 'grey',
+                                    width: 1
+                                }
+                            };
+
+                            var config = {
+                                responsive: true
+                            };
+
+                            Plotly.newPlot('resids_{{this_source.psr_id_esc}}', [zero_line, resids_plot], resids_layout, config);
+                        </script>
                     </div>
                 </div>
-            {% endfor %}
-            <div id="test"></div>
+            </div>
+        {% endfor %}
+        <div id="test"></div>
+    </div>
 {% endblock %}

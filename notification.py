@@ -4,9 +4,9 @@ from slack_bolt.adapter.socket_mode import SocketModeHandler
 
 class slack_handler:
     def __init__(self):
-        self.CHANNEL_ID = "C07RU3FQ0CW"
-        self.SLACK_BOT_TOKEN = "xoxb-7884645340771-7881932432293-i09Q8IckBmGaxQDhed7HXyU7"
-        self.SLACK_APP_TOKEN = "xapp-1-A07RU3YCM8E-7897477213873-e4ae988142ed9d73aaa452bfb5b899e058aeb1b09b1348da383adc33ae3ae9fb"
+        self.CHANNEL_ID = "C080AKT7GEM"
+        self.SLACK_BOT_TOKEN = "xoxb-194910630096-8000595811924-QU9jYymnW4dLCg68Ckl9qOq4"
+        self.SLACK_APP_TOKEN = "xapp-1-A080LPRPBPA-7991431433846-018a5948f84f0d548a71c59e51602127622dac3b16209a95c82dbaa3a3791bd8"
         self.app = App(token=self.SLACK_BOT_TOKEN)
 
     def send(self, message=None, image=None, file=None, image_title=None, file_title=None):

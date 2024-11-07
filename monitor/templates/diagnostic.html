@@ -6,20 +6,27 @@
 
 
     <div class="row">
-        <div class="col-md-4">
+        <div class="col-md-12">
+            <div style="float: right">
+                <button type="button" class="btn btn-outline-primary btn-sm" id="btn_download_diagnostic">Download Diagnostic PDF</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="btn_download_parfile">Download Parfile</button>
+            </div>
             <h3>{{ source_id }} <small style="font-size: 0.5em;">Last updated on {{ sources[source_id].get_last_updated() }}</small></h3>
-            <pre style="font-size: 0.70em;">{{ sources[source_id].get_parfile() }}</pre>
+        </div>
+        <div class="col-md-4">
+            <pre style="font-size: 0.70em;" id="pre_parfile">{{ sources[source_id].get_parfile() }}</pre>
         </div>
         <div class="col-md-8">
             <div id="diagnostic_pdf_div">
                 <div class="card">
                     <div class="card-body">
-                        <object id="diagnostic_pdf" data="{{ request.base_url }}/pdf" type="application/pdf" style="width: 100%; aspect-ratio: 1.77; border: 0; border-radius: 5px; "></object>
+<!--                        <object id="diagnostic_pdf" data="{{ request.base_url }}/pdf" type="application/pdf" style="width: 100%; aspect-ratio: 1.77; border: 0; border-radius: 5px; "></object>-->
+                        <div id="diagnostic_pdf" style="width: 100%; aspect-ratio: 1.77; border: 0; border-radius: 5px; cursor: pointer; "></div>
                     </div>
                 </div>
             </div>
         </div>
-        <hr style="margin-top: 15px; ">
+        <hr style="margin-top: 30px; ">
         <div class="col-md-6">
             <h5>Statistics</h5>
             {% for param in sources[source_id].get_statistics(): %}
@@ -57,7 +64,10 @@
                         showlegend: false,
                         margin: {'t':50,'l':110,'b':60,'r':40}
                     };
-                    Plotly.newPlot('stat_{{ param }}', [trace], layout);
+                    var config = {
+                        responsive: true
+                    };
+                    Plotly.newPlot('stat_{{ param }}', [trace], layout, config);
                 </script>
             {% endfor %}
         </div>
@@ -98,7 +108,10 @@
                         showlegend: false,
                         margin: {'t':50,'l':110,'b':60,'r':40}
                     };
-                    Plotly.newPlot('param_{{ param }}', [trace], layout);
+                    var config = {
+                        responsive: true
+                    };
+                    Plotly.newPlot('param_{{ param }}', [trace], layout, config);
                 </script>
             {% endfor %}
         </div>
@@ -115,14 +128,65 @@
             $("#diagnostic_pdf_div").css("position", "fixed");
             $("#diagnostic_pdf_div").css("top", "0");
             $("#diagnostic_pdf_div").css("left", "0");
-            $("#diagnostic_pdf_div").css("padding", "50px");
+            $("#diagnostic_pdf_div").css("padding", "3%");
             $("#diagnostic_pdf_div").css("z-index", "1000");
             $("#diagnostic_pdf_div").css("backdrop-filter", "blur(10px)");
             $("#diagnostic_pdf_div").css("background-color", "rgba(255, 255, 255, 0.75)");
+            $("#diagnostic_pdf_div").css("overflow-y", "scroll");
+            $("#diagnostic_pdf_div").css("overflow-x", "hidden");
         }
 
         $("#diagnostic_pdf_div").on("click", function() {
             diagnostic_pdf_fullscreen();
+        });
+    </script>
+
+    <script src="https://mozilla.github.io/pdf.js/build/pdf.mjs" type="module"></script>
+    <script type="module">
+        var pdf_url = "{{ request.base_url }}/pdf";
+        var { pdfjsLib } = globalThis;
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://mozilla.github.io/pdf.js/build/pdf.worker.mjs';
+
+        pdfjsLib.getDocument(pdf_url).promise.then(function(pdf) {
+            pdf.getPage(1).then(function(page) {
+                var scale = 1;
+                var viewport = page.getViewport({ scale: scale });
+                var canvas = document.createElement('canvas');
+                var context = canvas.getContext('2d');
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+                canvas.style.width = '100%';
+                var renderContext = {
+                    canvasContext: context,
+                    viewport: viewport
+                };
+                page.render(renderContext).promise.then(function() {
+                    document.getElementById('diagnostic_pdf').appendChild(canvas);
+                });
+            });
+        });
+    </script>
+
+    <script>
+        function saveAs(blob, filename) {
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement("a");
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(function() {
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            }, 0);
+        }
+        $("#btn_download_diagnostic").on("click", function() {
+            window.open("{{ request.base_url }}/pdf", "_blank");
+        });
+        $("#btn_download_parfile").on("click", function() {
+            var parfile_content = $("#pre_parfile").text()
+            var blob = new Blob([parfile_content], { type: "text/plain;charset=utf-8" });
+            saveAs(blob, "{{ source_id }}.par");
         });
     </script>
     
