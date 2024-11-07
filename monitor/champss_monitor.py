@@ -17,9 +17,9 @@ def after_request(response):
     return response
 
 @app.route('/')
-def main():
+def index():
     return render_template(
-        'main.html',
+        'index.html',
         sources=app.sources,
         request=request
     )
