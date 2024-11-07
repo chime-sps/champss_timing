@@ -284,7 +284,7 @@ class plot:
         ## combine the 2 grids
         n_params_gs = axs[2, 1].get_gridspec()
         axs_n_params = fig.add_subplot(n_params_gs[2, 1:4])
-        axs_n_params.plot(plot_data["params_x"], plot_data["params_y"], "k.", label="Nparams", markersize=3)
+        axs_n_params.plot(plot_data["params_x"], plot_data["params_y"], "k.", label="Nparams")
         # axs_n_params.set_title("N Params")
         axs_n_params.set_xlabel("MJD")
         axs_n_params.set_ylabel("Parameters Fitted")

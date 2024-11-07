@@ -119,6 +119,7 @@ class champss_timing:
 
                 # if n_timed == 1:
                 if n_timed == 0:
+                    # plot(db_hdl=self.db_hdl).diagnostic(savefig=self.path_diagnostic_plot)
                     self.logger.debug(f"No additional file for timing. ")
                     break
 
