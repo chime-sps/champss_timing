@@ -39,7 +39,7 @@ class notification:
         self.sh = slack_handler(messager_token)
 
     def send_urgent_message(self, message, psr_id="psr_id_not_provided"):
-        self.sh.send("[ ⚠️ URGENT ! ] @wenke.xia\n" + message + "\nPSR ID: #" + psr_id)
+        self.sh.send("[ ⚠️ URGENT ! ] <@wenke.xia>\n" + message + "\nPSR ID: #" + psr_id)
 
     def send_success_message(self, message, psr_id="psr_id_not_provided"):
         self.sh.send("[ ✅ SUCCESS ]\n" + message + "\nPSR ID: #" + psr_id)
