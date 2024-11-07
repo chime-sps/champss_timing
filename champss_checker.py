@@ -1,16 +1,15 @@
 from .database import database
-from .notification import notification
 
 import numpy as np
 import os
 
 class champss_checker:
-    def __init__(self, psr_dir, db_hdl, psr_id="psr_id_not_provided"):
+    def __init__(self, psr_dir, db_hdl, noti_hdl, psr_id="psr_id_not_provided"):
         self.psr_dir = psr_dir
         self.db_hdl = db_hdl
         self.psr_id = psr_id
         self.diagnostic_plot = psr_dir + "/champss_diagnostic.pdf"
-        self.noti_hdl = notification()
+        self.noti_hdl = noti_hdl
         self.timing_info = self.db_hdl.get_all_timing_info()
 
     def check_chi2r(self):

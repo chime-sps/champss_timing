@@ -16,7 +16,7 @@ from .champss_checker import champss_checker
 from .logger import logger
 
 class champss_timing:
-    def __init__(self, psr_dir, data_archives, n_pools=4, workspace_cleanup=True, logger=logger()):
+    def __init__(self, psr_dir, data_archives, slack_token, n_pools=4, workspace_cleanup=True, logger=logger()):
         """
         CHAMPSS timing pipeline class
 
@@ -57,7 +57,7 @@ class champss_timing:
         # Objects
         self.db_hdl = database(self.path_db)
         self.archive_cache = archive_cache(self.path_psr_dir, db_hdl=self.db_hdl)
-        self.noti_hdl = notification()
+        self.noti_hdl = notification(slack_token)
 
         # Timing config
         self.timing_config = {}
@@ -132,7 +132,7 @@ class champss_timing:
                 plot(db_hdl=self.db_hdl).diagnostic(savefig=self.path_diagnostic_plot)
 
                 # Run checker
-                champss_checker(self.path_psr_dir, self.db_hdl, self.psr_id).check()
+                champss_checker(self.path_psr_dir, self.db_hdl, self.noti_hdl, self.psr_id).check()
 
                 # End of the script
                 self.logger.success("Script finished. ")

@@ -4,8 +4,6 @@ import traceback
 from hashlib import md5
 import os
 
-from .notification import notification
-
 class utils:
     def print_warning(string):
         print(f"\033[93m{string}\033[0m")

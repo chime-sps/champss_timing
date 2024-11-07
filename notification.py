@@ -3,10 +3,13 @@ from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
 class slack_handler:
-    def __init__(self):
-        self.CHANNEL_ID = "C080AKT7GEM"
-        self.SLACK_BOT_TOKEN = "xoxb-194910630096-8000595811924-QU9jYymnW4dLCg68Ckl9qOq4"
-        self.SLACK_APP_TOKEN = "xapp-1-A080LPRPBPA-7991431433846-018a5948f84f0d548a71c59e51602127622dac3b16209a95c82dbaa3a3791bd8"
+    def __init__(self, slack_token):
+        # self.CHANNEL_ID = "C080AKT7GEM"
+        # self.SLACK_BOT_TOKEN = "xoxb-194910630096-8000595811924-QU9jYymnW4dLCg68Ckl9qOq4"
+        # self.SLACK_APP_TOKEN = "xapp-1-A080LPRPBPA-7991431433846-018a5948f84f0d548a71c59e51602127622dac3b16209a95c82dbaa3a3791bd8"
+        self.SLACK_BOT_TOKEN = slack_token["SLACK_BOT_TOKEN"]
+        self.SLACK_APP_TOKEN = slack_token["SLACK_APP_TOKEN"]
+        self.CHANNEL_ID = slack_token["CHANNEL_ID"]
         self.app = App(token=self.SLACK_BOT_TOKEN)
 
     def send(self, message=None, image=None, file=None, image_title=None, file_title=None):
@@ -35,8 +38,8 @@ class slack_handler:
         )
 
 class notification:
-    def __init__(self):
-        self.sh = slack_handler()
+    def __init__(self, messager_token):
+        self.sh = slack_handler(messager_token)
 
     def send_urgent_message(self, message, psr_id="psr_id_not_provided"):
         self.sh.send("[ ⚠️ URGENT ! ]\n" + message + "\nPSR ID: #" + psr_id)
