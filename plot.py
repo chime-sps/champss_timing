@@ -208,11 +208,11 @@ class plot:
         resids_gs = axs[0, 1].get_gridspec()
         axs_resids = fig.add_subplot(resids_gs[0, 1:4])
         ## plot residuals
-        axs_resids.errorbar(plot_data["resid_mjds"], plot_data["resids_phase"], plot_data["resids_err_phase"], fmt="x", c="k", capsize=3, label="Fitted")
+        axs_resids.errorbar(plot_data["resid_mjds"], plot_data["resids_phase"], plot_data["resids_err_phase"], fmt="x", c="k", markersize=5, capsize=2, label="Fitted")
         ## set axis limits
         lim_0, lim_1 = axs_resids.get_ylim()
         lim_0, lim_1 = (-max([np.abs(lim_0), np.abs(lim_1)]), max([np.abs(lim_0), np.abs(lim_1)]))
-        if lim_1 < 0.001: lim_0, lim_1 = (-0.001, 0.001)
+        # if lim_1 < 0.002: lim_0, lim_1 = (-0.002, 0.002)
         axs_resids.set_ylim(lim_0, lim_1)
         ## plot residuals for bad toas
         # if len(plot_data["bad_toa_mjds"]) > 0:
@@ -282,10 +282,10 @@ class plot:
         ## combine the 2 grids
         n_params_gs = axs[2, 1].get_gridspec()
         axs_n_params = fig.add_subplot(n_params_gs[2, 1:4])
-        axs_n_params.plot(plot_data["params_x"], plot_data["params_y"], "kx", label="Nparams")
+        axs_n_params.plot(plot_data["params_x"], plot_data["params_y"], "ks", label="Nparams", markersize=3)
         # axs_n_params.set_title("N Params")
         axs_n_params.set_xlabel("MJD")
-        axs_n_params.set_ylabel("Number of Parameters Fitted")
+        axs_n_params.set_ylabel("Parameters Fitted")
         # axs_n_params.set_yticklabels(self._round_axis(axs_n_params.get_yticks(), 1), rotation=90, fontdict={"verticalalignment": "center"})
         self._format_y_axis(axs_n_params)
         ## fill mjd gaps
