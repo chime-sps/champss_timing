@@ -63,6 +63,9 @@ class champss_timing:
         self.timing_config = {}
 
     def initialize(self):
+        # Print git version
+        self.logger.success(f"CHAMPSS Timing Pipeline (version_{utils.get_git_version()})")
+
         # Initialize DB
         self.db_hdl.initialize()
 

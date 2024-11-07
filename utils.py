@@ -38,3 +38,9 @@ class utils:
                 name_ = f"{name}_{i}"
 
         return name_
+
+    def get_version_hash():
+        try:
+            return subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).strip().decode("utf-8")
+        except:
+            return "unknown"
