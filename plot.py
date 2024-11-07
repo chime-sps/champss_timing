@@ -212,7 +212,7 @@ class plot:
         ## set axis limits
         lim_0, lim_1 = axs_resids.get_ylim()
         lim_0, lim_1 = (-max([np.abs(lim_0), np.abs(lim_1)]), max([np.abs(lim_0), np.abs(lim_1)]))
-        if lim_1 < 0.01: lim_0, lim_1 = (-0.01, 0.01)
+        if lim_1 < 0.001: lim_0, lim_1 = (-0.001, 0.001)
         axs_resids.set_ylim(lim_0, lim_1)
         ## plot residuals for bad toas
         # if len(plot_data["bad_toa_mjds"]) > 0:
