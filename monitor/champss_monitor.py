@@ -21,7 +21,7 @@ app.secret_key = utils.utils.get_rand_string()
 
 @app.before_request
 def before_request():
-    if request.endpoint != 'login':
+    if request.endpoint != 'login' and request.endpoint != 'api':
         if not app.login.has_logged_in():
             return redirect(url_for('login'))
 
