@@ -72,6 +72,10 @@ def diagnostic_pdf(source_id):
     res.headers['Content-Type'] = 'application/pdf'
     return res
 
+@app.route('/diagnostic/<source_id>/pdf/')
+def diagnostic_pdf_(source_id):
+    diagnostic_pdf(source_id)
+
 @app.route('/public/api/<endpoint>', methods=['GET', 'POST'])
 def api(endpoint):
     return app.api.handle(endpoint, request)

@@ -143,7 +143,7 @@
 
     <script src="https://mozilla.github.io/pdf.js/build/pdf.mjs" type="module"></script>
     <script type="module">
-        var pdf_url = "{{ request.base_url }}/pdf";
+        var pdf_url = "{{ request.base_url }}/pdf/";
         var { pdfjsLib } = globalThis;
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://mozilla.github.io/pdf.js/build/pdf.worker.mjs';
 
