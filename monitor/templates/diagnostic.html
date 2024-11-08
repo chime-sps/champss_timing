@@ -143,11 +143,11 @@
 
     <script src="https://mozilla.github.io/pdf.js/build/pdf.mjs" type="module"></script>
     <script type="module">
-        var pdf_url = "{{ request.base_url }}/pdf/";
+        var pdf_data = atob("{{ sources[source_id].get_diagnostic_pdf_base64() | safe }}");
         var { pdfjsLib } = globalThis;
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://mozilla.github.io/pdf.js/build/pdf.worker.mjs';
 
-        pdfjsLib.getDocument(pdf_url).promise.then(function(pdf) {
+        pdfjsLib.getDocument({data: pdf_data}).promise.then(function(pdf) {
             pdf.getPage(1).then(function(page) {
                 var scale = 1;
                 var viewport = page.getViewport({ scale: scale });
