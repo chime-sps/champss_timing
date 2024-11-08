@@ -11,12 +11,15 @@ class dir_loader():
         self.psr_dir = psr_dir
         self.sources = []
         self.update_checker_thread = None
+        self.running = False
 
         # Load sources
         self.load_sources()
         print(f"{len(self.sources)} sources loaded")
 
     def initialize(self):
+        self.running = True
+
         for source in self.sources:
             source.initialize()
 
@@ -25,23 +28,38 @@ class dir_loader():
         self.update_checker_thread.start()
 
     def cleanup(self):
+        self.running = False
+
         for source in self.sources:
             source.cleanup()
 
         # Stop update checker
+        print("Stopping update checker...")
         self.update_checker_thread.join(3)
 
     def update_checker(self):
+        count = 0
+        checking_freq = 1
         while True:
+            threading.Event().wait(1)
+            count += 1
+
+            if time.time() - self.app.last_request < 30:
+                checking_freq = 5
+            else:
+                checking_freq = 30
+
+            if self.running == False:
+                break
+
+            if count >= checking_freq:
+                count = 0
+                continue
+
             if time.time() - self.app.last_request < 300:
                 print("Checking for updates...")
                 for source in self.sources:
                     source.update_checker()
-
-            if time.time() - self.app.last_request < 30:
-                threading.Event().wait(5)
-            else:
-                threading.Event().wait(30)
 
     def load_sources(self):
         for source_dir in glob.glob(self.psr_dir + "/*"):
