@@ -74,7 +74,7 @@ def diagnostic_pdf(source_id):
 
 @app.route('/diagnostic/<source_id>/pdf/')
 def diagnostic_pdf_(source_id):
-    diagnostic_pdf(source_id)
+    return diagnostic_pdf(source_id)
 
 @app.route('/public/api/<endpoint>', methods=['GET', 'POST'])
 def api(endpoint):
