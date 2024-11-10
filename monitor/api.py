@@ -6,13 +6,10 @@ class api:
 
     def update_psrdir(self):
         if self.app.update != None:
-            def update():
-                global self
-                self.app.update()
-                for source in self.app.sources:
-                    source.cleanup()
-                    source.initialize()
-            threading.Thread(target=update).start()
+            self.app.update()
+            for source in self.app.sources:
+                source.cleanup()
+                source.initialize()
             return "Updated."
 
         return "Update handler is not set."
