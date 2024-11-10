@@ -6,12 +6,13 @@ import threading
 from .src_loader import src_loader
 
 class dir_loader():
-    def __init__(self, psr_dir, app):
+    def __init__(self, psr_dir, app, auto_update = False):
         self.app = app
         self.psr_dir = psr_dir
         self.sources = []
         self.update_checker_thread = None
         self.running = False
+        self.auto_update = auto_update
 
         # Load sources
         self.load_sources()
@@ -24,8 +25,9 @@ class dir_loader():
             source.initialize()
 
         # Start update checker
-        self.update_checker_thread = threading.Thread(target = self.update_checker)
-        self.update_checker_thread.start()
+        if self.auto_update:
+            self.update_checker_thread = threading.Thread(target = self.update_checker)
+            self.update_checker_thread.start()
 
     def cleanup(self):
         self.running = False
@@ -34,8 +36,9 @@ class dir_loader():
             source.cleanup()
 
         # Stop update checker
-        print("Stopping update checker...")
-        self.update_checker_thread.join(3)
+        if self.auto_update:
+            print("Stopping update checker...")
+            self.update_checker_thread.join(3)
 
     def update_checker(self):
         count = 0

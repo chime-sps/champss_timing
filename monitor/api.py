@@ -5,7 +5,10 @@ class api:
     def update_psrdir(self):
         if self.app.update != None:
             self.app.update()
-            return "Update started."
+            for source in self.app.sources:
+                source.cleanup()
+                source.initialize()
+            return "Updated."
 
         return "Update handler is not set."
 
