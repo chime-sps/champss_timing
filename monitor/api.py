@@ -6,9 +6,10 @@ class api:
 
     def update_psrdir(self):
         if self.app.update != None:
-            self.app.update()
             for source in self.app.sources:
                 source.cleanup()
+            self.app.update()
+            for source in self.app.sources:
                 source.initialize()
             return "Updated."
 
