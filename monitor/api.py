@@ -1,13 +1,18 @@
+import threading
+
 class api:
     def __init__(self, app):
         self.app = app
 
     def update_psrdir(self):
         if self.app.update != None:
-            self.app.update()
-            for source in self.app.sources:
-                source.cleanup()
-                source.initialize()
+            def update():
+                global self
+                self.app.update()
+                for source in self.app.sources:
+                    source.cleanup()
+                    source.initialize()
+            threading.Thread(target=update).start()
             return "Updated."
 
         return "Update handler is not set."
