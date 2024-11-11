@@ -17,6 +17,7 @@ app.login = None
 app.api = None
 app.update = None
 app.last_request = 0
+app.pipeline_version = utils.utils.get_version_hash()
 app.secret_key = utils.utils.get_rand_string()
 
 @app.before_request
@@ -36,6 +37,7 @@ def after_request(response):
 def index():
     return render_template(
         'index.html',
+        app=app,
         sources=app.sources,
         request=request
     )
@@ -52,6 +54,7 @@ def login():
             show_msg = "Wrong password."
     return render_template(
         'login.html',
+        app=app,
         sources=app.sources,
         request=request,
         show_msg=show_msg
@@ -61,6 +64,7 @@ def login():
 def diagnostic(source_id):
     return render_template(
         'diagnostic.html',
+        app=app,
         source_id=source_id,
         sources=app.sources,
         request=request

@@ -54,7 +54,7 @@
                 </li>
             </ul>
         </div>
-        <div class="offcanvas-body" style="position: absolute; bottom: 0; left: 50%; width: 20em; transform: translate(-50%, -220%) rotate(-90deg); line-height: 0.8em; text-overflow: ellipsis; ">
+        <div class="offcanvas-body" style="position: absolute; bottom: 0; left: 50%; width: 20em; transform: translate(-50%, -220%) rotate(-90deg); line-height: 0.8em; text-overflow: ellipsis; " onclick="show_version()">
             <b>CHAMPSS Timing Pipeline</b><br>
             <small>{{ sources.psr_dir }}</small>
         </div>
@@ -65,11 +65,16 @@
         {% endblock %}
 <!--        <center>-->
 <!--            <br>-->
-<!--            <div style="width: 100%; height: 50px;">-->
-<!--                <small>Monitor loaded at <code>{{ sources.psr_dir }}</code>.</small>-->
+<!--            <div style="width: 100%; bottom: 0; position: fixed; padding-bottom: 15px; z-index: -1; font-size: 0.75em; color: #888; ">-->
+<!--                <small>CHAMPSS Timing Pipeline ({{ app.pipeline_version }})</small>-->
 <!--            </div>-->
 <!--        </center>-->
     </div>
+    <script>
+        function show_version() {
+            alert("𝗖𝗛𝗔𝗠𝗣𝗦𝗦 𝗧𝗶𝗺𝗶𝗻𝗴 𝗣𝗶𝗽𝗲𝗹𝗶𝗻𝗲 \nGit Hash: {{ app.pipeline_version }} \nLoaded PSRDIR: {{ sources.psr_dir }}");
+        }
+    </script>
     <script>
         const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
         const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
