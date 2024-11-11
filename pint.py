@@ -295,12 +295,14 @@ class pint_handler():
         if not self.initialized:
             self.initialize()
 
-        params = []
-        for param in self.m.params:
-            if not self.m[param].frozen:
-                params.append(param)
+        # params = []
+        # for param in self.m.params:
+        #     if not self.m[param].frozen:
+        #         params.append(param)
+        #
+        # return params
 
-        return params
+        return self.m.free_params
     
     def check_toa_gaps(self, latest_n_days=2, threshold=15):
         mjds = self.t.get_mjds().value
@@ -316,9 +318,17 @@ class pint_handler():
         if not self.initialized:
             self.initialize()
 
-        # Sanity check: if F1 > 0, then set it into 0
-        # if self.m["F1"].value > 0:
-        #     self.m["F1"].value = 0
+        if "F1" not in self.m.free_params:
+            self.m["F1"].value = 0
+
+        if "PX" not in self.m.free_params:
+            self.m["PX"].value = 0
+
+        if "PMRA" not in self.m.free_params:
+            self.m["PMRA"].value = 0
+
+        if "PMDEC" not in self.m.free_params:
+            self.m["PMDEC"].value = 0
 
         try:
             self.f = pint.fitter.Fitter.auto(self.t, self.m)
