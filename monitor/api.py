@@ -11,6 +11,7 @@ class api:
             self.app.update()
             for source in self.app.sources:
                 source.initialize()
+            self.app.sources.get_heatmap()
             return "Updated."
 
         return "Update handler is not set."

@@ -45,3 +45,9 @@ class utils:
             return subprocess.check_output(['git', '-C', os.path.dirname(os.path.realpath(__file__)), 'rev-parse', '--short', 'HEAD']).decode().strip()
         except:
             return "unknown"
+
+    def mjd_to_timestamp(mjd):
+        return (mjd - 40587) * 86400
+
+    def mjd_to_datetime(mjd):
+        return datetime.datetime.utcfromtimestamp(utils.mjd_to_timestamp(mjd))

@@ -5,6 +5,95 @@
 
 {% block content %}
     <h3>Dashboard</h3>
+    <div class="card" style="margin-bottom: 15px; " xmlns="http://www.w3.org/1999/html">
+        <div class="card-body">
+            <div class="heatmap" id="heatmap"></div>
+            <div class="heatmap" id="heatmap_legend" style="flex-direction: row-reverse; height: 15px; "></div>
+        </div>
+    </div>
+    <script>
+        var values = {{ sources.heatmap["val_normalized"] | safe }};
+        var counts = {{ sources.heatmap["val"] | safe }};
+        var dates = {{ sources.heatmap["key"] | safe }};
+
+        function generateHeatmap() {
+            const heatmap = document.getElementById("heatmap");
+
+            for (let i = 0; i < values.length; i++) {
+                const square = document.createElement("a");
+                square.classList.add("square");
+                square.setAttribute("value", values[i]);
+
+                if(values[i] > 1) {
+                    values[i] = 1;
+                }
+
+                if (values[i] === 0) {
+                    square.style.backgroundColor = "#eee";
+                    square.style.opacity = 1;
+                } else {
+                    // square.style.backgroundColor = "#003200";
+                    square.style.backgroundColor = "#000";
+                    square.style.opacity = values[i] / 1;
+                }
+
+                if(square.style.opacity < 0.2) {
+                    square.style.opacity = 0.2;
+                }
+
+                square.setAttribute("data-bs-toggle", "tooltip");
+                square.setAttribute("data-bs-placement", "top");
+
+                if(counts[i] > 0){
+                    square.setAttribute("data-bs-title", counts[i] + " TOA(s) on " + dates[i]);
+                } else {
+                    square.setAttribute("data-bs-title", "No TOA on " + dates[i]);
+                }
+
+                heatmap.appendChild(square);
+            }
+
+            const legend_data = [0, 0.2, 0.4, 0.6, 0.8, 1]
+            const legend = document.getElementById("heatmap_legend");
+
+            // add "less" on the left in text
+            const less = document.createElement("span");
+            less.style = "font-size: 0.75em; padding-left: 7px; padding-right: 7px;"
+            less.innerHTML = "Less";
+            legend.appendChild(less);
+
+            for (let i = 0; i < legend_data.length; i++) {
+                const square = document.createElement("a");
+                square.classList.add("square");
+                square.setAttribute("value", legend_data[i]);
+
+                if (legend_data[i] === 0) {
+                    square.style.backgroundColor = "#eee";
+                    square.style.opacity = 0.75;
+                } else {
+                    // square.style.backgroundColor = "#216e39";
+                    // square.style.backgroundColor = "#003200";
+                    square.style.backgroundColor = "#000";
+                    square.style.opacity = legend_data[i] / 1;
+                }
+
+                if(square.style.opacity < 0.2) {
+                    square.style.opacity = 0.2;
+                }
+
+                legend.appendChild(square);
+            }
+
+            // add "more" on the right in text
+            const more = document.createElement("span");
+            more.style = "font-size: 0.75em; padding-left: 7px; padding-right: 7px;";
+            more.innerHTML = " More";
+            legend.appendChild(more);
+
+        }
+
+        generateHeatmap();
+    </script>
     <div class="row">
         {% for this_source in sources %}
             <div class="col-lg-6" id="div_{{this_source.psr_id_esc}}" style="cursor:pointer;">
@@ -103,4 +192,8 @@
         {% endfor %}
         <div id="test"></div>
     </div>
+<script>
+    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+    const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+</script>
 {% endblock %}

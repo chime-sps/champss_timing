@@ -13,6 +13,33 @@
 
     <!-- Plotly -->
     <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+
+    <style>
+        .heatmap {
+            display: flex;
+            flex-wrap: wrap;
+            width: 100%;
+            margin: 0 auto;
+            flex-direction: column;
+            height: 120px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            align-content: baseline;
+        }
+
+        .square {
+            width: 14px;
+            height: 14px;
+            margin: 1px;
+            background-color: #216e39;
+            border: 1px solid #888;
+            border-radius: 3px;
+        }
+
+        .square[value="0"] {
+            border: 1px solid #ddd;
+        }
+    </style>
 </head>
 
 <body>
