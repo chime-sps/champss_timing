@@ -4,6 +4,8 @@ import numpy as np
 import hashlib
 from champss_timing.database import database
 
+from ..utils import utils
+
 
 class src_loader():
     def __init__(self, source_dir):
@@ -39,7 +41,7 @@ class src_loader():
         mjds = timing_info["notes"]["fitted_mjds"]
         resids = timing_info["residuals"]
 
-        return {"mjd": mjds, "val": resids["val"], "err": resids["err"]}
+        return {"mjd": mjds, "val": resids["val"], "err": resids["err"], "updated": utils.mjd_to_datetime(np.max(mjds)).strftime("%Y-%m-%d")}
 
     def get_parameter_info(self):
         all_timing_info = self.db.get_all_timing_info()

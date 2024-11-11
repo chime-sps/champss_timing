@@ -8,6 +8,7 @@
     <div class="card" style="margin-bottom: 15px; " xmlns="http://www.w3.org/1999/html">
         <div class="card-body">
             <div class="heatmap" id="heatmap"></div>
+            <small style="float: left; position: absolute; font-size: 0.75em; ">Number of TOAs the pipeline has processed for each day. </small>
             <div class="heatmap" id="heatmap_legend" style="flex-direction: row-reverse; height: 15px; "></div>
         </div>
     </div>
@@ -32,8 +33,8 @@
                     square.style.backgroundColor = "#eee";
                     square.style.opacity = 1;
                 } else {
-                    // square.style.backgroundColor = "#003200";
-                    square.style.backgroundColor = "#000";
+                    square.style.backgroundColor = "#216e39";
+                    // square.style.backgroundColor = "#000";
                     square.style.opacity = values[i] / 1;
                 }
 
@@ -72,8 +73,8 @@
                     square.style.opacity = 0.75;
                 } else {
                     // square.style.backgroundColor = "#216e39";
-                    // square.style.backgroundColor = "#003200";
-                    square.style.backgroundColor = "#000";
+                    square.style.backgroundColor = "#216e39";
+                    // square.style.backgroundColor = "#000";
                     square.style.opacity = legend_data[i] / 1;
                 }
 
@@ -97,7 +98,7 @@
     <div class="row">
         {% for this_source in sources %}
             <div class="col-lg-6" id="div_{{this_source.psr_id_esc}}" style="cursor:pointer;">
-                <div class="card" style="margin-bottom: 15px; " xmlns="http://www.w3.org/1999/html">
+                <div class="card" id="card_{{this_source.psr_id_esc}}" style="margin-bottom: 15px; " xmlns="http://www.w3.org/1999/html">
                     <div class="card-body">
                         <small style="float: right; ">Updated on {{this_source.get_last_updated()}}</small>
                         <h4 style="margin-bottom: 0;">{{this_source.psr_id}}</h4>
@@ -185,6 +186,10 @@
                             };
 
                             Plotly.newPlot('resids_{{this_source.psr_id_esc}}', [zero_line, resids_plot], resids_layout, config);
+
+                            if(resids.updated == dates[dates.length-1]) {
+                                $('#card_{{this_source.psr_id_esc}}').addClass('border-success');
+                            }
                         </script>
                     </div>
                 </div>

@@ -37,7 +37,7 @@ class dir_loader():
             self.update_checker_thread = threading.Thread(target = self.update_checker)
             self.update_checker_thread.start()
 
-    def get_heatmap(self, n_max=1050):
+    def get_heatmap(self, n_max=1050, reverse=False):
         heatmap = {}
 
         for source in self.sources:
@@ -66,12 +66,17 @@ class dir_loader():
             heatmap_keys.append(utils.mjd_to_datetime(key).strftime("%Y-%m-%d"))
             heatmap_val.append(val)
 
-        heatmap_keys = heatmap_keys[::-1]
-        heatmap_val = heatmap_val[::-1]
+        if reverse:
+            heatmap_keys = heatmap_keys[::-1]
+            heatmap_val = heatmap_val[::-1]
 
-        if len(heatmap_keys) > n_max:
-            heatmap_keys = heatmap_keys[:n_max]
-            heatmap_val = heatmap_val[:n_max]
+            if len(heatmap_keys) > n_max:
+                heatmap_keys = heatmap_keys[:n_max]
+                heatmap_val = heatmap_val[:n_max]
+        else:
+            if len(heatmap_keys) > n_max:
+                heatmap_keys = heatmap_keys[-n_max:]
+                heatmap_val = heatmap_val[-n_max:]
 
         self.heatmap = {
             "key": json.dumps(list(heatmap_keys)),
