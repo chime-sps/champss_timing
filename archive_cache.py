@@ -71,7 +71,7 @@ class archive_cache:
         
         shutil.copyfile(f"{self.cache_dir}/{self.utils.get_archive_id(filename)}", dest)
 
-    def update_model(self, parfile="auto"):
+    def update_model(self, parfile="auto", n_pools="auto"):
         if parfile == "auto":
             parfile = f"{self.psr_dir}/pulsar.par"
 
@@ -90,7 +90,7 @@ class archive_cache:
         )
 
         # update model for each archive
-        self.exec_update_model(archives, f"{self.cache_dir}/pulsar.par.tmp")
+        self.exec_update_model(archives, f"{self.cache_dir}/pulsar.par.tmp", n_pools=n_pools)
         utils.print_success(f"  [update_model] timing model updated for {len(archives)} observations. ")
 
         # update psr_amps in database

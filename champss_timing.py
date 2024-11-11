@@ -128,7 +128,7 @@ class champss_timing:
 
                 # update model for cached archives
                 self.logger.debug(f"Updating model for all cached archives")
-                self.archive_cache.update_model()
+                self.archive_cache.update_model(n_pools=self.n_pools)
 
                 # Create diagnostic plot
                 self.logger.info(f"Creating diagnostic plot")

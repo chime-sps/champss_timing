@@ -18,10 +18,11 @@ class exec():
             # Try if slurm environment
             try:
                 self.n_pools = int(os.environ["SLURM_CPUS_PER_TASK"])
-                print(f"SLURM environment detected. Using {self.n_pools} CPUs.")
+                print(f"SLURM environment detected. ")
             except:
                 self.n_pools = multiprocessing.cpu_count()
-                print(f"Using {self.n_pools} CPUs.")
+
+        print(f"Using {self.n_pools} CPUs.")
 
     def _exec(self, cmd, log=""):
         # Run the command
