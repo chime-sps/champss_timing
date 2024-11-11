@@ -95,8 +95,8 @@ def run(psr_dir, port, password=False, debug=False, update_hdl=None):
         app.debug = True
         app.config.update(DEBUG=True)
 
-    if app.update != None:
-        app.update()
+    # if app.update != None:
+    #     app.update()
 
     with dir_loader.dir_loader(psr_dir, app) as app.sources:
         app.run(port = port)
