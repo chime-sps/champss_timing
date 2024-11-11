@@ -183,6 +183,7 @@ class plot:
         amps_gs = axs[1, 0].get_gridspec()
         axs_amps = fig.add_subplot(amps_gs[1:, 0])
         axs_amps.matshow(np.tile(plot_data["amps_normalized"], (1, 2)), cmap="gray_r", aspect="auto")
+        axs_amps.invert_yaxis()
         # axs_amps.set_title("Amplitudes")
         axs_amps.set_xlabel("Phase")
         axs_amps.set_ylabel("MJD")
@@ -357,7 +358,7 @@ class plot:
         axs_table.set_title("Fitted Model Parameters")
 
         # Add date to the right bottom corner
-        fig.text(0.999, 0.001, f"PSR {plot_data['fitted_params']['PSR']} | {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", fontsize=10, ha="right", va="bottom")
+        fig.text(0.999, 0.001, f"CHAMPSS Timing Pipeline ({utils.get_version_hash()}) | PSR {plot_data['fitted_params']['PSR']} | {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", fontsize=10, ha="right", va="bottom")
 
         # Tight layout
         fig.tight_layout()     

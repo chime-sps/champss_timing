@@ -35,8 +35,7 @@ class database:
         if self.readonly:
             # check if database exists
             if not os.path.exists(psr_db):
-                utils.print_error(f"Database {psr_db} does not exist. Please provide a valid database file.")
-                exit
+                raise Exception(f"Database {psr_db} does not exist. Please provide a valid database file.")
 
             # copy the database to a temporary file
             self.psr_db = f"{psr_db}.readonly{utils.get_rand_string()}.tmp"
