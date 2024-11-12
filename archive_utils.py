@@ -1,4 +1,5 @@
 import psrchive
+import numpy as np
 
 class archive_utils:
     def __init__(self, archive):
@@ -15,3 +16,16 @@ class archive_utils:
     
     def get_snr(self):
         return self.prof.snr()
+
+    def get_bad_channels(self, output_format="list"): # works similar to get_bad_channel_list.py on Cedar, but without aquiring data on site.
+        bad_chans = []
+
+        for i in range(self.subint.get_nchan()):
+            this_pow = np.round(self.subint.get_Profile(0, i).get_amps(), 8)
+            if (this_pow == this_pow[0]).all():
+                bad_chans.append(i)
+
+        if output_format == "clfd":
+            return "\n".join(bad_chans)
+
+        return bad_chans

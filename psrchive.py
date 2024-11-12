@@ -1,16 +1,20 @@
 from .exec import exec
+from .archive_utils import archive_utils
 
 import os
 
 class psrchive_handler():
-    def __init__(self, self_super):
+    def __init__(self, self_super, use_get_bad_channel_list_py=False):
         self.exec_handler = self_super.exec_handler
         self.n_pools = self_super.n_pools
         self.logger = self_super.logger.copy()
+        self.use_get_bad_channel_list_py = use_get_bad_channel_list_py
 
         # Check for whether commands exists
         self.logger.debug("Initializing PSRCHIVE modules... ")
-        self.cmd_checklist = ["get_bad_channel_list.py", "clfd", "pam", "pat"]
+        self.cmd_checklist = ["clfd", "pam", "pat"]
+        if self.use_get_bad_channel_list_py:
+            self.cmd_checklist.append("get_bad_channel_list.py")
         self.cmd_check()
         self.logger.debug("Initializing PSRCHIVE modules... Done. ")
         
@@ -42,19 +46,26 @@ class psrchive_handler():
         self.scrunch(fs, scrunch_flag="p", ext="", overwrite=True)
 
         # get_bad_channel_list.py
-        output_files = []
-        exec_hlr = self.exec_handler(n_pools=self.n_pools, log=self._get_log_path(fs) + "/get_bad_channel_list.log")
-        for f in fs:
-            output_files.append(f"{f}{ext}.zapfile")
-            exec_hlr.append(f"get_bad_channel_list.py --fmt clfd --type timer --out {f}{ext}.zapfile {f}{ext}")
-        exec_hlr.run()
+        if self.use_get_bad_channel_list_py:
+            self.logger.debug("Getting bad channel list... (using get_bad_channel_list.py)")
+            output_files = []
+            exec_hlr = self.exec_handler(n_pools=self.n_pools, log=self._get_log_path(fs) + "/get_bad_channel_list.log")
+            for f in fs:
+                output_files.append(f"{f}{ext}.zapfile")
+                exec_hlr.append(f"get_bad_channel_list.py --fmt clfd --type timer --out {f}{ext}.zapfile {f}{ext}")
+            exec_hlr.run()
 
-        # Check output files exist
-        if not self.file_check(output_files):
-            raise Exception("Failed to get bad channel list")
-        
-        # if(not exec_hlr.check()):
-        #     raise Exception("Failed to get bad channel list")
+            # Check output files exist
+            if not self.file_check(output_files):
+                raise Exception("Failed to get bad channel list")
+
+            # if(not exec_hlr.check()):
+            #     raise Exception("Failed to get bad channel list")
+        else:
+            self.logger.debug("Getting bad channel list... (using internal method)")
+            for f in fs:
+                ar_hdl = archive_utils(f"{f}{ext}")
+                open(f"{f}{ext}.zapfile", "w").write(ar_hdl.get_bad_channels(output_format="clfd"))
         
         # clfd
         output_files = []
