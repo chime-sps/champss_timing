@@ -25,7 +25,9 @@ class archive_utils:
             if (this_pow == this_pow[0]).all():
                 bad_chans.append(i)
 
+        print(f"{len(bad_chans) / self.subint.get_nchan() * 100}% of channels are bad.")
+
         if output_format == "clfd":
-            return "\n".join(bad_chans)
+            return " ".join([str(i) for i in bad_chans])
 
         return bad_chans
