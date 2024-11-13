@@ -4,6 +4,7 @@ import time
 import shutil
 import traceback
 import astropy.units as u
+import numpy as np
 
 from .utils import utils
 from .timing import timing
@@ -235,6 +236,9 @@ class champss_timing:
                         ### Process archives
                         self.logger.debug(f" > Preparing data")
                         tim.prepare()
+                        ### Sanity check for bad_percentage
+                        if (np.array(tim.psrchive.bad_percentage) > 0.50).any():
+                            self.noti_hdl.send_urgent_message(f"Bad channel percentage > 50% (usually ~30% for CHIME/Pulsar). Please check the diagnostic plot. ", psr_id=self.psr_id)
                     else:
                         ### Copy from cache
                         self.logger.debug(f" > All archives are cached. Copying from cache... ")

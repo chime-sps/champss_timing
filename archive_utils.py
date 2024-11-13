@@ -1,6 +1,9 @@
 import psrchive
 import numpy as np
 
+from .logger import logger
+from .notification import notification
+
 class archive_utils:
     def __init__(self, archive):
         self.archive = psrchive.Archive.load(archive)
@@ -21,13 +24,13 @@ class archive_utils:
         bad_chans = []
 
         for i in range(self.subint.get_nchan()):
-            this_pow = np.round(self.subint.get_Profile(0, i).get_amps(), 7)
+            this_pow = np.round(self.subint.get_Profile(0, i).get_amps(), 6)
             if (this_pow == this_pow[0]).all() and this_pow[0] < 0.0005:
                 bad_chans.append(i)
 
-        print(f"{len(bad_chans) / self.subint.get_nchan() * 100}% of channels are bad.")
+        bad_percentage = len(bad_chans) / self.subint.get_nchan()
 
         if output_format == "clfd":
-            return "\n".join([str(i) for i in bad_chans])
+            return "\n".join([str(i) for i in bad_chans]), bad_percentage
 
-        return bad_chans
+        return bad_chans, bad_percentage

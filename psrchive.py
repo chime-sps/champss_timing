@@ -9,6 +9,7 @@ class psrchive_handler():
         self.n_pools = self_super.n_pools
         self.logger = self_super.logger.copy()
         self.use_get_bad_channel_list_py = use_get_bad_channel_list_py
+        self.bad_percentage = []
 
         # Check for whether commands exists
         self.logger.debug("Initializing PSRCHIVE modules... ")
@@ -53,6 +54,7 @@ class psrchive_handler():
             for f in fs:
                 output_files.append(f"{f}{ext}.zapfile")
                 exec_hlr.append(f"get_bad_channel_list.py --fmt clfd --type timer --out {f}{ext}.zapfile {f}{ext}")
+                self.bad_percentage.append(0) # Not getting bad percentage from get_bad_channel_list.py, but we can trust it.
             exec_hlr.run()
 
             # Check output files exist
@@ -64,8 +66,15 @@ class psrchive_handler():
         else:
             self.logger.debug("Getting bad channel list... (using internal method)")
             for f in fs:
-                ar_hdl = archive_utils(f"{f}{ext}")
-                open(f"{f}{ext}.zapfile", "w").write(ar_hdl.get_bad_channels(output_format="clfd"))
+                zapfile_clfd, bad_percentage = archive_utils(f"{f}{ext}").get_bad_channels(output_format="clfd")
+                open(f"{f}{ext}.zapfile", "w").write(zapfile_clfd)
+
+                if bad_percentage > 0.5:
+                    self.logger.warning(f"Bad channels exceed 50% ({bad_percentage * 100}%) in {f}{ext}")
+                else:
+                    self.logger.debug(f"{bad_percentage * 100}% of channels are bad.")
+
+                self.bad_percentage.append(bad_percentage)
         
         # clfd
         output_files = []
