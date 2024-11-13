@@ -21,13 +21,13 @@ class archive_utils:
         bad_chans = []
 
         for i in range(self.subint.get_nchan()):
-            this_pow = np.round(self.subint.get_Profile(0, i).get_amps(), 8)
-            if (this_pow == this_pow[0]).all():
+            this_pow = np.round(self.subint.get_Profile(0, i).get_amps(), 7)
+            if (this_pow == this_pow[0]).all() and this_pow[0] < 0.0005:
                 bad_chans.append(i)
 
         print(f"{len(bad_chans) / self.subint.get_nchan() * 100}% of channels are bad.")
 
         if output_format == "clfd":
-            return " ".join([str(i) for i in bad_chans])
+            return "\n".join([str(i) for i in bad_chans])
 
         return bad_chans
