@@ -239,6 +239,10 @@ class champss_timing:
                         ### Sanity check for bad_percentage
                         if (np.array(tim.psrchive.bad_percentage) > 0.50).any():
                             self.noti_hdl.send_urgent_message(f"Bad channel percentage > 50% (usually ~30% for CHIME/Pulsar). Please check the diagnostic plot. ", psr_id=self.psr_id)
+                            self.noti_hdl.send_code(tim.psrchive.bad_percentage, psr_id=self.psr_id)
+                        if (np.array(tim.psrchive.bad_percentage) < 0.05).any():
+                            self.noti_hdl.send_urgent_message(f"Bad channel percentage < 5% (usually ~30% for CHIME/Pulsar). Please check the diagnostic plot. ", psr_id=self.psr_id)
+                            self.noti_hdl.send_code(tim.psrchive.bad_percentage, psr_id=self.psr_id)
                     else:
                         ### Copy from cache
                         self.logger.debug(f" > All archives are cached. Copying from cache... ")
