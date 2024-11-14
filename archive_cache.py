@@ -78,8 +78,8 @@ class archive_cache:
         if tempdir == "auto":
             tempdir = f"{self.cache_dir}/temp"
 
-        if os.path.exists(tempdir):
-            shutil.rmtree(tempdir)
+        if not os.path.exists(tempdir):
+            os.makedirs(tempdir, exist_ok=True)
 
         # get all archives
         archives = []
