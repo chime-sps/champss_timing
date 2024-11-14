@@ -48,8 +48,16 @@ class champss_timing:
         self.info_first_mjd = 0
         self.info_last_mjd = 0
         self.n_pools = n_pools
-        self.workspace_cleanup = workspace_cleanup
         self.logger = logger
+        self.workspace_root = "./__champss_timing__workspace"
+        self.tempfolder = "auto"
+        self.workspace_cleanup = workspace_cleanup
+
+        # If slurm is used, set workspace to /scratch
+        if "SLURM_TMPDIR" in os.environ:
+            self.workspace = os.environ["SLURM_TMPDIR"]
+            self.tempfolder = f"{self.workspace}/temp"
+            self.workspace_cleanup = False
 
         # Format psr_dir
         if self.path_psr_dir.endswith("/"):
@@ -129,7 +137,7 @@ class champss_timing:
 
                 # update model for cached archives
                 self.logger.debug(f"Updating model for all cached archives")
-                self.archive_cache.update_model(n_pools=self.n_pools)
+                self.archive_cache.update_model(n_pools=self.n_pools, tempdir=self.tempfolder)
 
                 # Create diagnostic plot
                 self.logger.info(f"Creating diagnostic plot")
@@ -223,7 +231,8 @@ class champss_timing:
                 par_output = f"{self.path_timing_model}.timingoutput", 
                 n_pools = self.n_pools, 
                 workspace_cleanup = self.workspace_cleanup, 
-                logger = self.logger.copy()
+                logger = self.logger.copy(),
+                workspace_root = self.workspace_root
             ) as tim:
                 # Processing initialize workspace
                 self.logger.debug(f" > Initializing modules")

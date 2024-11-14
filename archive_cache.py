@@ -71,16 +71,23 @@ class archive_cache:
         
         shutil.copyfile(f"{self.cache_dir}/{self.utils.get_archive_id(filename)}", dest)
 
-    def update_model(self, parfile="auto", n_pools="auto"):
+    def update_model(self, parfile="auto", n_pools="auto", tempdir="auto", cleanup=True):
         if parfile == "auto":
             parfile = f"{self.psr_dir}/pulsar.par"
+
+        if tempdir == "auto":
+            tempdir = f"{self.cache_dir}/temp"
 
         # get all archives
         archives = []
         for ar in self.db_hdl.get_all_archive_info():
             this_path = f"{self.cache_dir}/{ar['filename']}"
+            this_temp_path = f"{tempdir}/{ar['filename']}"
             if os.path.exists(f"{this_path}"):
-                archives.append(this_path)
+                # copy archive to temp directory
+                shutil.copyfile(this_path, this_temp_path)
+                # append to archives
+                archives.append(this_temp_path)
             else:
                 self.utils.print_warning(f"Archive {ar['filename']} not found in cache. Skipping.")
 
@@ -100,6 +107,10 @@ class archive_cache:
         print(f"  [update_model] committing changes to database... ")
         self.db_commit()
         utils.print_success(f"  [update_model] archive information in database updated for {len(archives)} observations. ")
+
+        # cleanup
+        if cleanup:
+            shutil.rmtree(tempdir)
 
         return True
     

@@ -11,17 +11,17 @@ import itertools
 from shutil import copyfile, rmtree
 
 class timing():
-    def __init__(self, ars, std, par, par_output=False, n_pools=4, workspace_cleanup=True, logger=logger()):
+    def __init__(self, ars, std, par, par_output=False, n_pools=4, workspace_cleanup=True, logger=logger(), workspace_root="./__champss_timing__workspace"):
         # Paths & Settings
         self.ars = ars # data archives
         self.std = std # pulse template
         self.par = par # input timing model
         self.par_output = par_output # output timing model
         self.n_pools = n_pools
+        self.workspace_root = workspace_root
         self.workspace_cleanup = workspace_cleanup
 
         # Workspace
-        self.workspace_root = "./__champss_timing__workspace"
         self.workspace = f"{self.workspace_root}/{utils.get_time_string()}__{utils.get_rand_string()}"
         self.fs = []
 
