@@ -78,6 +78,9 @@ class archive_cache:
         if tempdir == "auto":
             tempdir = f"{self.cache_dir}/temp"
 
+        if os.path.exists(tempdir):
+            shutil.rmtree(tempdir)
+
         # get all archives
         archives = []
         for ar in self.db_hdl.get_all_archive_info():
@@ -85,19 +88,19 @@ class archive_cache:
             this_temp_path = f"{tempdir}/{ar['filename']}"
             if os.path.exists(f"{this_path}"):
                 # copy archive to temp directory
-                shutil.copyfile(this_path, tempdir)
+                shutil.copyfile(this_path, this_temp_path)
                 # append to archives
                 archives.append(this_temp_path)
             else:
                 self.utils.print_warning(f"Archive {ar['filename']} not found in cache. Skipping.")
 
         # Remove TZRSITE to fix a problem with psrchive for CHIME observations
-        open(f"{self.cache_dir}/pulsar.par.tmp", "w").write(
+        open(f"{tempdir}/pulsar.par.tmp", "w").write(
             open(parfile).read().replace("TZRSITE", "# TZRSITE")
         )
 
         # update model for each archive
-        self.exec_update_model(archives, f"{self.cache_dir}/pulsar.par.tmp", n_pools=n_pools)
+        self.exec_update_model(archives, f"{tempdir}/pulsar.par.tmp", n_pools=n_pools)
         utils.print_success(f"  [update_model] timing model updated for {len(archives)} observations. ")
 
         # update psr_amps in database
