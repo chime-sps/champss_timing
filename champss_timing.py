@@ -59,6 +59,8 @@ class champss_timing:
             self.tempfolder = f"{self.workspace}/temp"
             self.workspace_cleanup = False
 
+            print(f"SLURM detected. Setting workspace to {self.workspace} and tempfolder to {self.tempfolder}")
+
         # Format psr_dir
         if self.path_psr_dir.endswith("/"):
             self.path_psr_dir = self.path_psr_dir[0:-1]
