@@ -85,7 +85,7 @@ class archive_cache:
             this_temp_path = f"{tempdir}/{ar['filename']}"
             if os.path.exists(f"{this_path}"):
                 # copy archive to temp directory
-                shutil.copyfile(this_path, this_temp_path)
+                shutil.copyfile(this_path, tempdir)
                 # append to archives
                 archives.append(this_temp_path)
             else:

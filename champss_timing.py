@@ -53,13 +53,14 @@ class champss_timing:
         self.tempfolder = "auto"
         self.workspace_cleanup = workspace_cleanup
 
-        # If slurm is used, set workspace to /scratch
+        # If slurm is used, set workspace to $SLURM_TMPDIR
         if "SLURM_TMPDIR" in os.environ:
-            self.workspace = os.environ["SLURM_TMPDIR"]
-            self.tempfolder = f"{self.workspace}/temp"
-            self.workspace_cleanup = False
+            if os.environ["SLURM_TMPDIR"] != "":
+                self.workspace = os.environ["SLURM_TMPDIR"]
+                self.tempfolder = f"{self.workspace}/temp"
+                self.workspace_cleanup = False
 
-            print(f"SLURM detected. Setting workspace to {self.workspace} and tempfolder to {self.tempfolder}")
+                logger.info(f"SLURM detected. Setting workspace to {self.workspace} and tempfolder to {self.tempfolder}")
 
         # Format psr_dir
         if self.path_psr_dir.endswith("/"):
