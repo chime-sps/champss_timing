@@ -18,13 +18,14 @@ class archive_utils:
     def get_snr(self):
         return self.prof.snr()
 
-    def get_bad_channels(self,
-                         output_format="list"):  # works similar to get_bad_channel_list.py on Cedar, but without aquiring data on site.
+    def get_bad_channels(self, output_format="list"):  # works similar to get_bad_channel_list.py on Cedar, but without aquiring data on site.
         bad_chans = []
 
         for i in range(self.subint.get_nchan()):
-            if np.std(self.subint.get_Profile(0, i).get_amps()) < 1e-9:
-                bad_chans.append(i)
+            for j in range(self.subint.get_npol()):
+                if np.std(self.subint.get_Profile(j, i).get_amps()) < 1e-9:
+                    bad_chans.append(i)
+                    break
 
         #     this_pow = np.round(self.subint.get_Profile(0, i).get_amps(), 6)
         #     if (this_pow == this_pow[0]).all() and this_pow[0] < 0.0005:

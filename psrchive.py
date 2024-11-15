@@ -43,9 +43,6 @@ class psrchive_handler():
         return True
 
     def zap_bad_channel(self, fs, ext=""):
-        # Scrunch pols (clfd requires pam -p first)
-        self.scrunch(fs, scrunch_flag="p", ext="", overwrite=True)
-
         # get_bad_channel_list.py
         if self.use_get_bad_channel_list_py:
             self.logger.debug("Getting bad channel list... (using get_bad_channel_list.py)")
@@ -70,12 +67,15 @@ class psrchive_handler():
                 open(f"{f}{ext}.zapfile", "w").write(zapfile_clfd)
 
                 if bad_percentage > 0.5:
-                    self.logger.warning(f"Bad channels exceed 50% ({bad_percentage * 100}%) in {f}{ext}")
+                    self.logger.warning(f"[{f}{ext}] Bad channels exceed 50% ({bad_percentage * 100}%). ")
                 else:
-                    self.logger.debug(f"{bad_percentage * 100}% of channels are bad.")
+                    self.logger.debug(f"[{f}{ext}] {bad_percentage * 100}% of channels are bad.")
 
                 self.bad_percentage.append(bad_percentage)
-        
+
+        # Scrunch pols (clfd requires pam -p first)
+        self.scrunch(fs, scrunch_flag="p", ext="", overwrite=True)
+
         # clfd
         output_files = []
         exec_hlr = self.exec_handler(n_pools=self.n_pools, log=self._get_log_path(fs) + "/clfd.log")
