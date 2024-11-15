@@ -55,7 +55,7 @@ class champss_timing:
 
         # If slurm is used, set workspace to $SLURM_TMPDIR
         if "SLURM_TMPDIR" in os.environ:
-            if os.environ["SLURM_TMPDIR"] != "":
+            if os.environ["SLURM_TMPDIR"] != "" and os.path.isdir(os.environ["SLURM_TMPDIR"]):
                 self.workspace = os.environ["SLURM_TMPDIR"]
                 self.tempfolder = f"{self.workspace}/temp"
                 self.workspace_cleanup = False
