@@ -18,6 +18,9 @@ class archive_utils:
     def get_snr(self):
         return self.prof.snr()
 
+    def get_mjd(self):
+        return self.ar_hdl.subint.get_start_time().in_days()
+
     def get_bad_channels(self, output_format="list"):  # works similar to get_bad_channel_list.py on Cedar, but without aquiring data on site.
         bad_chans = []
 
