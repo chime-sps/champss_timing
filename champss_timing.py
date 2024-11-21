@@ -17,7 +17,7 @@ from .champss_checker import champss_checker
 from .logger import logger
 
 class champss_timing:
-    def __init__(self, psr_dir, data_archives, slack_token, n_pools=4, workspace_cleanup=True, logger=logger()):
+    def __init__(self, psr_dir, data_archives, slack_token, data_archives_alternative=[], n_pools=4, workspace_cleanup=True, logger=logger()):
         """
         CHAMPSS timing pipeline class
 
@@ -37,6 +37,7 @@ class champss_timing:
         self.path_psr_dir = psr_dir
         self.psr_id = None
         self.path_data_archives = data_archives
+        self.path_data_archives_alternative = data_archives_alternative
         self.path_db = f"{self.path_psr_dir}/champss_timing.sqlite3.db"
         self.path_pulse_template = f"{self.path_psr_dir}/paas.std"
         self.path_timing_model = f"{self.path_psr_dir}/pulsar.par"
@@ -47,6 +48,8 @@ class champss_timing:
         self.info_ars_paths = []
         self.info_first_mjd = 0
         self.info_last_mjd = 0
+
+        # Settings
         self.n_pools = n_pools
         self.logger = logger
         self.workspace_root = "./__champss_timing__workspace"
@@ -123,6 +126,12 @@ class champss_timing:
 
         # Get psr id
         self.psr_id = self.path_psr_dir.split("/")[-1]
+
+        # Filling TOAs by althernative data archives
+        for mjd in self.path_data_archives_alternative:
+            if mjd not in self.path_data_archives:
+                self.path_data_archives[mjd] = self.path_data_archives_alternative[mjd]
+                self.logger.debug(f"Alternative data archive for MJD={mjd} added: {self.path_data_archives[mjd]}")
 
     def run(self):
         n_timed = 0
@@ -210,7 +219,7 @@ class champss_timing:
                         # fit_params.append(this_param_id)
                         # break # one param a time
 
-            if(len(fit_params) == 0):
+            if len(fit_params) == 0:
                 self.logger.error(f"No parameter to fit at n_days={n_days_to_fit}")
                 return {"status": "error"} 
 
