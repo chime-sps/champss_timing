@@ -134,6 +134,13 @@ class plot:
         plot_data["resids_err_phase"] = plot_data["resids_err"] / this_F0
         plot_data["bad_resids_phase"] = plot_data["bad_resids"] / this_F0
         plot_data["bad_resids_err_phase"] = plot_data["bad_resids_err"] / this_F0
+
+        # Resize amplitudes to the same size
+        max_amps_len = max([len(i) for i in plot_data["amps"]])
+        for i in range(len(plot_data["amps"])):
+            if len(plot_data["amps"][i]) != max_amps_len:
+                plot_data["amps"][i] = np.interp(np.linspace(0, 1, max_amps_len), np.linspace(0, 1, len(plot_data["amps"][i])), plot_data["amps"][i])
+                plot_data["amps_normalized"][i] = np.interp(np.linspace(0, 1, max_amps_len), np.linspace(0, 1, len(plot_data["amps_normalized"][i])), plot_data["amps_normalized"][i])
   
         # stack absolute amplitudes
         plot_data["stacked_amps"] = np.sum(plot_data["amps"], axis=0)

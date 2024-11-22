@@ -89,6 +89,12 @@ class champss_timing:
 
         # Initialize archive_cache
         self.db_hdl.initialize()
+
+        # Filling TOAs by althernative data archives
+        for mjd in self.path_data_archives_alternative:
+            if mjd not in self.path_data_archives:
+                self.path_data_archives[mjd] = self.path_data_archives_alternative[mjd]
+                self.logger.debug(f"Alternative data archive for MJD={mjd} added: {self.path_data_archives[mjd]}")
         
         # Check number of data archives
         if len(self.path_data_archives) < 5:
@@ -126,12 +132,6 @@ class champss_timing:
 
         # Get psr id
         self.psr_id = self.path_psr_dir.split("/")[-1]
-
-        # Filling TOAs by althernative data archives
-        for mjd in self.path_data_archives_alternative:
-            if mjd not in self.path_data_archives:
-                self.path_data_archives[mjd] = self.path_data_archives_alternative[mjd]
-                self.logger.debug(f"Alternative data archive for MJD={mjd} added: {self.path_data_archives[mjd]}")
 
     def run(self):
         n_timed = 0
@@ -405,7 +405,7 @@ class champss_timing:
             if(len(splitted) != 5):
                 raise Exception("Unexpected .tim file format", this_param)
             
-            self.logger.debug(f"[TOA] filename={splitted[0].split('/')[-1]}, freq={splitted[1]}, toa={splitted[2]}, toa_err={splitted[3]}, telescope={splitted[4]}", layer=1)
+            self.logger.debug(f"[TOA] filename={utils.get_archive_id(splitted[0])}, freq={splitted[1]}, toa={splitted[2]}, toa_err={splitted[3]}, telescope={splitted[4]}", layer=1)
 
             self.db_hdl.insert_toa(
                 filename = utils.get_archive_id(splitted[0]), # set only the filename as the index, otherwise the ws id will be different...

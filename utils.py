@@ -25,7 +25,7 @@ class utils:
         return md5(str(random.random()).encode()).hexdigest()[0:6]
     
     def get_archive_id(archive):
-        return archive.split("/")[-1].split(".")[0]
+        return archive.split("/")[-1].split(".ar")[0]
 
     def no_overwriting_name(name):
         name_ = name
