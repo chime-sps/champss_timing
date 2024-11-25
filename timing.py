@@ -24,6 +24,7 @@ class timing():
         # Workspace
         self.workspace = f"{self.workspace_root}/{utils.get_time_string()}__{utils.get_rand_string()}"
         self.fs = []
+        self.jumps = []
 
         # Functions
         self.logger = logger # logging function
@@ -39,10 +40,15 @@ class timing():
         if self.initialized:
             return 
         
-        # Check files exist
-        for f in self.ars + [self.par, self.std]:
+        # Check archive exist
+        for f in self.ars:
+            if not os.path.exists(f["path"]):
+                raise Exception(f"Archive {f['path']} does not exist")
+
+        # Check psrdir files exist
+        for f in [self.par, self.std]:
             if not os.path.exists(f):
-                raise Exception(f"File {f} does not exist")
+                raise Exception(f"Psrdir file {f} does not exist")
             
         # Create workspace
         self.logger.debug(f"Creating workspace at {self.workspace}")
@@ -54,9 +60,9 @@ class timing():
         self.logger.debug("Copying files to workspace... ", layer=1)
         for i, f in enumerate(self.ars):
             self.logger.debug(f"Copying file {i+1}/{len(self.ars)}", end="\r", layer=2)
-            # os.system(f"cp {f} {self.workspace}")
-            copyfile(f, f"{self.workspace}/{os.path.basename(f)}")
-            self.fs.append(f"{self.workspace}/{os.path.basename(f)}")
+            copyfile(f, f"{self.workspace}/{os.path.basename(f['path'])}")
+            self.fs.append(f"{self.workspace}/{os.path.basename(f['path'])}")
+            self.jumps.append(f["jump"])
         # os.system(f"cp {self.par} {self.workspace}/pulsar.par")
         copyfile(self.par, f"{self.workspace}/pulsar.par")
         # os.system(f"cp {self.std} {self.workspace}/paas.std")

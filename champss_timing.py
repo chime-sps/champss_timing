@@ -17,7 +17,7 @@ from .champss_checker import champss_checker
 from .logger import logger
 
 class champss_timing:
-    def __init__(self, psr_dir, data_archives, slack_token, data_archives_alternative=[], n_pools=4, workspace_cleanup=True, logger=logger()):
+    def __init__(self, psr_dir, data_archives, slack_token, timing_mode="opd", n_pools=4, workspace_cleanup=True, logger=logger()):
         """
         CHAMPSS timing pipeline class
 
@@ -27,6 +27,18 @@ class champss_timing:
             Path to the directory containing the pulsar data
         data_archives : dict
             List of data archives to be processed
+        slack_token : dict
+            Slack token for notification
+        timing_mode : str
+            Timing mode to be used (opd, mpd)
+            opd: One TOA a day
+            mpd: Multiple TOAs a day
+        n_pools : int
+            Number of pools to be used for multiprocessing
+        workspace_cleanup : bool
+            Clean up workspace after timing
+        logger : logger
+            Logger object for logging
 
         Returns
         -------
@@ -37,7 +49,6 @@ class champss_timing:
         self.path_psr_dir = psr_dir
         self.psr_id = None
         self.path_data_archives = data_archives
-        self.path_data_archives_alternative = data_archives_alternative
         self.path_db = f"{self.path_psr_dir}/champss_timing.sqlite3.db"
         self.path_pulse_template = f"{self.path_psr_dir}/paas.std"
         self.path_timing_model = f"{self.path_psr_dir}/pulsar.par"
@@ -55,6 +66,7 @@ class champss_timing:
         self.workspace_root = "./__champss_timing__workspace"
         self.tempfolder = "auto"
         self.workspace_cleanup = workspace_cleanup
+        self.timing_mode = timing_mode
 
         # If slurm is used, set workspace to $SLURM_TMPDIR
         if "SLURM_TMPDIR" in os.environ:
@@ -89,19 +101,14 @@ class champss_timing:
 
         # Initialize archive_cache
         self.db_hdl.initialize()
-
-        # Filling TOAs by althernative data archives
-        for mjd in self.path_data_archives_alternative:
-            if mjd not in self.path_data_archives:
-                self.path_data_archives[mjd] = self.path_data_archives_alternative[mjd]
-                self.logger.debug(f"Alternative data archive for MJD={mjd} added: {self.path_data_archives[mjd]}")
         
         # Check number of data archives
         if len(self.path_data_archives) < 5:
             raise ValueError("No enough data archives to perform timing (at least 5 needed)")
 
-        # Sort data archives by MJD
-        self.path_data_archives = {k: v for k, v in sorted(self.path_data_archives.items(), key=lambda item: item[0])}
+        # Sort data archives by MJD key
+        # self.path_data_archives = {k: v for k, v in sorted(self.path_data_archives.items(), key=lambda item: item[0])}
+        self.path_data_archives = dict(sorted(self.path_data_archives.items()))
 
         # Get first and last MJD
         self.info_ars_mjds = list(self.path_data_archives.keys())
@@ -124,8 +131,9 @@ class champss_timing:
         if not os.path.isfile(self.path_timing_config):
             raise FileNotFoundError(f"File {self.path_timing_config} not found for timing configuration")
         for mjd in self.path_data_archives:
-            if not os.path.isfile(self.path_data_archives[mjd]):
-                raise FileNotFoundError(f"File {self.path_data_archives[mjd]} not found for data archive")
+            for this_archive_info in self.path_data_archives[mjd]:
+                if not os.path.isfile(this_archive_info["path"]):
+                    raise FileNotFoundError(f"File {this_archive_info['path']} not found for data archive")
         
         # Load config
         self.timing_config = json.load(open(self.path_timing_config, "r")) 
@@ -227,7 +235,7 @@ class champss_timing:
         try:
             archives_untimed = self.db_get_untimed_archives(archives)
             self.logger.info(f"Timing module input parameters: ")
-            self.logger.data(f"Timing {mjds} with archives: " + "\n -> " + "\n -> ".join(archives))
+            self.logger.data(f"Timing {mjds} with archives: " + "\n -> " + "\n -> ".join(archives.values()))
             self.logger.data(f"Fit params: {fit_params}")
             self.logger.data(f"Potential Fit params: {potential_fit_params}")
             self.logger.data(f"MJD range: {min(mjds)} - {max(mjds)}")
@@ -473,9 +481,19 @@ class champss_timing:
     def db_get_untimed_archives(self, archives):
         untimed_archives = []
 
-        for this_file in archives:
-            if not self.db_hdl.check_toa_exists(utils.get_archive_id(this_file)):
-                untimed_archives.append(this_file)
+        if self.timing_mode == "opd":
+            for archive in archives:
+                for i, this_ar_info in enumerate(archive):
+                    if self.db_hdl.check_toa_exists(utils.get_archive_id(this_ar_info["path"])):
+                        break
+                    if i == len(archive) - 1:
+                        # If loop reaches the end, then the archive is untimed since no TOA is found so that no break is called.
+                        untimed_archives.append(archive[0]) # append only the first archive (highest priority)
+        elif self.timing_mode == "mpd":
+            for archive in archives:
+                for i, this_ar_info in enumerate(archive):
+                    if not self.db_hdl.check_toa_exists(utils.get_archive_id(this_ar_info["path"])):
+                        untimed_archives.append(this_ar_info)
 
         return untimed_archives
 
