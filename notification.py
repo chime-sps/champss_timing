@@ -39,22 +39,46 @@ class notification:
         self.sh = slack_handler(messager_token)
 
     def send_urgent_message(self, message, psr_id="psr_id_not_provided"):
-        self.sh.send("[ ⚠️ URGENT ! ] <@wenke.xia>\n" + message + "\nPSR ID: #" + psr_id)
+        try:
+            self.sh.send("[ ⚠️ URGENT ! ] <@wenke.xia>\n" + message + "\nPSR ID: #" + psr_id)
+        except Exception as e:
+            print(f"Error sending urgent message: {e}")
+            print(f"Message: {message}")
 
     def send_success_message(self, message, psr_id="psr_id_not_provided"):
-        self.sh.send("[ ✅ SUCCESS ]\n" + message + "\nPSR ID: #" + psr_id)
+        try:
+            self.sh.send("[ ✅ SUCCESS ]\n" + message + "\nPSR ID: #" + psr_id)
+        except Exception as e:
+            print(f"Error sending success message: {e}")
+            print(f"Message: {message}")
 
     def send_message(self, message, psr_id="psr_id_not_provided"):
-        self.sh.send(message + "\nPSR ID: #" + psr_id)
+        try:
+            self.sh.send(message + "\nPSR ID: #" + psr_id)
+        except Exception as e:
+            print(f"Error sending message: {e}")
+            print(f"Message: {message}")
 
     def send_image(self, image, psr_id="psr_id_not_provided"):
-        self.sh.send(image=image, image_title="PSR ID: #" + psr_id)
+        try:
+            self.sh.send(image=image, image_title="PSR ID: #" + psr_id)
+        except Exception as e:
+            print(f"Error sending image: {e}")
+            print(f"Image: {image}")
 
     def send_file(self, file, psr_id="psr_id_not_provided"):
-        self.sh.send(file=file, file_title="PSR ID: #" + psr_id)
+        try:
+            self.sh.send(file=file, file_title="PSR ID: #" + psr_id)
+        except Exception as e:
+            print(f"Error sending file: {e}")
+            print(f"File: {file}")
     
     def send_code(self, code, psr_id="psr_id_not_provided"):
-        self.sh.send(message=f"```\n{code}\n```" + "\nPSR ID: #" + psr_id)
+        try:
+            self.sh.send(message=f"```\n{code}\n```" + "\nPSR ID: #" + psr_id)
+        except Exception as e:
+            print(f"Error sending code: {e}")
+            print(f"Code: {code}")
 
 # sh = slack_handler()
 # sh.send("Hello, World!")
