@@ -60,7 +60,7 @@ class timing():
         self.logger.debug("Copying files to workspace... ", layer=1)
         for i, f in enumerate(self.ars):
             self.logger.debug(f"Copying file {i+1}/{len(self.ars)}", end="\r", layer=2)
-            copyfile(f, f"{self.workspace}/{os.path.basename(f['path'])}")
+            copyfile(f['path'], f"{self.workspace}/{os.path.basename(f['path'])}")
             self.fs.append(f"{self.workspace}/{os.path.basename(f['path'])}")
             self.jumps.append(f["jump"])
         # os.system(f"cp {self.par} {self.workspace}/pulsar.par")

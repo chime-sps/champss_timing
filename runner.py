@@ -3,7 +3,9 @@ import glob
 import datetime
 import traceback
 import pandas as pd
-from . import champss_timing, archive_utils, notification, logger
+import tqdm
+from multiprocessing import Pool
+from champss_timing import champss_timing, archive_utils, notification, logger
 
 import ssl
 ssl._create_default_https_context = ssl._create_unverified_context  # To avoid SSL error on Narva
@@ -14,9 +16,10 @@ TIMING_DATA_PATH_PULSAR = "/home/wenkexia/projects/ctb-vkaspi/champss/fold_mode/
 TIMING_DATA_PATH_CHAMPSS = "/home/wenkexia/projects/ctb-vkaspi/champss/fold_mode/champss/"
 DATA_FILENAME_PULSAR = "*%PSR_ID%*.ar"
 DATA_FILENAME_CHAMPSS = "%PSR_ID%/*.ar"
+CONFIG_FILENAME = "champss_timing.config"
 MODEL_FILENAME = "pulsar.par"
 TEMPLATE_FILENAME = "paas.std"
-N_POOL = 1
+N_POOL = 6
 
 # SLACK_TOKEN = {
 #     "CHANNEL_ID": "C080AKT7GEM",
@@ -29,6 +32,10 @@ SLACK_TOKEN = {
     "SLACK_BOT_TOKEN": "xoxb-7884645340771-7881932432293-i09Q8IckBmGaxQDhed7HXyU7",
     "SLACK_APP_TOKEN": "xapp-1-A07RU3YCM8E-7897477213873-e4ae988142ed9d73aaa452bfb5b899e058aeb1b09b1348da383adc33ae3ae9fb"
 }  # test channel
+
+# Functions
+def get_mjd_from_archive(ar):
+    return round(archive_utils.archive_utils(ar).get_mjd())
 
 # Initialize hamdlers
 logger = logger.logger()
@@ -45,6 +52,7 @@ for this_psr_dir in glob.glob(TIMING_SOURCES_PATH + "/*"):
         "id": this_psr_dir.split("/")[-1],
         "dir": this_psr_dir,
         "log": f"{this_psr_dir}/script_log.txt",
+        "config": f"{this_psr_dir}/{CONFIG_FILENAME}",
         "model": f"{this_psr_dir}/{MODEL_FILENAME}",
         "template": f"{this_psr_dir}/{TEMPLATE_FILENAME}",
         "data_pulsar": glob.glob(
@@ -56,6 +64,10 @@ for this_psr_dir in glob.glob(TIMING_SOURCES_PATH + "/*"):
     }
 
     # Check if file exists
+    if not os.path.exists(this_psr_config["config"]):
+        logger.debug(f"> Config file for {this_psr_config['id']} does not exist. Skipping.")
+        continue
+
     if not os.path.exists(this_psr_config["model"]):
         logger.debug(f"> Model file for {this_psr_config['id']} does not exist. Skipping.")
         continue
@@ -64,7 +76,7 @@ for this_psr_dir in glob.glob(TIMING_SOURCES_PATH + "/*"):
         logger.debug(f"> Template file for {this_psr_config['id']} does not exist. Skipping.")
         continue
 
-    if len(this_psr_config["data"]) + len(this_psr_config["data_champss"]) == 0:
+    if len(this_psr_config["data_pulsar"]) + len(this_psr_config["data_champss"]) == 0:
         logger.debug(f"> No observation for {this_psr_config['id']} found. Skipping.")
         continue
 
@@ -93,11 +105,14 @@ for pulsar in pulsars:
         psr_dir = pulsar['dir']
         archives_aval_pulsar = pulsar['data_pulsar']
         archives_aval_champss = pulsar['data_champss']
+        archives_aval_pulsar_mjds = list(tqdm.tqdm(map(get_mjd_from_archive, archives_aval_pulsar), total=len(archives_aval_pulsar), desc="Getting MJDs for CHIME/Pulsar"))
+        archives_aval_champss_mjds = list(tqdm.tqdm(map(get_mjd_from_archive, archives_aval_champss), total=len(archives_aval_champss), desc="Getting MJDs for CHAMPSS"))
 
         archives = {}
-        for ar in archives_aval_pulsar:
+        for i, ar in enumerate(archives_aval_pulsar):
             # Get MJD
-            this_mjd = round(archive_utils.archive_utils(ar).get_mjd())
+            # this_mjd = round(archive_utils.archive_utils(ar).get_mjd())
+            this_mjd = archives_aval_pulsar_mjds[i]
 
             # Check if MJD exists
             if this_mjd not in archives.keys():
@@ -106,14 +121,17 @@ for pulsar in pulsars:
             # Append to archives
             archives[this_mjd].append({
                 "path": ar,
-                "jump": 0
+                "jump": 0, 
+                "id": "CHIME/Pulsar", 
+                "mjd": this_mjd
             })
 
             logger.data(this_mjd, ar)
 
-        for ar in archives_aval_champss:
+        for i, ar in enumerate(archives_aval_champss):
             # Get MJD
-            this_mjd = round(archive_utils.archive_utils(ar).get_mjd())
+            # this_mjd = round(archive_utils.archive_utils(ar).get_mjd())
+            this_mjd = archives_aval_champss_mjds[i]
 
             # Check if MJD exists
             if this_mjd not in archives.keys():
@@ -122,7 +140,9 @@ for pulsar in pulsars:
             # Append to archives
             archives[this_mjd].append({
                 "path": ar,
-                "jump": 0
+                "jump": 0, 
+                "id": "CHAMPSS", 
+                "mjd": this_mjd
             })
 
             logger.data(this_mjd, ar)

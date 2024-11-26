@@ -236,7 +236,7 @@ class champss_timing:
         if self.timing_mode == "opd":
             for i, ar_info in enumerate(archives):
                 ar_list.append(ar_info[0])
-                self.logger.debug(f"OPD: MJD{ar_info[0]['mjd']} -> {ar_info[0]['id']} ({self.utils.get_archive_id(ar_info[0]['path'])})")
+                self.logger.debug(f"OPD: MJD{ar_info[0]['mjd']} -> {ar_info[0]['id']} ({utils.get_archive_id(ar_info[0]['path'])})")
         elif self.timing_mode == "mpd":
             for ar_info in archives:
                 ar_list += ar_info
@@ -247,7 +247,7 @@ class champss_timing:
         try:
             ar_list_untimed = self.db_get_untimed_archives(ar_list)
             self.logger.info(f"Timing module input parameters: ")
-            self.logger.data(f"Timing {mjds} with archives: " + "\n -> " + "\n -> ".join([f"{this_ar['path']}" for this_ar in archives]))
+            self.logger.data(f"Timing {mjds} with archives: " + "\n -> " + "\n -> ".join([f"{this_ar['path']}" for this_ar in ar_list]))
             self.logger.data(f"Fit params: {fit_params}")
             self.logger.data(f"Potential Fit params: {potential_fit_params}")
             self.logger.data(f"MJD range: {min(mjds)} - {max(mjds)}")
@@ -310,7 +310,7 @@ class champss_timing:
                 # Create new timfile from database and overwrite the one in the workspace
                 self.logger.debug(f" > Creating timfile")
                 open(f"{tim.workspace}/pulsar.tim", "w").write(
-                    self.db_create_timfile(archives)
+                    self.db_create_timfile(ar_list)
                 )
 
                 # Run timing from PINT
@@ -320,7 +320,7 @@ class champss_timing:
                 
                 # Insert timing info
                 self.logger.debug(f"Saving timing info to database")
-                self.db_insert_timing_info(archives, mjds, tim.pint)
+                self.db_insert_timing_info(ar_list, mjds, tim.pint)
 
                 # Finishing and print summary
                 self.logger.success(f"Timing module finished")
@@ -350,7 +350,7 @@ class champss_timing:
 
         return {"status": "success"}
 
-    def db_insert_timing_info(self, fs, mjds, pint):
+    def db_insert_timing_info(self, ar_list, mjds, pint):
         # Get PINT objects
         pint_f = pint.f
         pint_t = pint.t
@@ -388,8 +388,8 @@ class champss_timing:
 
         # Get archive ids
         archive_ids = []
-        for f in fs:
-            archive_ids.append(utils.get_archive_id(f))
+        for ar_info in ar_list:
+            archive_ids.append(utils.get_archive_id(ar_info["path"]))
         
         # Insert timing info
         self.db_hdl.insert_timing_info(
@@ -473,18 +473,18 @@ class champss_timing:
             
         return True
     
-    def db_create_timfile(self, archives):
+    def db_create_timfile(self, ar_list):
         timfile = ""
 
-        for this_file in archives:
-            this_toa = self.db_hdl.get_toa_by_filename(utils.get_archive_id(this_file))
+        for ar_info in ar_list:
+            this_toa = self.db_hdl.get_toa_by_filename(utils.get_archive_id(ar_info["path"]))
 
-            if(not self.db_check_valid_toa(this_file)):
-                self.logger.warning(f"INVALID_TOA remark was found for {this_file}. Skipped while creating timfile...", layer=1)
+            if(not self.db_check_valid_toa(ar_info["path"])):
+                self.logger.warning(f"INVALID_TOA remark was found for {ar_info['path']}. Skipped while creating timfile...", layer=1)
                 continue
 
             if(this_toa["timestamp"] == 0 or this_toa["raw_tim"].strip() == ""):
-                raise Exception(f"TOA from archive [{this_file}] does not exist in database. ")
+                raise Exception(f"TOA from archive [{ar_info['path']}] does not exist in database. ")
             
             timfile += this_toa["raw_tim"] + "\n"
 
