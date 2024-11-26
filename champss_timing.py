@@ -17,7 +17,7 @@ from .champss_checker import champss_checker
 from .logger import logger
 
 class champss_timing:
-    def __init__(self, psr_dir, data_archives, slack_token, timing_mode="opd", n_pools=4, workspace_cleanup=True, logger=logger()):
+    def __init__(self, psr_dir, data_archives, slack_token=False, timing_mode="opd", n_pools=4, workspace_cleanup=True, logger=logger()):
         """
         CHAMPSS timing pipeline class
 

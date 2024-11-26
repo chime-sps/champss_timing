@@ -44,9 +44,27 @@ class slack_handler:
             utils.print_error(f"Error sending file: {e}")
             utils.print_error(f"File: {filename}")
 
+class print_handler:
+    def __init__(self):
+        return
+
+    def send(self, message=None, image=None, file=None, image_title=None, file_title=None):
+        if message is not None:
+            self.print_text(message)
+        if image is not None:
+            self.print_image("Image: " + image)
+        if file is not None:
+            self.print_file("File: " + file)
+
+    def print_text(self, message):
+        print("\033[1;32;40m(Alert -> " + message + ")\033[0m")
+        
 class notification:
     def __init__(self, messager_token):
-        self.sh = slack_handler(messager_token)
+        if not messager_token:
+            self.sh = print_handler()
+        else:
+            self.sh = slack_handler(messager_token)
 
     def send_urgent_message(self, message, psr_id="psr_id_not_provided"):
         self.sh.send("[ ⚠️ URGENT ! ] <@wenke.xia>\n" + message + "\nPSR ID: #" + psr_id)
