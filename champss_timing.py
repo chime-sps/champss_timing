@@ -231,21 +231,33 @@ class champss_timing:
                 self.logger.error(f"No parameter to fit at n_days={n_days_to_fit}")
                 return {"status": "error"} 
 
+        # Check timing mode
+        ar_list = []
+        if self.timing_mode == "opd":
+            for i, ar_info in enumerate(archives):
+                ar_list.append(ar_info[0])
+                self.logger.debug(f"OPD: MJD{ar_info[0]['mjd']} -> {ar_info[0]['id']} ({self.utils.get_archive_id(ar_info[0]['path'])})")
+        elif self.timing_mode == "mpd":
+            for ar_info in archives:
+                ar_list += ar_info
+        else:
+            raise ValueError("Invalid timing mode. ")
+
         # Run timing
         try:
-            archives_untimed = self.db_get_untimed_archives(archives)
+            ar_list_untimed = self.db_get_untimed_archives(ar_list)
             self.logger.info(f"Timing module input parameters: ")
-            self.logger.data(f"Timing {mjds} with archives: " + "\n -> " + "\n -> ".join(archives.values()))
+            self.logger.data(f"Timing {mjds} with archives: " + "\n -> " + "\n -> ".join([f"{this_ar['path']}" for this_ar in archives]))
             self.logger.data(f"Fit params: {fit_params}")
             self.logger.data(f"Potential Fit params: {potential_fit_params}")
             self.logger.data(f"MJD range: {min(mjds)} - {max(mjds)}")
-            self.logger.data(f"Number of Observations: {len(mjds)} ({len(archives_untimed)} untimed)")
+            self.logger.data(f"Number of Observations: {len(mjds)} ({len(ar_list_untimed)} untimed)")
             self.logger.data(f"Input timing model: {self.path_timing_model}")
 
             self.logger.success("======== Running timing modules ========")
             self.logger.level_up()
             with timing(
-                ars = archives_untimed, # Only run for those archive that does not have any toas in the database
+                ars = ar_list_untimed, # Only run for those archive that does not have any toas in the database
                 par = self.path_timing_model,
                 std = self.path_pulse_template,
                 par_output = f"{self.path_timing_model}.timingoutput", 
@@ -259,7 +271,7 @@ class champss_timing:
                 tim.initialize()
                 
                 # Process archive as needed
-                if len(archives_untimed) > 0:
+                if len(ar_list_untimed) > 0:
                     ## Check if all archives are cached
                     if not self.archive_cache.archives_exists(tim.fs):
                         ### Process archives
@@ -478,22 +490,20 @@ class champss_timing:
 
         return timfile
     
-    def db_get_untimed_archives(self, archives):
+    def db_get_untimed_archives(self, ar_list):
         untimed_archives = []
 
-        if self.timing_mode == "opd":
-            for archive in archives:
-                for i, this_ar_info in enumerate(archive):
-                    if self.db_hdl.check_toa_exists(utils.get_archive_id(this_ar_info["path"])):
-                        break
-                    if i == len(archive) - 1:
-                        # If loop reaches the end, then the archive is untimed since no TOA is found so that no break is called.
-                        untimed_archives.append(archive[0]) # append only the first archive (highest priority)
-        elif self.timing_mode == "mpd":
-            for archive in archives:
-                for i, this_ar_info in enumerate(archive):
-                    if not self.db_hdl.check_toa_exists(utils.get_archive_id(this_ar_info["path"])):
-                        untimed_archives.append(this_ar_info)
+        # for ar_info in archives:
+        #     for i, this_ar_info in enumerate(ar_info):
+        #         if self.db_hdl.check_toa_exists(utils.get_archive_id(this_ar_info["path"])):
+        #             break
+        #         if i == len(ar_info) - 1:
+        #             # If loop reaches the end, then the archive is untimed since no TOA is found so that no break is called.
+        #             untimed_archives.append(ar_info)
+
+        for ar_info in ar_list:
+            if not self.db_hdl.check_toa_exists(utils.get_archive_id(ar_info["path"])):
+                untimed_archives.append(ar_info)
 
         return untimed_archives
 
