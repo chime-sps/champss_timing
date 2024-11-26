@@ -26,61 +26,45 @@ class slack_handler:
                 self.send_file(file)
     
     def send_text(self, message):
-        self.app.client.chat_postMessage(channel=self.CHANNEL_ID, text=message)
+        try:
+            self.app.client.chat_postMessage(channel=self.CHANNEL_ID, text=message)
+        except Exception as e:
+            utils.print_error(f"Error sending message: {e}")
+            utils.print_error(f"Message: {message}")
 
     def send_file(self, filename, message=""):
-        self.app.client.files_upload_v2(
-            channels=self.CHANNEL_ID,
-            initial_comment=message,
-            file=filename,
-            filename=filename
-        )
+        try:
+            self.app.client.files_upload_v2(
+                channels=self.CHANNEL_ID,
+                initial_comment=message,
+                file=filename,
+                filename=filename
+            )
+        except Exception as e:
+            utils.print_error(f"Error sending file: {e}")
+            utils.print_error(f"File: {filename}")
 
 class notification:
     def __init__(self, messager_token):
         self.sh = slack_handler(messager_token)
 
     def send_urgent_message(self, message, psr_id="psr_id_not_provided"):
-        try:
-            self.sh.send("[ ⚠️ URGENT ! ] <@wenke.xia>\n" + message + "\nPSR ID: #" + psr_id)
-        except Exception as e:
-            utils.print_error(f"Error sending urgent message: {e}")
-            utils.print_error(f"Message: {message}")
+        self.sh.send("[ ⚠️ URGENT ! ] <@wenke.xia>\n" + message + "\nPSR ID: #" + psr_id)
 
     def send_success_message(self, message, psr_id="psr_id_not_provided"):
-        try:
-            self.sh.send("[ ✅ SUCCESS ]\n" + message + "\nPSR ID: #" + psr_id)
-        except Exception as e:
-            utils.print_error(f"Error sending success message: {e}")
-            utils.print_error(f"Message: {message}")
+        self.sh.send("[ ✅ SUCCESS ]\n" + message + "\nPSR ID: #" + psr_id)
 
     def send_message(self, message, psr_id="psr_id_not_provided"):
-        try:
-            self.sh.send(message + "\nPSR ID: #" + psr_id)
-        except Exception as e:
-            utils.print_error(f"Error sending message: {e}")
-            utils.print_error(f"Message: {message}")
+        self.sh.send(message + "\nPSR ID: #" + psr_id)
 
     def send_image(self, image, psr_id="psr_id_not_provided"):
-        try:
-            self.sh.send(image=image, image_title="PSR ID: #" + psr_id)
-        except Exception as e:
-            utils.print_error(f"Error sending image: {e}")
-            utils.print_error(f"Image: {image}")
+        self.sh.send(image=image, image_title="PSR ID: #" + psr_id)
 
     def send_file(self, file, psr_id="psr_id_not_provided"):
-        try:
-            self.sh.send(file=file, file_title="PSR ID: #" + psr_id)
-        except Exception as e:
-            utils.print_error(f"Error sending file: {e}")
-            utils.print_error(f"File: {file}")
+        self.sh.send(file=file, file_title="PSR ID: #" + psr_id)
     
     def send_code(self, code, psr_id="psr_id_not_provided"):
-        try:
-            self.sh.send(message=f"```\n{code}\n```" + "\nPSR ID: #" + psr_id)
-        except Exception as e:
-            utils.print_error(f"Error sending code: {e}")
-            utils.print_error(f"Code: {code}")
+        self.sh.send(message=f"```\n{code}\n```" + "\nPSR ID: #" + psr_id)
 
 # sh = slack_handler()
 # sh.send("Hello, World!")
