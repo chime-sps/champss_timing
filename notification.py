@@ -52,9 +52,9 @@ class print_handler:
         if message is not None:
             self.print_text(message)
         if image is not None:
-            self.print_image("Image: " + image)
+            self.print_text("Image: " + image)
         if file is not None:
-            self.print_file("File: " + file)
+            self.print_text("File: " + file)
 
     def print_text(self, message):
         print("\033[1;32;40m(Alert -> " + message + ")\033[0m")
