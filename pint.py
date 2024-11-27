@@ -151,36 +151,35 @@ class pint_handler():
             self.logger.warning(f"Chi2r for all dropout trials are the same ({dropout_chi2rs[0]}). Not TOA will be removed. ")
             return self.t
 
-        while True:
-            # calculate threshold
-            dropout_chi2rs = np.array(dropout_chi2rs)
-            # ref_chi2r = self_tmp.f.get_params_dict("all", "quantity")["CHI2R"].value
-            ref_chi2r = np.median(dropout_chi2rs)
-            # threshold_chi2r = ref_chi2r - median_abs_deviation(np.abs(dropout_chi2rs - ref_chi2r)) * threshold
-            threshold_chi2r = ref_chi2r - median_abs_deviation(np.abs(dropout_chi2rs)) * threshold
+        # calculate threshold
+        dropout_chi2rs = np.array(dropout_chi2rs)
+        # ref_chi2r = self_tmp.f.get_params_dict("all", "quantity")["CHI2R"].value
+        ref_chi2r = np.median(dropout_chi2rs)
+        # threshold_chi2r = ref_chi2r - median_abs_deviation(np.abs(dropout_chi2rs - ref_chi2r)) * threshold
+        threshold_chi2r = ref_chi2r - median_abs_deviation(np.abs(dropout_chi2rs)) * threshold
 
-            # filter
+        # filter
+        toas_bad = np.where(dropout_chi2rs < threshold_chi2r)[0]
+        toas_good = np.where(dropout_chi2rs >= threshold_chi2r)[0]
+    
+        # do not include the lastest 3 TOAs in bad TOAs if there's a huge gap in the lastest 3 TOAs
+        if self.check_toa_gaps(latest_n_days=3, threshold=30):
+            self.logger.warning("Huge gap ( > 30 days) in the lastest 3 TOAs. Do not filter the lastest 3 TOAs out since the model might not be able to fit the gap. ")
+            i_del = np.where(toas_bad >= len(self.t) - 3)[0]
+            toas_good = np.append(toas_good, toas_bad[i_del])
+            toas_bad = np.delete(toas_bad, i_del)
+
+        # # do not include the lastest 1 TOAs in bad TOAs
+        # i_del = np.where(toas_bad >= len(self.t) - 1)[0]
+        # toas_good = np.append(toas_good, toas_bad[i_del])
+        # toas_bad = np.delete(toas_bad, i_del)
+
+        # sanity check: if there are too many points get filtered out
+        if (len(toas_bad) / len(self.t)) > 0.25:
+            self.logger.warning(f"More than 25% of points were filtered out by the dropout filter. Only filter out points with top 25% dropout chi2r. ")
+            threshold_chi2r = np.percentile(dropout_chi2rs, 75)
             toas_bad = np.where(dropout_chi2rs < threshold_chi2r)[0]
             toas_good = np.where(dropout_chi2rs >= threshold_chi2r)[0]
-        
-            # do not include the lastest 3 TOAs in bad TOAs if there's a huge gap in the lastest 3 TOAs
-            if self.check_toa_gaps(latest_n_days=3, threshold=30):
-                self.logger.warning("Huge gap ( > 30 days) in the lastest 3 TOAs. Do not filter the lastest 3 TOAs out since the model might not be able to fit the gap. ")
-                i_del = np.where(toas_bad >= len(self.t) - 3)[0]
-                toas_good = np.append(toas_good, toas_bad[i_del])
-                toas_bad = np.delete(toas_bad, i_del)
-
-            # # do not include the lastest 1 TOAs in bad TOAs
-            # i_del = np.where(toas_bad >= len(self.t) - 1)[0]
-            # toas_good = np.append(toas_good, toas_bad[i_del])
-            # toas_bad = np.delete(toas_bad, i_del)
-
-            # sanity check: if there are too many points get filtered out
-            if (len(toas_bad) / len(self.t)) < 0.25:
-                break
-
-            threshold += 1
-            self.logger.warning(f"More than 25% of points were filtered out by the dropout filter. Lowering threshold to ref_chi2 - mad * {threshold}")
         
         # get toas resid, err, and mjds
         self.logger.debug(f"Bad TOAs (dropout): {toas_bad}")
