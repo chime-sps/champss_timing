@@ -78,12 +78,12 @@ class pint_handler():
 
         return self.t
 
-    def error_filter(self, threshold=0.05):
+    def error_filter(self, threshold=0.01):
         while True:
             # get error_ok
             threshold_phase = threshold * (1 / self.m.F0.value) * u.s
-            if threshold_phase < 5000 * u.s:
-                threshold_phase = 5000 * u.s
+            if threshold_phase < 15000 * u.us:
+                threshold_phase = 15000 * u.us
             error_ok = self.t.get_errors() < threshold_phase.to(u.us)
 
             # filter
@@ -98,7 +98,7 @@ class pint_handler():
             self.logger.warning(f"More than 10% of points were filtered out by the error filter. Lowering threshold to {threshold}")
 
         # get toas and mjds
-        self.logger.debug(f"Bad TOAs: {toas_bad}")
+        self.logger.debug(f"Bad TOAs (error): {toas_bad}")
         self.bad_toas = self.t[toas_bad]
         self.bad_resids = self.prefit_resids.time_resids[toas_bad]
         self.t = self.t[toas_good]
@@ -183,7 +183,7 @@ class pint_handler():
             self.logger.warning(f"More than 25% of points were filtered out by the dropout filter. Lowering threshold to ref_chi2 - mad * {threshold}")
         
         # get toas resid, err, and mjds
-        self.logger.debug(f"Bad TOAs: {toas_bad}")
+        self.logger.debug(f"Bad TOAs (dropout): {toas_bad}")
         self.bad_toas = self.t[toas_bad]
         self.bad_resids = Residuals(self.t, self.m).time_resids[toas_bad]
         self.t = self.t[toas_good]

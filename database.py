@@ -176,7 +176,7 @@ class database:
         if toa is None:  
             toa = [0, "", 0, 0, 0, "", "", "{}"]
         
-        formatted_toa {
+        formatted_toa = {
             "timestamp": toa[0],
             "filename": toa[1],
             "freq": toa[2],
