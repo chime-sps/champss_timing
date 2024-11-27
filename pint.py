@@ -6,12 +6,14 @@ from pint.models import get_model_and_toas
 from pint.residuals import Residuals
 import pint.logging
 
+from multiprocessing import Pool
 from scipy.stats import median_abs_deviation
 from scipy.stats import f as f_stats
 import numpy as np
 import shutil
 import time
 import copy
+import tqdm
 import traceback
 
 from .utils import utils
@@ -24,6 +26,8 @@ class pint_handler():
         self.model = self_super.par
         self.model_output = self_super.par_output
         self.logger = self_super.logger.copy()
+        self.n_pools = self_super.n_pools
+
         self.m, self.t = False, False
         self.f = False
         self.f_status = None
@@ -108,26 +112,29 @@ class pint_handler():
         
         utils.print_info("Running dropout_chi2r_filter, the following PINT output is coming from dropout trials. ")
         
-        dropout_chi2rs = []
-        for i in range(len(self.t)):
-            self.logger.debug("Dropout filter trial", i, "/", len(self.t), layer=1, end="\r")
-            try:
-                # copy self
-                self_tmp = copy.deepcopy(self)
+        # dropout_chi2rs = []
+        # for i in range(len(self.t)):
+        #     self.logger.debug("Dropout filter trial", i, "/", len(self.t), layer=1, end="\r")
+        #     try:
+        #         # copy self
+        #         self_tmp = copy.deepcopy(self)
                 
-                # remove toa
-                self_tmp.t = self.t[:i] + self.t[i+1:]
+        #         # remove toa
+        #         self_tmp.t = self.t[:i] + self.t[i+1:]
 
-                # fit
-                f_tmp = pint.fitter.Fitter.auto(self_tmp.t, self_tmp.m)
-                f_tmp.fit_toas()
+        #         # fit
+        #         f_tmp = pint.fitter.Fitter.auto(self_tmp.t, self_tmp.m)
+        #         f_tmp.fit_toas()
             
-                # append chi2r
-                dropout_chi2rs.append(f_tmp.get_params_dict("all", "quantity")["CHI2R"].value)
+        #         # append chi2r
+        #         dropout_chi2rs.append(f_tmp.get_params_dict("all", "quantity")["CHI2R"].value)
             
-            except Exception as e:
-                self.logger.warning(f"Dropout trial failed for TOA {i}. ", e)
-                dropout_chi2rs.append(1e64)
+        #     except Exception as e:
+        #         self.logger.warning(f"Dropout trial failed for TOA {i}. ", e)
+        #         dropout_chi2rs.append(1e64)
+
+        with Pool(self.n_pools) as p:
+            dropout_chi2rs = list(tqdm.tqdm(p.map(self._dropout_filter_get_chi2rs, range(len(self.t))), total=len(self.t), desc="Dropout trials"))
 
         # fit model without dropout
         self_tmp = copy.deepcopy(self)
@@ -182,6 +189,19 @@ class pint_handler():
         self.t = self.t[toas_good]
 
         return self.t
+
+    def _dropout_filter_get_chi2rs(self, i):
+        # copy self
+        self_tmp = copy.deepcopy(self)
+
+        # remove toa
+        self_tmp.t = self_tmp.t[:i] + self_tmp.t[i+1:]
+
+        # fit
+        f_tmp = pint.fitter.Fitter.auto(self_tmp.t, self_tmp.m)
+        f_tmp.fit_toas()
+
+        return f_tmp.get_params_dict("all", "quantity")["CHI2R"].value
     
     def f_test(self, additional_params, p_value_threshold=0.05, beamsize=0.87376064): # chime beam size
         # Ref: [1] https://sites.duke.edu/bossbackup/files/2013/02/NonLinSummary.pdf
