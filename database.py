@@ -176,7 +176,7 @@ class database:
         if toa is None:  
             toa = [0, "", 0, 0, 0, "", "", "{}"]
         
-        return {
+        formatted_toa {
             "timestamp": toa[0],
             "filename": toa[1],
             "freq": toa[2],
@@ -186,6 +186,11 @@ class database:
             "raw_tim": toa[6],
             "notes": json.loads(toa[7])
         }
+
+        if "label" not in formatted_toa["notes"]:
+            formatted_toa["notes"]["label"] = "NO_LABEL"
+
+        return formatted_toa
 
     def insert_timing_info(self, files, obs_mjds, unfreeze_params, residuals, chi2, chi2_reduced, fitted_params, notes, timestamp="auto", commit=True):
         files = json.dumps(files)

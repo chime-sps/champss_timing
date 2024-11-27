@@ -236,7 +236,7 @@ class champss_timing:
         if self.timing_mode == "opd":
             for i, ar_info in enumerate(archives):
                 ar_list.append(ar_info[0])
-                self.logger.debug(f"OPD: MJD{ar_info[0]['mjd']} -> {ar_info[0]['id']} ({utils.get_archive_id(ar_info[0]['path'])})")
+                self.logger.debug(f"OPD: MJD{ar_info[0]['mjd']} -> {ar_info[0]['label']} ({utils.get_archive_id(ar_info[0]['path'])})")
         elif self.timing_mode == "mpd":
             for ar_info in archives:
                 ar_list += ar_info
@@ -424,8 +424,12 @@ class champss_timing:
                     
             if(len(splitted) != 5):
                 raise Exception("Unexpected .tim file format", this_param)
+
+            for ar_info in self.path_data_archives:
+                if utils.get_archive_id(ar_info["path"]) == utils.get_archive_id(splitted[0]):
+                    break
             
-            self.logger.debug(f"[TOA] filename={utils.get_archive_id(splitted[0])}, freq={splitted[1]}, toa={splitted[2]}, toa_err={splitted[3]}, telescope={splitted[4]}", layer=1)
+            self.logger.debug(f"[TOA] filename={utils.get_archive_id(splitted[0])}, freq={splitted[1]}, toa={splitted[2]}, toa_err={splitted[3]}, telescope={splitted[4]}, label={ar_info['label']}", layer=1)
 
             self.db_hdl.insert_toa(
                 filename = utils.get_archive_id(splitted[0]), # set only the filename as the index, otherwise the ws id will be different...
@@ -434,7 +438,9 @@ class champss_timing:
                 toa_err = splitted[3], 
                 telescope = splitted[4], 
                 raw_tim = this_toa, 
-                notes = {}
+                notes = {
+                    "label": ar_info["label"]
+                }
             )
 
             n_inserted += 1
