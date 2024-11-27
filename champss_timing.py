@@ -262,6 +262,7 @@ class champss_timing:
                 std = self.path_pulse_template,
                 par_output = f"{self.path_timing_model}.timingoutput", 
                 n_pools = self.n_pools, 
+                reset_params = self.timing_config["settings"]["reset_params"],
                 workspace_cleanup = self.workspace_cleanup, 
                 logger = self.logger.copy(),
                 workspace_root = self.workspace_root

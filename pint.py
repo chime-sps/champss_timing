@@ -25,6 +25,7 @@ class pint_handler():
         self.toas = f"{self_super.workspace}/pulsar.tim"
         self.model = self_super.par
         self.model_output = self_super.par_output
+        self.reset_params = self_super.reset_params
         self.logger = self_super.logger.copy()
         self.n_pools = self_super.n_pools
 
@@ -337,17 +338,24 @@ class pint_handler():
         if not self.initialized:
             self.initialize()
 
-        if "F1" not in self.m.free_params:
-            self.m["F1"].value = 0
+        if self.reset_params:
+            self.logger.debug("Resetting unfreezed parameters to 0. ")
 
-        if "PX" not in self.m.free_params:
-            self.m["PX"].value = 0
+            if "F1" not in self.m.free_params:
+                self.logger.debug("F1 -> 0", layer=1)
+                self.m["F1"].value = 0
 
-        if "PMRA" not in self.m.free_params:
-            self.m["PMRA"].value = 0
+            if "PX" not in self.m.free_params:
+                self.logger.debug("PX -> 0", layer=1)
+                self.m["PX"].value = 0
 
-        if "PMDEC" not in self.m.free_params:
-            self.m["PMDEC"].value = 0
+            if "PMRA" not in self.m.free_params:
+                self.logger.debug("PMRA -> 0", layer=1)
+                self.m["PMRA"].value = 0
+
+            if "PMDEC" not in self.m.free_params:
+                self.logger.debug("PMDEC -> 0", layer=1)
+                self.m["PMDEC"].value = 0
 
         try:
             self.f = pint.fitter.Fitter.auto(self.t, self.m)
