@@ -298,7 +298,7 @@ class champss_timing:
                     ## Save TOAs to timing database
                     self.logger.debug(f" > Saving TOAs")
                     for f in tim.fs:
-                        if(self.db_insert_timfile(f"{f}.clfd.FTp.tim") == 0):
+                        if(self.db_insert_timfile(f"{f}.clfd.FTp.tim", ar_list) == 0):
                             self.logger.warning(f"No TOA created from {f}. Placeholder with INVALID_TOA remark has created. ", layer=1)
                             self.db_insert_invalid_toa(f)
 
@@ -409,7 +409,7 @@ class champss_timing:
             }
         )
     
-    def db_insert_timfile(self, timfile):
+    def db_insert_timfile(self, timfile, ar_list):
         n_inserted = 0
         timfile = open(timfile, "r").read()
 
@@ -425,9 +425,14 @@ class champss_timing:
             if(len(splitted) != 5):
                 raise Exception("Unexpected .tim file format", this_param)
 
-            for ar_info in self.path_data_archives:
-                if utils.get_archive_id(ar_info["path"]) == utils.get_archive_id(splitted[0]):
+            ar_info = {}
+            for ar_info_ in ar_list:
+                if utils.get_archive_id(ar_info_["path"]) == utils.get_archive_id(splitted[0]):
+                    ar_info = ar_info_
                     break
+            
+            if ar_info == {}:
+                raise Exception(f"Archive {splitted[0]} not found in the archive list (unknown TOA). ")
             
             self.logger.debug(f"[TOA] filename={utils.get_archive_id(splitted[0])}, freq={splitted[1]}, toa={splitted[2]}, toa_err={splitted[3]}, telescope={splitted[4]}, label={ar_info['label']}", layer=1)
 
