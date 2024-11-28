@@ -100,13 +100,20 @@ class archive_cache:
         )
 
         # update model for each archive
-        self.exec_update_model(archives, f"{tempdir}/pulsar.par.tmp", n_pools=n_pools)
+        self.exec_update_model(archives, f"{tempdir}/pulsar.par.tmp", n_pools=n_pools, ext=".modified")
         utils.print_success(f"  [update_model] timing model updated for {len(archives)} observations. ")
 
         # update psr_amps in database
         for i, ar in enumerate(archives):
+            # check if archive exists
+            if not os.path.exists(ar + ".modified"):
+                raise Exception(f"Failed to update model for {ar}.")
+
+            # update psr_amps in database
             print(f"  [update_model] updating archive information in database for {i + 1}/{len(archives)}... ")
-            self.db_update_psr_amps(ar, commit=False)
+            self.db_update_psr_amps(ar + ".modified", commit=False)
+
+        # commit changes to database
         print(f"  [update_model] committing changes to database... ")
         self.db_commit()
         utils.print_success(f"  [update_model] archive information in database updated for {len(archives)} observations. ")
@@ -117,11 +124,11 @@ class archive_cache:
 
         return True
     
-    def exec_update_model(self, fs, parfile, n_pools=4):
+    def exec_update_model(self, fs, parfile, n_pools=4, ext=".modified"):
         # pam -e .pam -E pulsar.par xxx.ar.clfd.FTp
         exec_hlr = exec(n_pools=n_pools)
         for f in fs:
-            exec_hlr.append(f"pam -m -E {parfile} {f}") # -m: modify the original file
+            exec_hlr.append(f"pam -e {ext} -E {parfile} {f}") # -m: modify the original file
         exec_hlr.run()
         
         if(not exec_hlr.check()):
