@@ -155,7 +155,16 @@ class champss_timing:
                     self.logger.debug(f"No additional file for timing. ")
                     break
 
-                # update model for cached archives
+                # Remove existing diagnostic plot
+                if os.path.isfile(self.path_diagnostic_plot):
+                    os.remove(self.path_diagnostic_plot)
+
+                break
+            n_timed += 1
+
+            # If no diagnostic plot, create one
+            if not os.path.isfile(self.path_diagnostic_plot):
+                # Update model for cached archives
                 self.logger.debug(f"Updating model for all cached archives")
                 self.archive_cache.update_model(n_pools=self.n_pools, tempdir=self.tempfolder)
 
@@ -169,9 +178,6 @@ class champss_timing:
                 # End of the script
                 self.logger.success("Script finished. ")
                 self.noti_hdl.send_message(f"Timing finished for {n_timed} days of data. ", psr_id=self.psr_id)
-
-                break
-            n_timed += 1
 
         return {"n_timed": n_timed}
     
