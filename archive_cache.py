@@ -83,6 +83,7 @@ class archive_cache:
 
         # get all archives
         archives = []
+        archives_tmp = []
         for ar in self.db_hdl.get_all_archive_info():
             this_path = f"{self.cache_dir}/{ar['filename']}"
             this_temp_path = f"{tempdir}/{ar['filename']}"
@@ -90,7 +91,8 @@ class archive_cache:
                 # copy archive to temp directory
                 shutil.copyfile(this_path, this_temp_path)
                 # append to archives
-                archives.append(this_temp_path)
+                archives.append(this_path)
+                archives_tmp.append(this_temp_path)
             else:
                 self.utils.print_warning(f"Archive {ar['filename']} not found in cache. Skipping.")
 
@@ -100,23 +102,21 @@ class archive_cache:
         )
 
         # update model for each archive
-        self.exec_update_model(archives, f"{tempdir}/pulsar.par.tmp", n_pools=n_pools, ext=".modified")
-        utils.print_success(f"  [update_model] timing model updated for {len(archives)} observations. ")
+        self.exec_update_model(archives_tmp, f"{tempdir}/pulsar.par.tmp", n_pools=n_pools)
+        utils.print_success(f"  [update_model] timing model updated for {len(archives_tmp)} observations. ")
+
+        # check whether the files were updated
+        for i in range(len(archives_tmp)):
+            if self.get_md5(archives_tmp[i]) == self.get_md5(archives[i]):
+                raise Exception(f"Failed to update model for {archives_tmp[i]}")
 
         # update psr_amps in database
-        for i, ar in enumerate(archives):
-            # check if archive exists
-            if not os.path.exists(ar + ".modified"):
-                raise Exception(f"Failed to update model for {ar}.")
-
-            # update psr_amps in database
-            print(f"  [update_model] updating archive information in database for {i + 1}/{len(archives)}... ")
-            self.db_update_psr_amps(ar + ".modified", commit=False)
-
-        # commit changes to database
+        for i, ar in enumerate(archives_tmp):
+            print(f"  [update_model] updating archive information in database for {i + 1}/{len(archives_tmp)}... ")
+            self.db_update_psr_amps(ar, commit=False)
         print(f"  [update_model] committing changes to database... ")
         self.db_commit()
-        utils.print_success(f"  [update_model] archive information in database updated for {len(archives)} observations. ")
+        utils.print_success(f"  [update_model] archive information in database updated for {len(archives_tmp)} observations. ")
 
         # cleanup
         if cleanup:
@@ -124,11 +124,11 @@ class archive_cache:
 
         return True
     
-    def exec_update_model(self, fs, parfile, n_pools=4, ext=".modified"):
+    def exec_update_model(self, fs, parfile, n_pools=4):
         # pam -e .pam -E pulsar.par xxx.ar.clfd.FTp
         exec_hlr = exec(n_pools=n_pools)
         for f in fs:
-            exec_hlr.append(f"pam -e {ext} -E {parfile} {f}") # -m: modify the original file
+            exec_hlr.append(f"pam -m -E {parfile} {f}") # -m: modify the original file
         exec_hlr.run()
         
         if(not exec_hlr.check()):
