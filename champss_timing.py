@@ -155,29 +155,29 @@ class champss_timing:
                     self.logger.debug(f"No additional file for timing. ")
                     break
 
-                # Remove existing diagnostic plot
+                # Remove existing diagnostic plot, then will be created again below
                 if os.path.isfile(self.path_diagnostic_plot):
                     os.remove(self.path_diagnostic_plot)
 
                 break
             n_timed += 1
 
-            # If no diagnostic plot, create one
-            if not os.path.isfile(self.path_diagnostic_plot):
-                # Update model for cached archives
-                self.logger.debug(f"Updating model for all cached archives")
-                self.archive_cache.update_model(n_pools=self.n_pools, tempdir=self.tempfolder)
+        # If no diagnostic plot, create one
+        if not os.path.isfile(self.path_diagnostic_plot):
+            # Update model for cached archives
+            self.logger.debug(f"Updating model for all cached archives")
+            self.archive_cache.update_model(n_pools=self.n_pools, tempdir=self.tempfolder)
 
-                # Create diagnostic plot
-                self.logger.info(f"Creating diagnostic plot")
-                plot(db_hdl=self.db_hdl).diagnostic(savefig=self.path_diagnostic_plot)
+            # Create diagnostic plot
+            self.logger.info(f"Creating diagnostic plot")
+            plot(db_hdl=self.db_hdl).diagnostic(savefig=self.path_diagnostic_plot)
 
-                # Run checker
-                champss_checker(self.path_psr_dir, self.db_hdl, self.noti_hdl, self.psr_id).check()
+            # Run checker
+            champss_checker(self.path_psr_dir, self.db_hdl, self.noti_hdl, self.psr_id).check()
 
-                # End of the script
-                self.logger.success("Script finished. ")
-                self.noti_hdl.send_message(f"Timing finished for {n_timed} days of data. ", psr_id=self.psr_id)
+            # End of the script
+            self.logger.success("Script finished. ")
+            self.noti_hdl.send_message(f"Timing finished for {n_timed} days of data. ", psr_id=self.psr_id)
 
         return {"n_timed": n_timed}
     
