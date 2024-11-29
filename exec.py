@@ -23,6 +23,7 @@ class exec():
                 self.n_pools = multiprocessing.cpu_count()
 
         print(f"Using {self.n_pools} CPUs.")
+        os.environ['OPENBLAS_NUM_THREADS'] = str(self.n_pools)
 
     def _exec(self, cmd, log=""):
         # Run the command
@@ -63,7 +64,7 @@ class exec():
         for cmd in self.cmds:
             self.pool_args.append((cmd, self.log))
 
-        with multiprocessing.Pool(self.n_pools) as pool:
+        with multiprocessing.Pool(processes=self.n_pools) as pool:
             # self.res = pool.starmap(self._exec, tqdm.tqdm(self.pool_args))
             self.res = pool.starmap(self._exec, tqdm.tqdm(self.pool_args, total=len(self.pool_args)))
             pool.close()

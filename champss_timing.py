@@ -192,7 +192,8 @@ class champss_timing:
         archives = []
         if last_timing_info["timestamp"] == 0:
             self.logger.info("No timing info found, starting from scratch. ")
-            mjds = list(self.path_data_archives.keys())[0:5]
+            # mjds = list(self.path_data_archives.keys())[0:5]
+            mjds = self.get_densiest_mjds(list(self.path_data_archives.keys()))
             archives = [self.path_data_archives[mjd] for mjd in mjds]
             fit_params = ["F0"]
             potential_fit_params = []
@@ -209,17 +210,22 @@ class champss_timing:
             last_mjd = max(last_timing_info["obs_mjds"]) 
 
             # find the index of the next mjd to process
-            mjds = []
-            archives = []
-            for idx, mjd in enumerate(list(self.path_data_archives.keys())): 
-                if mjd >= last_mjd + self.timing_config["settings"]["fit_every_n_days"]:
-                    mjds = list(self.path_data_archives.keys())[0:idx+1]
-                    archives = [self.path_data_archives[i] for i in mjds]
-                    break
+            # mjds = []
+            # archives = []
+            # for idx, mjd in enumerate(list(self.path_data_archives.keys())): 
+            #     if mjd >= last_mjd + self.timing_config["settings"]["fit_every_n_days"]:
+            #         mjds = list(self.path_data_archives.keys())[0:idx+1]
+            #         archives = [self.path_data_archives[i] for i in mjds]
+            #         break
             
             # check whether there are more files to process
-            if mjds == [] or archives == []:
+            if len(last_timing_info["obs_mjds"]) == len(self.path_data_archives):
                 return {"status": "no_files"}
+
+            # find the nearest mjd to the last mjd
+            mjds = last_timing_info["obs_mjds"] + [self.get_nearest_mjd(list(self.path_data_archives.keys()), last_timing_info["obs_mjds"])]
+            print(mjds, self.path_data_archives)
+            archives = [self.path_data_archives[i] for i in mjds]
 
             # get the fit_params
             fit_params = last_timing_info["unfreeze_params"]
@@ -524,6 +530,27 @@ class champss_timing:
                 untimed_archives.append(ar_info)
 
         return untimed_archives
+
+    def get_densiest_mjds(self, mjds):
+        if len(mjds) <= 5:
+            return mjds
+        
+        stds = []
+        for i in range(len(mjds) - 5):
+            stds.append(np.std(mjds[i:i+5]))
+        min_std_i = np.where(stds == np.min(stds))[0][0]
+        return mjds[min_std_i:min_std_i+5]
+
+    def get_nearest_mjd(self, mjds, last_mjds):
+        for mjd in last_mjds:
+            if mjd in mjds:
+                # remove the mjd from the list
+                mjds.remove(mjd)
+
+        if len(mjds) == 0:
+            return []
+
+        return mjds[np.argmin(np.abs(np.array(mjds) - np.mean(last_mjds)))]
 
     def cleanup(self):
         # Close DB
