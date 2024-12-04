@@ -224,7 +224,6 @@ class champss_timing:
 
             # find the nearest mjd to the last mjd
             mjds = last_timing_info["obs_mjds"] + [self.get_nearest_mjd(list(self.path_data_archives.keys()), last_timing_info["obs_mjds"])]
-            print(mjds, self.path_data_archives)
             archives = [self.path_data_archives[i] for i in mjds]
 
             # get the fit_params
@@ -317,8 +316,8 @@ class champss_timing:
 
                     ## Save cache archive and information to database
                     self.logger.debug(f" > Saving and caching archive information")
-                    for f in tim.fs:
-                        self.archive_cache.add_archive(f"{f}.clfd.FTp")
+                    for i, f in enumerate(tim.fs):
+                        self.archive_cache.add_archive(f"{f}.clfd.FTp", tim.backends[i])
 
                 # Create new timfile from database and overwrite the one in the workspace
                 self.logger.debug(f" > Creating timfile")

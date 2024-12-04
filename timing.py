@@ -26,6 +26,7 @@ class timing():
         self.workspace = f"{self.workspace_root}/{utils.get_time_string()}__{utils.get_rand_string()}"
         self.fs = []
         self.jumps = []
+        self.backends = []
 
         # Functions
         self.logger = logger # logging function
@@ -64,6 +65,7 @@ class timing():
             copyfile(f['path'], f"{self.workspace}/{os.path.basename(f['path'])}")
             self.fs.append(f"{self.workspace}/{os.path.basename(f['path'])}")
             self.jumps.append(f["jump"])
+            self.backends.append(f["label"])
         # os.system(f"cp {self.par} {self.workspace}/pulsar.par")
         copyfile(self.par, f"{self.workspace}/pulsar.par")
         # os.system(f"cp {self.std} {self.workspace}/paas.std")

@@ -329,6 +329,9 @@ class database:
 
         if self.get_version() < 1.1:
             formatted_info["notes"]["md5"] = "" # md5 information should be present in the notes
+        
+        if "backend" not in formatted_info["notes"]:
+            formatted_info["notes"]["backend"] = "unknown"
 
         return formatted_info
 

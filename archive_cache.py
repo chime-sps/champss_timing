@@ -35,7 +35,7 @@ class archive_cache:
             if not os.path.exists(f"{self.cache_dir}/{ar['filename']}"):
                 self.utils.print_warning(f"Archive {ar['filename']} not found in cache. Please resolve this issue manually. Maybe the cache was deleted and needs to be created manually.")
         
-    def add_archive(self, filename):
+    def add_archive(self, filename, backend="unknown"):
         if not os.path.exists(filename):
             raise Exception(f"Archive {filename} does not exist.")
 
@@ -45,7 +45,7 @@ class archive_cache:
 
         # insert archive info to database
         print(f"  [Archive] {filename} -> database")
-        self.db_insert_archive_info(filename)
+        self.db_insert_archive_info(filename, backend)
 
     def get_md5(self, filename):
         md5 = hashlib.md5()
@@ -136,7 +136,7 @@ class archive_cache:
 
         return True
 
-    def db_insert_archive_info(self, filename):
+    def db_insert_archive_info(self, filename, backend):
         archive_hdl = archive_utils(filename)
 
         self.db_hdl.insert_archive_info(
@@ -144,7 +144,8 @@ class archive_cache:
             psr_amps = archive_hdl.get_amps(), 
             psr_snr = archive_hdl.get_snr(), 
             notes = {
-                "md5": self.get_md5(filename)
+                "md5": self.get_md5(filename), 
+                "backend": backend
             }
         )
     

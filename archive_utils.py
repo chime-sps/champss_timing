@@ -3,10 +3,11 @@ import numpy as np
 
 
 class archive_utils:
-    def __init__(self, archive):
+    def __init__(self, archive, dedisperse=True):
         # Initialize archive object
         self.archive = psrchive.Archive.load(archive)
-        self.archive.dedisperse()
+        if dedisperse:
+            self.archive.dedisperse()
 
         # Get data, subint, and profile objects
         self.data = self.archive.get_data
