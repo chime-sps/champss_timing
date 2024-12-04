@@ -334,7 +334,7 @@ class pint_handler():
 
         return False
         
-    def fit(self, raise_exception=True):
+    def fit(self, raise_exception=True, maxiter=100):
         if not self.initialized:
             self.initialize()
 
@@ -368,7 +368,7 @@ class pint_handler():
             raise Exception("Fitting failed. Please resolve this error manually. ", e)
 
         try:
-            self.f.fit_toas()
+            self.f.fit_toas(maxiter=maxiter)
             self.logger.info(self.f.get_summary())
             self.f_status = True
         except Exception as e:
