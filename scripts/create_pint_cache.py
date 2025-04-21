@@ -6,9 +6,9 @@ from pint.models import get_model_and_toas
 from pint.residuals import Residuals
 pint.logging.setup(level="WARNING")
 
-from backend.database import database
-from backend.logger import logger
-from backend.utils import utils
+from backend.datastores.database import database
+from backend.utils.logger import logger
+from backend.utils.utils import utils
 logger = logger()
 
 def get_pulsars():

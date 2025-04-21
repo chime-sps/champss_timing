@@ -1,6 +1,7 @@
 import argparse
 import glob
 import os
+import sys
 import time
 import importlib
 
@@ -22,7 +23,10 @@ parser.add_argument(
 )
 
 # Parse arguments
-args = parser.parse_args()
+args, unknown = parser.parse_known_args()
+
+# Reconstruct the command line arguments for script if they are looking for any
+sys.argv = [sys.argv[0]] + unknown
 
 # List all available scripts
 script_paths = glob.glob(os.path.dirname(__file__) + "/scripts/*.py")
