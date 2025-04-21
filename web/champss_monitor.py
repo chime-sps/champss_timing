@@ -12,7 +12,7 @@ import threading
 from . import dir_loader
 from . import login as login_hdl
 from . import api as api_hdl
-from ..backend.utils.utils import utils
+from backend.utils.utils import utils
 
 app = Flask(__name__)
 app.sources = None
@@ -20,8 +20,8 @@ app.login = None
 app.api = None
 app.update = None
 app.last_request = 0
-app.pipeline_version = utils.utils.get_version_hash()
-app.secret_key = utils.utils.get_rand_string()
+app.pipeline_version = utils.get_version_hash()
+app.secret_key = utils.get_rand_string()
 
 @app.before_request
 def before_request():
@@ -88,10 +88,10 @@ def ephemeris():
         app=app,
         sources=app.sources,
         request=request, 
-        f02p0=utils.utils.f02p0,
-        f12p1=utils.utils.f12p1,
+        f02p0=utils.f02p0,
+        f12p1=utils.f12p1,
         round=round, 
-        deg2dms=utils.utils.deg2dms, 
+        deg2dms=utils.deg2dms, 
         min=min,
         max=max, 
         tag_filter=tag_filter, 
@@ -135,7 +135,7 @@ def diagnostic(source_id):
         request=request, 
         show_sidebar=show_sidebar, 
         round=round, 
-        deg2dms=utils.utils.deg2dms,
+        deg2dms=utils.deg2dms,
     )
 
 @app.route('/diagnostic/<source_id>/pulse_profiles')

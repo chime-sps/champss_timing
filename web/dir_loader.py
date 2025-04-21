@@ -6,7 +6,7 @@ import threading
 import numpy as np
 
 from .src_loader import src_loader
-from ..backend.utils.utils import utils
+from backend.utils.utils import utils
 
 class dir_loader():
     def __init__(self, psr_dir, app):#, auto_update = False):

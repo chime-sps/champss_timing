@@ -1,9 +1,17 @@
 import os
 import shutil
-import git
 import threading
 import time
+import argparse
+
 from web import champss_monitor
+
+try:
+    import git
+except ImportError:
+    import subprocess
+    git = None
+    print("gitpython is not installed. Using subprocess instead.")
 
 # Initialize parser
 parser = argparse.ArgumentParser(description="CHAMPSS Timing Pipeline Web Server")
@@ -32,13 +40,19 @@ def update_repo():
         print("Remove the old directory: %s" % psr_dir)
 
     # Construct options
-    multi_options = []
+    multi_options = ["--depth", "1", "--single-branch", "--branch", "main"]
     if ssh_key != "":
         multi_options.append(f"--config core.sshCommand='ssh -i {ssh_key}'")
 
     # Clone the repository
-    git.Repo.clone_from(repo_url, psr_dir, multi_options=multi_options, allow_unsafe_options=True)
-    print("Clone the new directory: %s" % psr_dir)
+    if git is not None:
+        git.Repo.clone_from(repo_url, psr_dir, multi_options=multi_options, allow_unsafe_options=True)
+        print("Clone the new directory: %s (gitpython)" % psr_dir)
+    else:
+        # Use subprocess to clone the repository
+        cmd = ["git", "clone"] + multi_options + [repo_url, psr_dir]
+        subprocess.run(cmd, check=True)
+        print("Clone the new directory: %s (subprocess)" % psr_dir)
 
 champss_monitor.run(
     psr_dir=psr_dir, 

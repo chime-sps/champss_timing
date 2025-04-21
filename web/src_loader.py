@@ -6,10 +6,10 @@ import base64
 import numpy as np
 import hashlib
 from scipy.spatial import KDTree
-from ..backend.champss_checker import champss_checker
-from ..backend.datastores.database import database
+from backend.champss_checker import champss_checker
+from backend.datastores.database import database
 
-from ..utils import utils
+from backend.utils.utils import utils
 
 
 class src_loader():
