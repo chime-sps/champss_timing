@@ -339,8 +339,13 @@ class tmg_master:
         
         return formatted_raw_data
     
-    def get_raw_data(self, psr_id=None, ar_id=None, location=None, mjd=None, md5sum=None, size=None, format=None, backend=None, status=None, metadata=None, notes=None):
+    def get_raw_data(self, psr_id=None, ar_id=None, location=None, mjd=None, md5sum=None, size=None, format=None, backend=None, status=None, metadata=None, notes=None, remove_action=False):
         query = "SELECT * FROM raw_data WHERE "
+        
+        # Remove action
+        if remove_action:
+            query = "DELETE FROM raw_data WHERE "
+
         query_values = []
         if psr_id is not None:
             query += "psr_id = ? AND "
@@ -381,7 +386,13 @@ class tmg_master:
         else:
             query = query[:-5]
 
+        # Execute
         self.cur.execute(query, query_values)
+
+        if remove_action:
+            self.conn.commit()
+            return
+
         return self.format_raw_data_all(self.cur.fetchall())
     
     def count_raw_data(self, psr_id=None, ar_id=None, location=None, mjd=None, md5sum=None, size=None, format=None, backend=None, status=None, metadata=None, notes=None):
