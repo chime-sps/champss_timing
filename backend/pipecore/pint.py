@@ -125,6 +125,9 @@ class pint_handler():
         # # scale the mad to get the threshold
         # mad_threshold = threshold * mad
 
+        # get median
+        median = np.median(resids)
+
         # get threshold
         mad_threshold = stats_utils.mad_outlier_thresholds(resids, z_score=threshold, return_interval=False)
         
