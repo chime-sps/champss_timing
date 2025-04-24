@@ -106,8 +106,8 @@ source_dir_fm = cli_config.config["user_defined"]["globus"]["source_dir_fm"]
 source_dir_fil = cli_config.config["user_defined"]["globus"]["source_dir_fil"]
 dest_dir = cli_config.config["user_defined"]["globus"]["dest_dir"]
 transfer_scopes = cli_config.config["user_defined"]["globus"]["transfer_scopes"]
-heartbeat_url = cli_config.config["user_defined"]["globus"]["heartbeat_url"]
 timing_sources_repo = cli_config.config["user_defined"]["globus"]["timing_sources_repo"]
+heartbeat_url = cli_config.config["user_defined"]["heartbeat_url_cedar_narval"]
 
 
 ###################################################
@@ -254,7 +254,7 @@ with tmg_master("./champss_timing_sources/TMGMaster.sqlite3.db", readonly=True) 
                 if len(tm.get_raw_data(psr_id=pulsar, ar_id=utils.get_archive_id(f), backend="chimepsr_fil")) == 0:
                     files.append({
                         "src": f, 
-                        "dest": dest_dir + "/filterbank" + pulsar + "/" + f.split("/")[-1]
+                        "dest": dest_dir + "/filterbank/" + pulsar + "/" + f.split("/")[-1]
                     })
 
 ###################################################
