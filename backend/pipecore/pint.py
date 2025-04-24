@@ -25,6 +25,7 @@ import astropy.units as u
 
 # Other local packages
 from ..utils.utils import utils
+from ..utils.stats_utils import stats_utils
 
 # Set logging level
 pint.logging.setup(level="WARNING")
@@ -117,12 +118,15 @@ class pint_handler():
         resids = np.array(prefit_resids.time_resids.to(u.s).value)
         resids_errs = self.t.table["error"].to(u.s).value
 
-        # get mad and median
-        mad = median_abs_deviation(resids)
-        median = np.median(resids)
+        # # get mad and median
+        # mad = median_abs_deviation(resids)
+        # median = np.median(resids)
 
-        # scale the mad to get the threshold
-        mad_threshold = threshold * mad
+        # # scale the mad to get the threshold
+        # mad_threshold = threshold * mad
+
+        # get threshold
+        mad_threshold = stats_utils.mad_outlier_thresholds(resids, z_score=threshold, return_interval=False)
         
         # filter data
         toas_bad = np.where(np.abs(resids - median) >= mad_threshold)[0]

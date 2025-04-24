@@ -2,7 +2,7 @@ from .datastores.database import database
 
 import numpy as np
 import os
-from scipy.stats import median_abs_deviation
+from .utils.stats_utils import stats_utils
 
 class champss_checker:
     """
@@ -160,27 +160,7 @@ class champss_checker:
 
     def _mad_outlier_test(self, samples, point):
         """
-        This function is used to determine if a point is an outlier or not. 
-        It is used in the MAD outlier test. 
-
-        Parameters
-        ----------
-        samples : array_like
-            The sample of values to test the point against. 
-        point : float
-            The point to test. 
-
-        Returns
-        -------
-        float
-            The z-score of the point.
+        Shortcut for stats_utils.mad_outlier_test
         """
 
-        # get mad and median
-        mad = median_abs_deviation(samples)
-        median = np.median(samples)
-
-        # calculate the z-score
-        z_score = np.abs(point - median) / mad
-
-        return z_score
+        return stats_utils.mad_outlier_test(samples, point)

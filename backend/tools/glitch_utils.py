@@ -11,6 +11,7 @@ from astropy.coordinates import EarthLocation
 from ..datastores.database import database
 from ..utils.logger import logger
 from ..utils.utils import utils
+from ..utils.stats_utils import stats_utils
 
 class glitch_utils():
     def __init__(self, db_hdl=None, db_path=None, logger=logger()):
@@ -209,7 +210,7 @@ class glitch_utils():
         )
     
     def plot_diagnostic(self, resid_day0, resid_day1, glitch_info, next_transit_time, savefig=None):
-        fig, ax = plt.subplots(2, 2, figsize=(20, 8), gridspec_kw={"width_ratios": [1, 2]})
+        fig, ax = plt.subplots(3, 2, figsize=(20, 12), gridspec_kw={"width_ratios": [1, 2]})
         P = 1 / self.timing_info_day1["fitted_params"]["F0"]
 
         # normalize amps
@@ -227,6 +228,9 @@ class glitch_utils():
             2
         )
 
+        # calculate thresholds
+        thres_l, thres_h = self.alert_thresholds(np.array(self.timing_info_day1["residuals"]["val"] )* 1e-6 / P)
+
         # Plot pulse profiles for day 0
         ax[0, 0].plot(day0_amps, color="k", lw=0.5)
         ax[0, 0].plot(day1_amps, color="k", lw=0.25, alpha=0.25)
@@ -242,6 +246,13 @@ class glitch_utils():
         ax[1, 0].text(0, 0.915, f"↓ Size of Observed Phase Shift", ha="left", va="bottom")
         ax[1, 0].set_title(f"Pulse Profile on Day 1 (MJD={int(resid_day1['mjd'])})")
         ax[1, 0].axis("off")
+
+        # Plot pulse profile residual (day1 - day0)
+        ax[2, 0].plot(day1_amps - day0_amps, color="k", lw=0.5)
+        ax[2, 0].hlines(0.9, 0, toa_shift, color="k")
+        ax[2, 0].text(0, 0.915, f"↓ Size of Observed Phase Shift", ha="left", va="bottom")
+        ax[2, 0].set_title(f"Pulse Profile Residual (Day 1 - Day 0)")
+        ax[2, 0].axis("off")
         
         # Plot residuals
         ax[0, 1].errorbar(
@@ -276,29 +287,40 @@ class glitch_utils():
         ax[0, 1].legend(frameon=False)
         ax[0, 1].set_title("Timing Residuals")
 
+        # Plot residual distribution
+        ax[1, 1].hist(np.array(self.timing_info_day1["residuals"]["val"]) * 1e-6 / P, bins=50, color="k", alpha=0.5)
+        ax[1, 1].axvline(resid_day0["val"] * 1e-6 / P, color="blue", linestyle="-", alpha=0.5, label="Day 0 (MJD={:.5f}, residual={:.3f} +/- {:.3f})".format(resid_day0["mjd"], resid_day0["val"] * 1e-6 / P, resid_day0["err"] * 1e-6 / P))
+        ax[1, 1].axvline(resid_day1["val"] * 1e-6 / P, color="red", linestyle="-", alpha=0.5, label="Day 1 (MJD={:.5f}, residual={:.3f} +/- {:.3f})".format(resid_day1["mjd"], resid_day1["val"] * 1e-6 / P, resid_day1["err"] * 1e-6 / P))
+        ax[1, 1].axvline(thres_l, color="orange", linestyle="-", alpha=0.65, label="Alert Threshold (99.7% confidence)")
+        ax[1, 1].axvline(thres_h, color="orange", linestyle="-", alpha=0.65)
+        ax[1, 1].set_xlabel("Residuals (phase)")
+        ax[1, 1].set_ylabel("Counts")
+        ax[1, 1].set_title("Residual Distribution")
+        ax[1, 1].legend(frameon=False)
+
         # Plot glitch info
-        ax[1, 1].text(0.5, 1 - 1 * 0.07, f"Glitch Information", ha="center", va="center", weight="bold")
-        ax[1, 1].text(0, 1 - 2 * 0.07, f"If this is a glitch:", ha="left", va="center")
-        ax[1, 1].text(0, 1 - 3 * 0.07, f"  $\\Delta$P > {glitch_info['glitch']['phase_wrap=0']['dP']:.3e} s, $\\Delta$P/P > {glitch_info['glitch']['phase_wrap=0']['dPP']:.3e} (phase_wrap < 1/day)", ha="left", va="center")
-        ax[1, 1].text(0, 1 - 4 * 0.07, f"  $\\Delta$P > {glitch_info['glitch']['phase_wrap=1']['dP']:.3e} s, $\\Delta$P/P > {glitch_info['glitch']['phase_wrap=1']['dPP']:.3e} (1 < phase_wrap < 2/day)", ha="left", va="center")
-        ax[1, 1].text(0.5, 1 - 2 * 0.07, f"If this is an anti-glitch:", ha="left", va="center")
-        ax[1, 1].text(0.5, 1 - 3 * 0.07, f"  $\\Delta$P > {glitch_info['anti_glitch']['phase_wrap=0']['dP']:.3e} s, $\\Delta$P/P > {glitch_info['anti_glitch']['phase_wrap=0']['dPP']:.3e} (phase_wrap < 1/day)", ha="left", va="center")
-        ax[1, 1].text(0.5, 1 - 4 * 0.07, f"  $\\Delta$P > {glitch_info['anti_glitch']['phase_wrap=1']['dP']:.3e} s, $\\Delta$P/P > {glitch_info['anti_glitch']['phase_wrap=1']['dPP']:.3e} (1 < phase_wrap < 2/day)", ha="left", va="center")
+        ax[2, 1].text(0.5, 1 - 1 * 0.07, f"Glitch Information", ha="center", va="center", weight="bold")
+        ax[2, 1].text(0, 1 - 2 * 0.07, f"If this is a glitch:", ha="left", va="center")
+        ax[2, 1].text(0, 1 - 3 * 0.07, f"  $\\Delta$P > {glitch_info['glitch']['phase_wrap=0']['dP']:.3e} s, $\\Delta$P/P > {glitch_info['glitch']['phase_wrap=0']['dPP']:.3e} (phase_wrap < 1/day)", ha="left", va="center")
+        ax[2, 1].text(0, 1 - 4 * 0.07, f"  $\\Delta$P > {glitch_info['glitch']['phase_wrap=1']['dP']:.3e} s, $\\Delta$P/P > {glitch_info['glitch']['phase_wrap=1']['dPP']:.3e} (1 < phase_wrap < 2/day)", ha="left", va="center")
+        ax[2, 1].text(0.5, 1 - 2 * 0.07, f"If this is an anti-glitch:", ha="left", va="center")
+        ax[2, 1].text(0.5, 1 - 3 * 0.07, f"  $\\Delta$P > {glitch_info['anti_glitch']['phase_wrap=0']['dP']:.3e} s, $\\Delta$P/P > {glitch_info['anti_glitch']['phase_wrap=0']['dPP']:.3e} (phase_wrap < 1/day)", ha="left", va="center")
+        ax[2, 1].text(0.5, 1 - 4 * 0.07, f"  $\\Delta$P > {glitch_info['anti_glitch']['phase_wrap=1']['dP']:.3e} s, $\\Delta$P/P > {glitch_info['anti_glitch']['phase_wrap=1']['dPP']:.3e} (1 < phase_wrap < 2/day)", ha="left", va="center")
 
         # Plot transit info
-        ax[1, 1].text(0.5, 1 - 5.5 * 0.07, f"Observation Information", ha="center", va="center", weight="bold")
-        ax[1, 1].text(0, 1 - 6.5 * 0.07, f"Next transit time of the source at DRAO: {next_transit_time} (PST)", ha="left", va="center")
+        ax[2, 1].text(0.5, 1 - 5.5 * 0.07, f"Observation Information", ha="center", va="center", weight="bold")
+        ax[2, 1].text(0, 1 - 6.5 * 0.07, f"Next transit time of the source at DRAO: {next_transit_time} (PST)", ha="left", va="center")
 
         # Plot instructions
-        ax[1, 1].text(0.5, 1 - 8 * 0.07, f"Instructions & Checklists", ha="center", va="center", weight="bold")
-        ax[1, 1].text(0, 1 - 9 * 0.07, f"☐ Check if this event was caused by a real glitch/anti-glitch, RFI, or timing noise. ", ha="left", va="center")
-        ax[1, 1].text(0, 1 - 10 * 0.07, f"☐ Run pdmp on raw archive data to check whether it was a glitch or anti-glitch. ", ha="left", va="center")
-        ax[1, 1].text(0, 1 - 11 * 0.07, f"☐ Run pdmp on raw archive data to check whether the calculated $\\Delta$P/P was an aliased solution. ", ha="left", va="center")
-        ax[1, 1].text(0, 1 - 12 * 0.07, f"  → If the lower limit of $\\Delta$P/P was GREATER than 3e-6, trigger a follow-up observation. ", ha="left", va="center")
-        ax[1, 1].text(0, 1 - 13 * 0.07, f"  → If the lower limit of $\\Delta$P/P was LESS than 3e-6, wait for the next observation (source transit time see above) and estimate $\\Delta$P/P again. ", ha="left", va="center")
+        ax[2, 1].text(0.5, 1 - 8 * 0.07, f"Instructions & Checklists", ha="center", va="center", weight="bold")
+        ax[2, 1].text(0, 1 - 9 * 0.07, f"☐ Check if this event was caused by a real glitch/anti-glitch, RFI, or timing noise. ", ha="left", va="center")
+        ax[2, 1].text(0, 1 - 10 * 0.07, f"☐ Run pdmp on raw archive data to check whether it was a glitch or anti-glitch. ", ha="left", va="center")
+        ax[2, 1].text(0, 1 - 11 * 0.07, f"☐ Run pdmp on raw archive data to check whether the calculated $\\Delta$P/P was an aliased solution. ", ha="left", va="center")
+        ax[2, 1].text(0, 1 - 12 * 0.07, f"  → If the lower limit of $\\Delta$P/P was GREATER than 3e-6, trigger a follow-up observation. ", ha="left", va="center")
+        ax[2, 1].text(0, 1 - 13 * 0.07, f"  → If the lower limit of $\\Delta$P/P was LESS than 3e-6, wait for the next observation (source transit time see above) and estimate $\\Delta$P/P again. ", ha="left", va="center")
 
         # remove x and y for glitch info
-        ax[1, 1].axis("off")
+        ax[2, 1].axis("off")
 
         # plot pipeline info
         psr_id = "UNKN-OWNX"
@@ -313,6 +335,12 @@ class glitch_utils():
             plt.savefig(savefig)
         else:
             plt.show()
+        
+    def alert_thresholds(self, residuals):
+        """
+        Shortcut for stats_utils.mad_outlier_test
+        """
+        return stats_utils.mad_outlier_thresholds(residuals)
 
     def normalize_amps(self, amps):
         amps = np.array(amps)
