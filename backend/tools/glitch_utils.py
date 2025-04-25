@@ -232,25 +232,26 @@ class glitch_utils():
         thres_l, thres_h = self.alert_thresholds(np.array(self.timing_info_day1["residuals"]["val"] )* 1e-6 / P)
 
         # Plot pulse profiles for day 0
-        ax[0, 0].plot(day0_amps, color="k", lw=0.5)
-        ax[0, 0].plot(day1_amps, color="k", lw=0.25, alpha=0.25)
+        ax[0, 0].plot(day0_amps, color="blue", lw=0.5)
+        ax[0, 0].plot(day1_amps, color="red", lw=0.25, alpha=0.25)
         ax[0, 0].hlines(0.9, 0, toa_shift, color="k")
         ax[0, 0].text(0, 0.915, f"↓ Size of Observed Phase Shift", ha="left", va="bottom")
         ax[0, 0].set_title(f"Pulse Profile on Day 0 (MJD={int(resid_day0['mjd'])})")
         ax[0, 0].axis("off")
 
         # Plot pulse profiles for day 1
-        ax[1, 0].plot(day0_amps, color="k", lw=0.25, alpha=0.25)
-        ax[1, 0].plot(day1_amps, color="k", lw=0.5)
+        ax[1, 0].plot(day0_amps, color="blue", lw=0.25, alpha=0.25)
+        ax[1, 0].plot(day1_amps, color="red", lw=0.5)
         ax[1, 0].hlines(0.9, 0, toa_shift, color="k")
         ax[1, 0].text(0, 0.915, f"↓ Size of Observed Phase Shift", ha="left", va="bottom")
         ax[1, 0].set_title(f"Pulse Profile on Day 1 (MJD={int(resid_day1['mjd'])})")
         ax[1, 0].axis("off")
 
         # Plot pulse profile residual (day1 - day0)
-        ax[2, 0].plot(day1_amps - day0_amps, color="k", lw=0.5)
-        ax[2, 0].hlines(0.9, 0, toa_shift, color="k")
-        ax[2, 0].text(0, 0.915, f"↓ Size of Observed Phase Shift", ha="left", va="bottom")
+        ax[2, 0].plot(day0_amps, color="blue", lw=0.25, alpha=0.25)
+        ax[2, 0].plot(np.roll(day1_amps, int(toa_shift)), color="red", lw=0.5, alpha=0.25)
+        ax[2, 0].plot(np.roll(day1_amps, int(toa_shift)) - day0_amps, color="k", lw=0.5)
+        ax[2, 0].text(0, 0.915, "Note: This pulse profile residual could be misleading\nif the SNR of the single observation profile is low. \nPlease check carefully with std. profile / fitbirst to conclude any changes.", ha="left", va="bottom", c="r", fontsize=8, fontweight="heavy", fontfamily="serif")
         ax[2, 0].set_title(f"Pulse Profile Residual (Day 1 - Day 0)")
         ax[2, 0].axis("off")
         
