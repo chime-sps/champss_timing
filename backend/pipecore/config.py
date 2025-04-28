@@ -18,6 +18,7 @@ class config():
             }, 
             "ignore_mjds": {
                 "earlier_than": 0,
+                "later_than": 999999,
             }, 
             "metadata": {
                 "tag": "untagged"

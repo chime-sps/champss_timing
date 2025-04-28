@@ -131,11 +131,6 @@ for d in pulsar_data:
             "psrfil": JUMP_PULSAR_FIL
         }
 
-        # Inject J2229+6114 for glitch detection, will be removed in the future. 
-        if d['id'] == "J2229+6114":
-            # remove mjds after 59871
-            d["data"] = {mjd: ars for mjd, ars in d["data"].items() if mjd <= 59872}
-
         # Start timing
         logger.debug(f"Starting pipeline for {d['id']}")
         with champss_timing.champss_timing(

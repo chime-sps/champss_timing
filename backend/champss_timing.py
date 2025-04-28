@@ -128,6 +128,9 @@ class champss_timing:
             if mjd < self.timing_config["ignore_mjds"]["earlier_than"]:
                 self.logger.debug(f"Archive mjd:{mjd} is ignored due to the earlier_than setting in the config file. ")
                 del self.path_data_archives[mjd]
+            if mjd > self.timing_config["ignore_mjds"]["later_than"]:
+                self.logger.debug(f"Archive mjd:{mjd} is ignored due to the later_than setting in the config file. ")
+                del self.path_data_archives[mjd]
 
         # Get first and last MJD
         self.info_ars_mjds = list(self.path_data_archives.keys())
