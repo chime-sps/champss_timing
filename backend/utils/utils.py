@@ -124,6 +124,29 @@ class utils:
             raise Exception("Failed to read DM from parfile")
 
         return None
+
+    @staticmethod
+    def read_start_end_from_parfile(parfile, raise_exception=True):
+        mjd_start = None
+        mjd_end = None
+        with open(parfile, "r") as f:
+            for line in f:
+                if "START" in line:
+                    mjd_start = float(line.split()[1])
+                if "FINISH" in line:
+                    mjd_end = float(line.split()[1])
+
+        if mjd_start is None or mjd_end is None:
+            if raise_exception:
+                raise Exception("Failed to read START/FINISH from parfile")
+
+        if mjd_start is None:
+            mjd_start = 0
+
+        if mjd_end is None:
+            mjd_end = 999999
+
+        return mjd_start, mjd_end
     
     @staticmethod
     def f02p0(f0):

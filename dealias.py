@@ -12,6 +12,7 @@ from backend.datastores.database import database
 from backend.datastores.tmg_master import tmg_master
 from backend.tools.alias_utils import alias_utils
 from backend.utils.logger import logger
+from backend.utils.utils import utils
 
 ##################################################
 # Initialize parameters                          #
@@ -224,15 +225,7 @@ for i, psr in enumerate(psrs):
 
         #  determine range of mjds
         if mjd_range == [] or len(psrs) > 1:
-            mjd_start = 0
-            mjd_end = 999999
-            with open(parfile, "r") as f:
-                for line in f:
-                    if "START" in line:
-                        mjd_start = float(line.split()[1])
-                    if "FINISH" in line:
-                        mjd_end = float(line.split()[1])
-            mjd_range = [mjd_start, mjd_end]
+            mjd_range = utils.read_start_end_from_parfile(parfile, raise_exception=False)
             logger.info(f"Auto-detected MJD range: {mjd_range}")
 
         # Get the list of time to process

@@ -32,6 +32,7 @@ class dealias_utils():
         self.logger = logger
         self.psrdir = psrdir
         self.psrdir_dealias = psrdir + "/dealias"
+        self.parfile = psrdir + "/pulsar.par"
         self.workspace = workspace
         self.outdir = outdir
 
@@ -59,10 +60,15 @@ class dealias_utils():
     def dealias(self, alias_factor):
         self.info["alias_factor"] = alias_factor
 
-        # create parfile and timfile
+        # read the mjd_start and mjd_end from the parfile
+        mjd_start, mjd_end = utils.read_start_end_from_parfile(self.parfile, raise_exception=False)
+
+        # copy the parfile to the workspace
+        shutil.copy(self.parfile, self.workspace + "/pulsar.dealias.par")
+
+        # create timfile from database
         with database(f"{self.psrdir}/champss_timing.sqlite3.db", readonly=True) as db_hdl:
-            open(self.workspace + "/pulsar.dealias.tim", "w").write(db_hdl.create_timfile())
-            open(self.workspace + "/pulsar.dealias.par", "w").write(db_hdl.create_parfile())
+            open(self.workspace + "/pulsar.dealias.tim", "w").write(db_hdl.create_timfile(mjd_range=[mjd_start, mjd_end])) # create only mjds between the mjd range specified in the parfile
 
         # dealias
         if alias_factor != 0:

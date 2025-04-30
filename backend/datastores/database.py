@@ -550,26 +550,76 @@ class database:
         return (count == 0)
 
     def create_parfile(self):
-        return self.get_all_timing_info()[-1]["notes"]["fitted_parfile"]
+        """
+        Create a parfile from the last timing info
+        If the last timing info does not exist, return None
+        """
 
-    def create_timfile(self, ar_list=None):
+        # Get timing info
+        timing_info = self.get_all_timing_info()
+
+        # Sanity check: if timing info is empty, return None
+        if len(timing_info) == 0:
+            self.logger.warning("No timing info found. Cannot create parfile.")
+            return None
+
+        return timing_info[-1]["notes"]["fitted_parfile"]
+
+    def create_timfile(self, ar_list=None, mjd_range=None):
+        """
+        Create a timfile from toas in the database
+        If the TOA does not exist, return blank timfile
+        
+        Parameters
+        ----------
+        ar_list : list
+            List of archive info. If None, get all archive info from the database.
+        mjd_range : list
+            List of two elements. The first element is the start MJD, the second element is the end MJD (e.g. [59000, 59148]).
+            If None, do not filter by MJD range.
+        
+        Returns
+        -------
+        str
+            The timfile string.
+        """
+
         timfile = ""
 
+        # Sanity check for mjd_range
+        if mjd_range is not None:
+            if not isinstance(mjd_range, list):
+                raise ValueError("mjd_range must be a list")
+            if len(mjd_range) != 2:
+                raise ValueError("mjd_range must be a list of two elements")
+            if mjd_range[0] > mjd_range[1]:
+                raise ValueError("mjd_range[0] must be less than mjd_range[1]")
+
+        # Get ar_list if not given
         if ar_list is None:
             ar_list = []
             for archive in self.get_all_archive_info():
                 ar_list.append({"path": archive["filename"]})
 
+        # Get TOA from archive
         for ar_info in ar_list:
             this_toa = self.get_toa_by_filename(utils.get_archive_id(ar_info["path"]))
 
+            # Apply mjd_range filter
+            if mjd_range is not None:
+                if this_toa["toa"] < mjd_range[0] or this_toa["toa"] > mjd_range[1]:
+                    continue
+                    
+            # Check if the TOA is valid
             if(not self.db_check_valid_toa(ar_info["path"])):
                 self.logger.warning(f"INVALID_TOA remark was found for {ar_info['path']}. Skipped while creating timfile...", layer=1)
                 continue
-
+            
+            # Check if the TOA actually exists
             if(this_toa["timestamp"] == 0 or this_toa["raw_tim"].strip() == ""):
                 raise Exception(f"TOA from archive [{ar_info['path']}] does not exist in database. ")
             
+            # Append to timfile
             timfile += this_toa["raw_tim"] + f" -rcvr {this_toa['notes']['rcvr']} " + "\n"
 
         return timfile
