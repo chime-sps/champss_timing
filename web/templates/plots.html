@@ -1,0 +1,382 @@
+{% extends 'base.html' %}
+
+{% block title %}CHAMPSS Timing Monitor - Plots{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h3>Plots</h3>
+        <div class="card">
+            <div class="card-body">
+                <div id="skymap" style="border-radius: 0.5rem; ;"></div>
+            </div>
+        </div>
+    </div>
+    <div style="height: 15px; "></div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <div id="ppdot" style="border-radius: 0.5rem; ;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <div id="pdm" style="border-radius: 0.5rem; ;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <div id="ntoachi2r" style="border-radius: 0.5rem; ;"></div>
+            </div>
+        </div>
+    </div>
+    <i style="color: #888; text-align: center; margin: 15px; ">
+        <small>Pulsars with CHI2R > 10 or timing span < 180 days are omitted from the plots.</small>
+    </i>
+</div>
+
+<div class="modal fade" id="preview" tabindex="-1" aria-labelledby="preview" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content" style="height: 90vh; ">
+            <div class="modal-body" style="height: 100%; overflow-y: hidden; ">
+                <div id="preview_loader" style="height: 100%; overflow-y: hidden; border-radius: 0.35rem; ">
+                    <h2 class="card-text placeholder-glow">
+                        <span class="placeholder col-5" style="float:right; "></span>
+                        <span class="placeholder col-2"></span>
+                    </h2>
+                    <p class="card-text placeholder-glow">
+                        <span class="placeholder col-8"></span><br>
+                    </p>
+                    <hr>
+                    <div class="row">
+                        <h3 class="card-text placeholder-glow">
+                            <span class="placeholder col-2"></span>
+                        </h3>
+                        <div class="col-md-4">
+                            <p class="card-text placeholder-glow">
+                                <span class="placeholder col-12"></span><br>
+                                <span class="placeholder col-9"></span><br>
+                                <span class="placeholder col-8"></span><br>
+                                <span class="placeholder col-12"></span><br>
+                                <span class="placeholder col-10"></span><br>
+                                <span class="placeholder col-10"></span><br>
+                                <span class="placeholder col-12"></span><br>
+                                <span class="placeholder col-12"></span><br>
+                                <span class="placeholder col-9"></span><br>
+                                <span class="placeholder col-8"></span><br>
+                                <span class="placeholder col-12"></span><br>
+                                <span class="placeholder col-12"></span><br>
+                                <span class="placeholder col-8"></span><br>
+                                <span class="placeholder col-10"></span><br>
+                                <span class="placeholder col-12"></span><br>
+                                <span class="placeholder col-8"></span><br>
+                                <span class="placeholder col-12"></span><br>
+                                <span class="placeholder col-10"></span><br>
+                                <span class="placeholder col-12"></span><br>
+                                <span class="placeholder col-9"></span><br>
+                                <span class="placeholder col-8"></span><br>
+                                <span class="placeholder col-10"></span><br>
+                                <span class="placeholder col-12"></span><br>
+                            </p>
+                        </div>
+                        <div class="col-md-8">
+                            <p class="card-text placeholder-glow">
+                                <span class="placeholder col-12" style="height: 25em; "></span><br>
+                                <span class="placeholder col-12"></span><br>
+                                <span class="placeholder col-12"></span><br>
+                                <span class="placeholder col-8"></span><br>
+                            </p>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h3 class="card-text placeholder-glow">
+                                <span class="placeholder col-4"></span>
+                            </h3>
+                            <p class="card-text placeholder-glow">
+                                <span class="placeholder col-12" style="height: 20em; "></span><br><br>
+                                <span class="placeholder col-12" style="height: 20em; "></span><br><br>
+                                <span class="placeholder col-12" style="height: 20em; "></span><br><br>
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <h3 class="card-text placeholder-glow">
+                                <span class="placeholder col-4"></span>
+                            </h3>
+                            <p class="card-text placeholder-glow">
+                                <span class="placeholder col-12" style="height: 20em; "></span><br><br>
+                                <span class="placeholder col-12" style="height: 20em; "></span><br><br>
+                                <span class="placeholder col-12" style="height: 20em; "></span><br><br>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div id="preview_iframe" style="height: 100%; overflow-y: hidden; border-radius: 0.35rem; display: none;"></div>
+            </div>
+            <div style="position: absolute; bottom: -2.55em; left: 50%; transform: translate(-50%, 0); ">
+                <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal" style="border-radius: 100px; width: 6em; margin-right: 5px;">
+                    <i class="bi bi-x-lg"></i> Close
+                </button>
+                <button type="button" class="btn btn-sm btn-light" id="open_in_new_tab" style="border-radius: 100px; width: 11em; ">
+                    <i class="bi bi-box-arrow-up-right"></i> Open in New Tab
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    function preview(url) {
+        $('#preview_iframe').hide();
+        $('#preview_loader').show();
+
+        $('#preview_iframe').html('<iframe src="' + url + '?preview" style="width: 100%; height: 100%; border: none; "></iframe>');
+        $('#preview').modal('show');
+
+        $('#preview_iframe iframe').on('load', function() {
+            $('#preview_loader').hide();
+            setTimeout(() => {
+                $('#preview_iframe').fadeIn();
+            }, 50);
+        });
+
+        $('#open_in_new_tab').click(function() {
+            window.open(url, '_blank');
+            $('#preview').modal('hide');
+        });
+    }
+    function get_DRAO_transiting_ra(offset=4.3905555556, obs_length=0.25) {
+        // Get UTC now
+        var now = new Date();
+        var utc_hours = now.getUTCHours();
+        var utc_minutes = now.getUTCMinutes();
+        var utc_seconds = now.getUTCSeconds();
+        var utc_time = utc_hours + (utc_minutes / 60) + (utc_seconds / 3600);
+
+        // Calculate transiting RA
+        var transiting_ra = utc_time + offset;
+        if (transiting_ra > 24) {
+            transiting_ra -= 24;
+        }
+        if (transiting_ra < 0) {
+            transiting_ra += 24;
+        }
+
+        return [transiting_ra - obs_length / 2, transiting_ra + obs_length / 2];
+
+    }
+</script>
+
+<script>
+    traces = [];
+    {% for this_tag in sources.plots["tags_avail"] %}
+        traces.push({
+            x: {{ sources.plots["skymap"][this_tag]["x"] | safe }},
+            y: {{ sources.plots["skymap"][this_tag]["y"] | safe }},
+            mode: 'markers',
+            type: 'scatter', 
+            name: '{{ this_tag }}', 
+            customdata: {{ sources.plots["skymap"][this_tag]["psr_id"] | safe }},
+            hovertemplate: '<b>%{customdata}</b><extra></extra>'
+        });
+    {% endfor %}
+
+    var layout = {
+        xaxis: {
+            title: 'RAJ (hrs)', 
+            range: [0, 24]
+        },
+        yaxis: {
+            title: 'DECJ (deg)', 
+            range: [-15, 90]
+        }, 
+        legend: {
+            x: 1,
+            xanchor: 'right',
+            y: 1
+        },
+        title: 'Sky Map', 
+        margin: {'t':50,'l':110,'b':60,'r':40}
+    };
+
+    Plotly.newPlot('skymap', traces, layout, {responsive: true});
+
+    // onclick event
+    document.getElementById('skymap').on('plotly_click', function(data){
+        console.log(data.points);
+        var psr_id = data.points[0].customdata;
+        preview('/diagnostic/' + psr_id);
+    });
+</script>
+
+<script>
+    function update_DRAO_transit() {
+        var transiting_ra = get_DRAO_transiting_ra();
+        var layout = {
+            shapes: [
+                {
+                    type: 'rect',
+                    x0: transiting_ra[0],
+                    y0: -20,
+                    x1: transiting_ra[1],
+                    y1: 95,
+                    line: {
+                        color: 'black',
+                        width: 1
+                    },
+                    fillcolor: 'rgba(0, 0, 0, 0.15)',
+                    layer: 'below', 
+                    opacity: 0.25,
+                    // add legend
+                    name: 'DRAO Transit',
+                    legendgroup: 'DRAO Transit',
+                    showlegend: true
+                }
+            ]
+        };
+        Plotly.relayout('skymap', layout);
+    }
+    setInterval(update_DRAO_transit, 5 * 60 * 1000); // update every 5 minutes
+    update_DRAO_transit();
+</script>
+
+<script>
+    traces = [];
+    {% for this_tag in sources.plots["tags_avail"] %}
+        traces.push({
+            x: {{ sources.plots["ppdot"][this_tag]["x"] | safe }},
+            y: {{ sources.plots["ppdot"][this_tag]["y"] | safe }},
+            mode: 'markers',
+            type: 'scatter', 
+            name: '{{ this_tag }}', 
+            customdata: {{ sources.plots["ppdot"][this_tag]["psr_id"] | safe }},
+            hovertemplate: '<b>%{customdata}</b><extra></extra>'
+        });
+    {% endfor %}
+
+    var layout = {
+        xaxis: {
+            title: 'P (s)', 
+            type: 'log', 
+            range: [-3, 1], 
+            exponentformat: 'none'
+        },
+        yaxis: {
+            title: 'Pdot (s/s)', 
+            type: 'log', 
+            range: [-22, -8], 
+            exponentformat: 'power'
+        }, 
+        legend: {
+            x: 1,
+            xanchor: 'right',
+            y: 1
+        }, 
+        title: 'P-Pdot Diagram', 
+        margin: {'t':50,'l':110,'b':60,'r':40}
+    };
+
+    Plotly.newPlot('ppdot', traces, layout, {responsive: true});
+
+    // onclick event
+    document.getElementById('ppdot').on('plotly_click', function(data){
+        console.log(data.points);
+        var psr_id = data.points[0].customdata;
+        preview('/diagnostic/' + psr_id);
+    });
+</script>
+
+<script>
+    traces = [];
+    {% for this_tag in sources.plots["tags_avail"] %}
+        traces.push({
+            x: {{ sources.plots["pdm"][this_tag]["x"] | safe }},
+            y: {{ sources.plots["pdm"][this_tag]["y"] | safe }},
+            mode: 'markers',
+            type: 'scatter', 
+            name: '{{ this_tag }}', 
+            customdata: {{ sources.plots["pdm"][this_tag]["psr_id"] | safe }},
+            hovertemplate: '<b>%{customdata}</b><extra></extra>'
+        });
+    {% endfor %}
+
+    var layout = {
+        xaxis: {
+            title: 'Period (s)',
+            type: 'log', 
+            exponentformat: 'none', 
+            range: [-3, 1]
+        },
+        yaxis: {
+            title: 'DM (pc/cm^3)',
+            type: 'linear', 
+            exponentformat: 'power'
+        }, 
+        legend: {
+            x: 1,
+            xanchor: 'right',
+            y: 1
+        }, 
+        title: 'P vs. DM', 
+        margin: {'t':50,'l':110,'b':60,'r':40}
+    };
+
+    Plotly.newPlot('pdm', traces, layout, {responsive: true});
+
+    // onclick event
+    document.getElementById('pdm').on('plotly_click', function(data){
+        console.log(data.points);
+        var psr_id = data.points[0].customdata;
+        preview('/diagnostic/' + psr_id);
+    });
+</script>
+
+<script>
+    traces = [];
+    {% for this_tag in sources.plots["tags_avail"] %}
+        traces.push({
+            x: {{ sources.plots["ntoachi2r"][this_tag]["x"] | safe }},
+            y: {{ sources.plots["ntoachi2r"][this_tag]["y"] | safe }},
+            mode: 'markers',
+            type: 'scatter', 
+            name: '{{ this_tag }}', 
+            customdata: {{ sources.plots["ntoachi2r"][this_tag]["psr_id"] | safe }},
+            hovertemplate: '<b>%{customdata}</b><extra></extra>'
+        });
+    {% endfor %}
+
+    var layout = {
+        xaxis: {
+            title: 'NTOA',
+            type: 'log', 
+            exponentformat: 'power'
+        },
+        yaxis: {
+            title: 'Reduced Chi2',
+            type: 'linear', 
+            exponentformat: 'none'
+        }, 
+        legend: {
+            x: 1,
+            xanchor: 'right',
+            y: 1
+        }, 
+        title: 'NTOA vs. CHI2R', 
+        margin: {'t':50,'l':110,'b':60,'r':40}
+    };
+
+    Plotly.newPlot('ntoachi2r', traces, layout, {responsive: true});
+
+    // onclick event
+    document.getElementById('ntoachi2r').on('plotly_click', function(data){
+        console.log(data.points);
+        var psr_id = data.points[0].customdata;
+        preview('/diagnostic/' + psr_id);
+    });
+</script>
+
+{% endblock %}

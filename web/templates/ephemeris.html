@@ -1,0 +1,309 @@
+{% extends 'base.html' %}
+
+{% block title %}CHAMPSS Timing Monitor - Ephemeris{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div style="float: right;">
+            <div id="header_tag_filter">
+                {% for this_tag in sources.tags %}
+                    {% if tag_filter == this_tag %}
+                        <a href="/ephemeris?tag=all" class="badge rounded-pill text-bg-dark">#{{ this_tag }}</a>
+                    {% else %}
+                        <a href="/ephemeris?tag={{ this_tag }}" class="badge rounded-pill text-bg-light">#{{ this_tag }}</a>
+                    {% endif %}
+                {% endfor %}
+            </div>
+            <div id="header_action_btn" style="display: none; ">
+                <div class="btn-group" role="group">
+                    <button type="button" class="btn btn-primary" id="btn_allfiles"
+                    style="--bs-btn-padding-y: .05rem; --bs-btn-padding-x: .45rem; --bs-btn-font-size: .65rem;"
+                    >0 files selected</button>
+                    <button type="button" class="btn btn-primary dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false" data-bs-reference="parent"
+                    style="--bs-btn-padding-y: .05rem; --bs-btn-padding-x: .45rem; --bs-btn-font-size: .65rem;"
+                    >
+                        <span class="visually-hidden">Toggle Dropdown</span>
+                    </button>
+                    <!-- <button type="button" class="btn btn-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false"
+                    style="--bs-btn-padding-y: .05rem; --bs-btn-padding-x: .45rem; --bs-btn-font-size: .65rem;"
+                    >0 files selected</button> -->
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><h6 class="dropdown-header">Actions</h6></li>
+                        <li><a class="dropdown-item btn-sm" id="btn_new_tab" href="#">Open in New Tab</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><h6 class="dropdown-header">Download Diagnostic Information</h6></li>
+                        <li><a class="dropdown-item btn-sm" id="btn_pdf" href="#">Diagnostic Plot (.pdf)</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><h6 class="dropdown-header">Download Timing Information</h6></li>
+                        <li><a class="dropdown-item btn-sm" id="btn_parfile" href="#">TOA Parfile (.par)</a></li>
+                        <li><a class="dropdown-item btn-sm" id="btn_timfile" href="#">TOA Timfile (.tim)</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><h6 class="dropdown-header">Download Debug Information</h6></li>
+                        <li><a class="dropdown-item btn-sm" id="btn_dbfile" href="#">Database File (.sqlite3.db)</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <h3>
+            Ephemeris
+        </h3>
+        <div class="card">
+            <div class="card-body">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th scope="col"><input type="checkbox" id="select-all"></th>
+                            <th scope="col">PSR</th>
+                            <th scope="col">RAJ (deg)</th>
+                            <th scope="col">DECJ (deg)</th>
+                            <th scope="col">P0 (s)</th>
+                            <th scope="col">P1 (s/s)</th>
+                            <th scope="col">DM (pc/cm<sup>3</sup>)</th>
+                            <th scope="col">CHI2R</th>
+                            <th scope="col">MJDs (days)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for this_source in sources %}
+                            {% if tag_filter == "all" or tag_filter == this_source.config["metadata"]["tag"] %}
+                                {% if this_source.last_timing_info["fitted_params"]["CHI2R"] > 10 or max(this_source.last_timing_info["notes"]["fitted_mjds"]) - min(this_source.last_timing_info["notes"]["fitted_mjds"]) < 180 %}
+                                    <tr style="opacity: 0.25; "
+                                    data-bs-toggle="tooltip" data-bs-placement="bottom"
+                                    data-bs-custom-class="custom-tooltip"
+                                    data-bs-title="Ephemeris may be unreliable">
+                                {% else %}
+                                    <tr>
+                                {% endif %}
+                                    <td><input type="checkbox" name="psr" value="{{ this_source.psr_id }}"></td>
+                                    <td><a href="/diagnostic/{{ this_source.psr_id }}" class="diagnostic_link" target="_blank">{{ this_source.psr_id }}</a> <span class="badge text-bg-dark rounded-pill index-tag">#{{this_source.config["metadata"]["tag"]}}</span></td>
+                                    <td>{{ deg2dms(this_source.last_timing_info["fitted_params"]["RAJ"]) }}</td>
+                                    <td>{{ deg2dms(this_source.last_timing_info["fitted_params"]["DECJ"]) }}</td>
+                                    <td>{{ f02p0(this_source.last_timing_info["fitted_params"]["F0"]) }}</td>
+                                    <td>{{ f12p1(this_source.last_timing_info["fitted_params"]["F0"], this_source.last_timing_info["fitted_params"]["F1"]) }}</td>
+                                    <td>{{ round(this_source.last_timing_info["fitted_params"]["DM"], 1) }}</td>
+                                    <td>{{ round(this_source.last_timing_info["fitted_params"]["CHI2R"], 1) }}</td>
+                                    <td>{{ round(min(this_source.last_timing_info["notes"]["fitted_mjds"])) }} → {{ round(max(this_source.last_timing_info["notes"]["fitted_mjds"])) }}</td>
+                                </tr>
+                            {% endif %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <i style="color: #888; text-align: center; margin: 15px; ">
+        <small>Pulsars with CHI2R > 10 or timing span < 180 days are shown in gray.</small>
+    </i>
+</div>
+
+<div class="card" id="card_diagnostic_link_preview" style="position: fixed; bottom: 30px; right: 30px; z-index: 1000; min-width: 30em; width: 35%; display: none; box-shadow: 0px 10px 25px rgba(0, 0, 0, .1); ">
+    <div class="card-body" style="width: 100%; aspect-ratio: 1.70; cursor: pointer; ">
+        <div id="diagnostic_pdf" style="width: 100%; border: 0; border-radius: 5px; display: none; "></div>
+        <!-- <div id="diagnostic_pdf_placeholder" >
+            <div style="position: absolute; bottom: 3px; right: 10px; ">
+                <button class="btn btn-dark btn-sm" type="button" style="transform-origin: right; scale: 0.5; border-radius: 5em;" disabled>
+                    <span class="spinner-grow spinner-grow-sm" aria-hidden="true"></span>
+                    <span role="status">Loading diagnostics data...</span>
+                </button>
+            </div>
+        </div> -->
+    </div>
+</div>
+
+<script>
+    function get_selected_pulsars() {
+        var selected_pulsars = [];
+        $('input[name="psr"]:checked').each(function() {
+            selected_pulsars.push($(this).val());
+        });
+        return selected_pulsars;
+    }
+
+    function update_action_btn() {
+        var selected_pulsars = get_selected_pulsars();
+        $('#btn_allfiles').text(selected_pulsars.length + ' files selected');
+        if (selected_pulsars.length > 0) {
+            $('#header_tag_filter').hide();
+            $('#header_action_btn').fadeIn();
+        } else {
+            $('#header_action_btn').hide();
+            $('#header_tag_filter').fadeIn();
+        }
+    }
+
+    function open_in_new_tab() {
+        var selected_pulsars = get_selected_pulsars();
+        for (var i = 0; i < selected_pulsars.length; i++) {
+            window.open('/diagnostic/' + selected_pulsars[i]);
+        }
+    }
+
+    function download_diagnostics() {
+        var selected_pulsars = get_selected_pulsars();
+        var urls = [];
+        var filenames = [];
+        for (var i = 0; i < selected_pulsars.length; i++) {
+            urls.push('/diagnostic/' + selected_pulsars[i] + '/pdf');
+            filenames.push("champss_timing_" + selected_pulsars[i] + '.pdf');
+        }
+        zip_download(
+            'diagnostics__' + new Date().toISOString().replace(/T/, ' ').replace(/\..+/, '').replace(/:/g, '-'),
+            filenames, 
+            urls
+        );
+    }
+
+    function download_parfiles() {
+        var selected_pulsars = get_selected_pulsars();
+        var urls = [];
+        var filenames = [];
+        for (var i = 0; i < selected_pulsars.length; i++) {
+            urls.push('/diagnostic/' + selected_pulsars[i] + '/parfile');
+            filenames.push("champss_timing_" + selected_pulsars[i] + '.par');
+        }
+        zip_download(
+            'parfiles__' + new Date().toISOString().replace(/T/, ' ').replace(/\..+/, '').replace(/:/g, '-'),
+            filenames, 
+            urls
+        );
+    }
+
+    function download_timfiles() {
+        var selected_pulsars = get_selected_pulsars();
+        var urls = [];
+        var filenames = [];
+        for (var i = 0; i < selected_pulsars.length; i++) {
+            urls.push('/diagnostic/' + selected_pulsars[i] + '/timfile');
+            filenames.push("champss_timing_" + selected_pulsars[i] + '.tim');
+        }
+        zip_download(
+            'timfiles__' + new Date().toISOString().replace(/T/, ' ').replace(/\..+/, '').replace(/:/g, '-'),
+            filenames, 
+            urls
+        );
+    }
+
+    function download_dbfiles() {
+        var selected_pulsars = get_selected_pulsars();
+        var urls = [];
+        var filenames = [];
+        for (var i = 0; i < selected_pulsars.length; i++) {
+            urls.push('/diagnostic/' + selected_pulsars[i] + '/dbfile');
+            filenames.push("champss_timing_" + selected_pulsars[i] + '.sqlite3.db');
+        }
+        zip_download(
+            'dbfiles__' + new Date().toISOString().replace(/T/, ' ').replace(/\..+/, '').replace(/:/g, '-'),
+            filenames, 
+            urls
+        );
+    }
+
+    function download_allfiles() {
+        var selected_pulsars = get_selected_pulsars();
+        var urls = [];
+        var filenames = [];
+        for (var i = 0; i < selected_pulsars.length; i++) {
+            // diagnostic
+            urls.push('/diagnostic/' + selected_pulsars[i] + '/pdf');
+            // filenames.push("champss_timing_" + selected_pulsars[i] + '.pdf');
+            filenames.push(selected_pulsars[i] + '/timing_diagnostic.pdf');
+
+            // timing
+            urls.push('/diagnostic/' + selected_pulsars[i] + '/parfile');
+            // filenames.push("champss_timing_" + selected_pulsars[i] + '.par');
+            filenames.push(selected_pulsars[i] + '/pulsar.par');
+            urls.push('/diagnostic/' + selected_pulsars[i] + '/timfile');
+            // filenames.push("champss_timing_" + selected_pulsars[i] + '.tim');
+            filenames.push(selected_pulsars[i] + '/pulsar.tim');
+
+            // debug
+            urls.push('/diagnostic/' + selected_pulsars[i] + '/dbfile');
+            // filenames.push("champss_timing_" + selected_pulsars[i] + '.sqlite3.db');
+            filenames.push(selected_pulsars[i] + '/champss_timing.sqlite3.db');
+        }
+        zip_download(
+            'allfiles__' + new Date().toISOString().replace(/T/, ' ').replace(/\..+/, '').replace(/:/g, '-'),
+            filenames, 
+            urls
+        );
+    }
+
+    $(document).ready(function() {
+        // Enable select all checkbox
+        $('#select-all').click(function(event) {
+            if(this.checked) {
+                $(':checkbox').each(function() {
+                    this.checked = true;
+                });
+            } else {
+                $(':checkbox').each(function() {
+                    this.checked = false;
+                });
+            }
+        });
+
+        // Update action button
+        $('input[name="psr"]').click(update_action_btn);
+        $('#select-all').click(update_action_btn);
+
+        // Bind action buttons
+        $('#btn_new_tab').click(open_in_new_tab);
+        $('#btn_pdf').click(download_diagnostics);
+        $('#btn_parfile').click(download_parfiles);
+        $('#btn_timfile').click(download_timfiles);
+        $('#btn_dbfile').click(download_dbfiles);
+        $('#btn_allfiles').click(download_allfiles);
+    });
+</script>
+
+<script type="module">
+    function show_pdf_preview(url) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://mozilla.github.io/pdf.js/build/pdf.worker.mjs';
+
+        // pdfjsLib.getDocument({data: pdf_data}).promise.then(function(pdf) {
+        var loadingTask = pdfjsLib.getDocument(url);
+        loadingTask.promise.then(function(pdf) {
+            pdf.getPage(1).then(function(page) {
+                var scale = 0.5;
+                var viewport = page.getViewport({ scale: scale });
+                var canvas = document.createElement('canvas');
+                var context = canvas.getContext('2d');
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+                canvas.style.width = '100%';
+                var renderContext = {
+                    canvasContext: context,
+                    viewport: viewport
+                };
+                page.render(renderContext).promise.then(function() {
+                    $("#diagnostic_pdf").empty();
+                    document.getElementById('diagnostic_pdf').appendChild(canvas);
+                    // $("#diagnostic_pdf_placeholder").hide();
+                    setTimeout(() => {
+                        $("#card_diagnostic_link_preview").fadeIn();
+                        $("#diagnostic_pdf").show();
+                    }, 0);
+                });
+            });
+        });
+    }
+
+    var diagnostic_link_preview_timeout = null;
+    $(".diagnostic_link").hover(
+        function() {
+            diagnostic_link_preview_timeout = setTimeout(() => {
+                var url = $(this).attr('href') + '/pdf';
+                show_pdf_preview(url);
+            }, 0);
+        }, 
+        function() {
+            clearTimeout(diagnostic_link_preview_timeout);
+            $("#diagnostic_pdf").hide();
+            // $("#diagnostic_pdf_placeholder").show();
+            $("#card_diagnostic_link_preview").hide();
+        })
+    ;
+</script>
+
+{% endblock %}

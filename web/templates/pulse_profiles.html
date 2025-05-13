@@ -1,0 +1,433 @@
+{% extends 'base.html' %}
+
+{% block title %}Pulse profiles for {{source_id}}{% endblock %}
+
+{% block content %}
+
+<div class="row" style="padding: 10px; ">
+    <div class="col-md-3">
+        <div class="card" style="position: relative; height: 95vh; overflow-y: auto; ">
+            <div class="card-body">
+                {% for month in obs_mjds %}
+                <h5>{{ month }}
+                    <input type="checkbox" class="btn-check" name="mjds_select_all" id="btn_mjd_{{ month.replace('.', '_') }}" value="{{ month.replace('.', '_') }}" autocomplete="off">
+                    <label class="btn btn-outline-dark btn-sm" for="btn_mjd_{{ month.replace('.', '_') }}" id="btn_mjd_{{ month }}_lab" 
+                        style="width: 7em; float: right; --bs-btn-padding-y: .1rem; --bs-btn-padding-x: .1rem; --bs-btn-font-size: .75rem; "
+                    >Select all</label><br>
+                    </h5>
+                    <section style="display: flex; flex-wrap: wrap; " id="mjds_{{ month.replace('.', '_') }}">
+                    {% for day in obs_mjds[month] %}
+                        <input type="checkbox" class="btn-check" name="mjds" data-month="{{ month }}" data-monthesc="{{ month.replace('.', '_') }}" id="btn_mjd_{{ day['mjd'] }}" value="{{ day['filename'] }}" autocomplete="off">
+                        <label class="btn btn-outline-secondary btn-sm" for="btn_mjd_{{ day['mjd'] }}" id="btn_mjd_{{ day['mjd'] }}_lab"
+                            style="margin-bottom: 0.25em; width: 3em; scale: 0.8; transform-origin: left; "
+                        >{{ day["day"] }}</label><br>
+                    {% endfor %}
+                    </section>
+                    <hr>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-9">
+        <div class="card" style="position: relative; height: 95vh;">
+            <div class="card-body">
+                <div id="pulse_profiles_placeholder" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; ">
+                    <p style="font-size: 1em; font-weight: bolder; opacity: 0.5; ">
+                        Select one or more days to view pulse profiles.
+                    </p>
+                </div>
+                <div id="pulse_profiles_spinner" style="position: absolute; bottom: 10px; right: 0px; width: 14em; z-index: 999; display: none; ">
+                    <button class="btn btn-dark btn-sm" type="button" style="scale: 0.75; border-radius: 5em;" disabled>
+                        <span class="spinner-grow spinner-grow-sm" aria-hidden="true"></span>
+                        <span role="status">Loading pulse profile data...</span>
+                    </button>
+                </div>
+                <div id="pulse_profiles" style="width: 100%; height: 100%; display: none; "></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-12" style="position: relative; width: 100%; margin-left: 5px; margin-top: -2px; ">
+        <div style="float: right; scale: 0.75; transform-origin: right; margin-right: calc(var(--bs-gutter-x)* .25); ">
+            <span class="badge text-bg-light"> 
+                <div class="form-check form-switch" style="min-height: 1.5em; display: inline-block; "
+                data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Stacking will sum all selected pulse profiles.">
+                    <input class="form-check-input" type="checkbox" role="switch" id="stacking_checkbox" name="stacking_checkbox" checked>
+                    <label class="form-check-label" for="stacking_checkbox" style="transform: translateY(2.5px)">Stacking</label>
+                </div>
+                &nbsp;&nbsp;&nbsp;&nbsp;
+                <div class="form-check form-switch" style="min-height: 1.5em; display: inline-block; "
+                data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Normalizing will divide all pulse profiles by their maximum amplitude.">
+                    <input class="form-check-input" type="checkbox" role="switch" id="normalizing_checkbox" name="normalizing_checkbox" checked>
+                    <label class="form-check-label" for="normalizing_checkbox" style="transform: translateY(2.5px)">Normalizing</label>
+                </div>
+            </span>
+        </div>
+        <div>
+            <code style="font-size: 0.6em; color: #000; " id="status"></code>
+        </div>
+    </div>
+</div>
+
+<!-- Minimum screen size warning -->
+<div id="screen_size_warning" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(255, 255, 255, 0.5); z-index: 1000; backdrop-filter: blur(15px); cursor: not-allowed; display: none; ">
+    <p style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; ">
+        <span style="font-size: 5em;"><i class="bi bi-exclamation-triangle"></i></span> <br>
+        <b>Screen size warning</b> <br>
+        <small>
+            This page is best viewed on a large screen. 
+            If you are on a mobile device, please switch to a desktop or laptop for a better experience.
+        </small>
+    </p>
+</div>
+
+<script>
+    $(document).ready(function() {
+        // on screen resize
+        $(window).resize(function() {
+            if (window.innerWidth < 960) {
+                $('#screen_size_warning').fadeIn();
+            }
+            else {
+                $('#screen_size_warning').fadeOut();
+            }
+        });
+    });
+</script>
+
+<script>
+    $(document).ready(function() {
+        var profile_data_cache = {};
+        var profile_data_size = 0;
+        var profile_data_stacked = [];
+        var main_timeout = setTimeout(() => {}, 0);
+        var stacking_selection_bak = [];
+        var stacking_selection_bak_timeout = setTimeout(() => {}, 0);
+
+        function get_file(filename, btn_id) {
+            if (!(filename in profile_data_cache)) {
+                $.ajax({
+                    url: "pulse_profiles/" + filename,
+                    type: 'GET',
+                    async: false,
+                    success: function(data) {
+                        profile_data_cache[filename] = data;
+                        $('#' + btn_id + "_lab").removeClass('btn-outline-secondary').addClass('btn-outline-dark');
+                        console.log('#' + btn_id + "_lab");
+                    }, 
+                    error: function() {
+                        $("#status").html("Error loading data from " + filename + ". ");
+                        $('#' + btn_id + "_lab").removeClass('btn-outline-secondary').addClass('btn-outline-danger');
+                    }
+                });
+            }
+        }
+
+        ////////////////////////////////
+        // Stacking Checkbox          //
+        ////////////////////////////////
+        $('#stacking_checkbox').change(function() {
+            if (!$(this).prop('checked')) {
+                clearTimeout(stacking_selection_bak_timeout);
+
+                // uncheck all mjds except for the last one
+                stacking_selection_bak = $('input[name="mjds"]:checked');
+                
+                for (var i = 0; i < stacking_selection_bak.length - 1; i++) {
+                    $(stacking_selection_bak[i]).prop('checked', false);
+                }
+
+                // trigger change event
+                $(stacking_selection_bak[stacking_selection_bak.length - 1]).change();
+
+                stacking_selection_bak_timeout = setTimeout(() => {
+                    stacking_selection_bak = []
+                }, 15 * 1000);
+            } else {
+                if (stacking_selection_bak.length != 0) {
+                    // uncheck all mjds
+                    $('input[name="mjds"]').prop('checked', false);
+
+                    // recheck all mjds
+                    for (var i = 0; i < stacking_selection_bak.length; i++) {
+                        $(stacking_selection_bak[i]).prop('checked', true);
+                    }
+
+                    // trigger change event
+                    $(stacking_selection_bak[stacking_selection_bak.length - 1]).change();
+                }
+            }
+        });
+
+        ////////////////////////////////
+        // Normalizing Checkbox       //
+        ////////////////////////////////
+        $('#normalizing_checkbox').change(function() {
+            $('input[name="mjds"]:checked').each(function() {
+                $(this).change();
+            });
+        });
+
+        ////////////////////////////////
+        // Select All Checkbox        //
+        ////////////////////////////////
+        $('input[name="mjds_select_all"]').change(function() {
+            var mjds = $(this).val();
+            var checked = $(this).prop('checked');
+            var n_files = $('input[name="mjds"]:checked').length;
+            var n_files_limit = 1000; // over 60 files, disable animation
+            var delay_offset = 50;
+
+            // uncheck the select all button. if all selected eventually then other handlers will check it
+            $(this).prop('checked', false);
+
+            var disable_animation = false;
+            if (n_files > n_files_limit) {
+                disable_animation = true;
+                delay_offset = 25;
+            }
+
+            if (!$('input[name="stacking_checkbox"]').prop('checked')) {
+                disable_animation = false; // force animation if stacking is off
+                delay_offset = 100; // increase delay offset
+                setTimeout(() => {
+                    $('input[name="mjds_select_all"]').prop('checked', false);// set select all to be unchecked
+                }, 300);
+                // uncheck all buttons
+                $('#mjds_' + mjds + ' input[type="checkbox"]').each(function() {
+                    $(this).prop('checked', false);
+                });
+            }
+
+            // get all required files
+            var btn_ids = $('#mjds_' + mjds + ' input[type="checkbox"]').map(function() {
+                return $(this).attr('id');
+            }).get();
+            var filenames = $('#mjds_' + mjds + ' input[type="checkbox"]').map(function() {
+                return $(this).val();
+            }).get();
+            
+            $("#status").html("Loading pulse profile data...");
+            $('#pulse_profiles_spinner').show();
+
+            setTimeout(() => {
+                for (var i = 0; i < filenames.length; i++) {
+                    get_file(filenames[i], btn_ids[i]);
+                }
+                
+                if (checked) {
+                    var delay = 0
+                    $('#mjds_' + mjds + ' input[type="checkbox"]').each(function() {
+                        if (!$(this).prop('checked')) {
+                            setTimeout(() => {
+                                if (disable_animation) {
+                                    $(this).prop('checked', true);
+                                } else {
+                                    $(this).click(); 
+                                }
+                            }, delay);
+                            delay += delay_offset;
+                        }
+                    });
+                } else {
+                    var delay = 0
+                    $('#mjds_' + mjds + ' input[type="checkbox"]').each(function() {
+                        if ($(this).prop('checked')) {
+                            setTimeout(() => {
+                                if (disable_animation) {
+                                    $(this).prop('checked', false);
+                                } else {
+                                    $(this).click();
+                                }
+                            }, delay);
+                            delay += delay_offset;
+                        }
+                    });
+                }
+
+                // trigger change event
+                if (disable_animation) {
+                    setTimeout(() => {
+                        $('#mjds_' + mjds + ' input[type="checkbox"]').last().change();
+                    }, delay += delay_offset);
+                }
+            }, 0);
+        });
+
+        ////////////////////////////////
+        // Individual Checkbox        //
+        ////////////////////////////////
+        $('input[name="mjds"]').change(function() {
+            // check if all buttons in the same month are checked
+            console.log($(this).data('month'));
+            var n_total = $('#mjds_' + $(this).data('monthesc') + ' input[type="checkbox"]').length;
+            var n_checked = $('#mjds_' + $(this).data('monthesc') + ' input[type="checkbox"]:checked').length;
+            console.log('#btn_mjd_' + $(this).data('month'));
+            if (n_total == n_checked) {
+                $('#btn_mjd_' + $(this).data('monthesc')).prop('checked', true);
+            } else {
+                $('#btn_mjd_' + $(this).data('monthesc')).prop('checked', false);
+            }
+        });
+
+        ////////////////////////////////
+        // Main Event Handler         //
+        ////////////////////////////////
+        $("#status").html("Ready.");
+        $('input[name="mjds"]').change(function() {
+            $('#pulse_profiles_placeholder').hide();
+            $('#pulse_profiles_spinner').show();
+            $('#pulse_profiles').show();
+            $("#status").html("Loading pulse profile data...");
+
+            stacking = $('input[name="stacking_checkbox"]').prop('checked');
+            normalizing = $('input[name="normalizing_checkbox"]').prop('checked');
+            
+            if (!stacking) {
+                // uncheck all other mjds except for the current one
+                var mjds = $(this).val();
+                $('input[name="mjds"]').each(function() {
+                    if ($(this).val() != mjds) {
+                        $(this).prop('checked', false);
+                    }
+                });
+            }
+
+            clearTimeout(main_timeout);
+            main_timeout = setTimeout(() => {
+                var btn_ids = $('input[name="mjds"]:checked').map(function() {
+                    return $(this).attr('id');
+                }).get();
+                var filenames = $('input[name="mjds"]:checked').map(function() {
+                    return $(this).val();
+                }).get();
+
+                // filenames is empty
+                if (filenames.length == 0) {
+                    $('#pulse_profiles_placeholder').show();
+                    $('#pulse_profiles_spinner').hide();
+                    $('#pulse_profiles').hide();
+                    $("#status").html("Ready. ");
+                    return;
+                }
+                
+                // get files and data size
+                for (var i = 0; i < filenames.length; i++) {
+                    // if (!(filenames[i] in profile_data_cache)) {
+                    //     $.ajax({
+                    //         url: "pulse_profiles/" + filenames[i],
+                    //         type: 'GET',
+                    //         async: false,
+                    //         success: function(data) {
+                    //             profile_data_cache[filenames[i]] = data;
+                    //             $('#' + btn_ids[i] + "_lab").removeClass('btn-outline-secondary').addClass('btn-outline-dark');
+                    //             console.log('#' + btn_ids[i] + "_lab");
+                    //         }, 
+                    //         error: function() {
+                    //             $("#status").html("Error loading data from " + filenames[i] + ". ");
+                    //             $('#' + btn_ids[i] + "_lab").removeClass('btn-outline-secondary').addClass('btn-outline-danger');
+                    //         }
+                    //     });
+                    // }
+                    get_file(filenames[i], btn_ids[i]);
+                    if (profile_data_size < profile_data_cache[filenames[i]]["psr_amps"].length) {
+                        profile_data_size = profile_data_cache[filenames[i]]["psr_amps"].length;
+                    }
+                }
+
+                // stack data
+                profile_data_stacked = Array(profile_data_size).fill(0);
+                for (var i = 0; i < filenames.length; i++) {
+                    var this_psr_amps = profile_data_cache[filenames[i]]["psr_amps"];
+                    if (this_psr_amps.length < profile_data_size) {
+                        // Resize amplitudes by a factor to profile_data_size
+                        this_psr_amps_ = Array(profile_data_size).fill(0);
+                        resize_factor = profile_data_size / this_psr_amps.length;
+
+                        k_ = 0
+                        resized_idx = 0
+                        for (var j = 0; j < this_psr_amps.length; j++) {
+                            k_ += resize_factor
+                            for (var k = 0; k < k_; k++) {
+                                this_psr_amps_[resized_idx] = this_psr_amps[j]
+                                resized_idx += 1
+                                k_ -= 1
+                            }
+                        }
+
+                        // console.log(profile_data_size - resized_idx);
+                        for (var j = resized_idx; j < profile_data_size; j++) {
+                            this_psr_amps_[resized_idx] = this_psr_amps_[resized_idx - 1]
+                            resized_idx += 1
+                            // console.log(resized_idx);
+                        }
+
+                        this_psr_amps = this_psr_amps_
+                    }
+
+                    // normalize data
+                    if (normalizing) {
+                        this_psr_amps = this_psr_amps.map(function(x) {
+                            if (math.max(this_psr_amps) == 0) {
+                                return 0;
+                            }
+                            return x / math.max(this_psr_amps);
+                        });
+                    }
+
+                    for (var j = 0; j < profile_data_size; j++) {
+                        profile_data_stacked[j] += this_psr_amps[j];
+                    }
+                }
+                // console.log(profile_data_stacked);
+
+                // plot data
+                var trace = {
+                    x: Array(profile_data_size).fill().map((x, i) => i),
+                    y: profile_data_stacked, 
+                    type: 'scatter', 
+                    mode: 'lines',
+                    line: {
+                        color: 'rgb(0, 0, 0)',
+                        width: 1
+                    }
+                };
+
+                var layout = {
+                    title: '{{ source_id }}',
+                    xaxis: {
+                        title: 'Phase (samples)', 
+                        exponentformat: 'power'
+                    },
+                    yaxis: {
+                        title: 'Normalized Amplitude',
+                        exponentformat: 'power'
+                    }, 
+                    margin: {
+                        l: 50,
+                        r: 50,
+                        b: 50,
+                        t: 50,
+                        pad: 0
+                    }
+                };
+
+                var data = [trace];
+
+                Plotly.newPlot('pulse_profiles', data, layout, {responsive: true});
+
+                // show stats in status bar
+                var std = math.std(profile_data_stacked);
+                var mean = math.mean(profile_data_stacked);
+                var max = math.max(profile_data_stacked);
+                var min = math.min(profile_data_stacked);
+                var snr = max / std;
+                var n_files = filenames.length;
+                $("#status").html("Mean: " + mean.toFixed(2) + ", Std: " + std.toFixed(2) + ", Max: " + max.toFixed(2) + ", Min: " + min.toFixed(2) + ", SNR: " + snr.toFixed(2) + ", N_files: " + n_files + ". ");
+                
+                $('#pulse_profiles_spinner').fadeOut();
+            }, 0);
+        });
+    });
+</script>
+
+{% endblock %}

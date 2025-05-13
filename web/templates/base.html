@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{% block title %}CHAMPSS Timing{% endblock %}</title>
+
+    <!-- JQuery -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+
+    <!-- Bootstrap CSS and JS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+
+    <!-- Zip.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" integrity="sha512-XMVd28F1oH/O71fzwBnV7HucLxVwtxf26XV8P4wPk26EDxuGZ91N8bsOttmnomcCD3CS5ZMRL50H0GgOHvegtg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip-utils@0.1.0/dist/jszip-utils.min.js"></script>
+
+    <!-- Math.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/14.0.1/math.min.js" integrity="sha512-PbOEC/cOHBQKshG/XgYoI+kff08IraowCgPlDT8NL91+ZPaeuvWVtC7jYTDua9Kow5QTpX+EMIM0RBKAA2Hsmg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+    <!-- PDF.js -->
+    <script src="https://mozilla.github.io/pdf.js/build/pdf.mjs" type="module"></script>
+
+    <style>
+        .heatmap {
+            display: flex;
+            flex-wrap: wrap;
+            width: 100%;
+            margin: 0 auto;
+            flex-direction: column;
+            height: 120px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            /*align-content: baseline;*/
+            align-content: flex-end;
+        }
+
+        .square {
+            width: 14px;
+            height: 14px;
+            margin: 1px;
+            background-color: #216e39;
+            border: 1px solid #888;
+            border-radius: 3px;
+        }
+
+        .square[value="0"] {
+            border: 1px solid #ddd;
+        }
+
+        .index-tag {
+            font-size: 0.45em; 
+            transform: translateY(-0.45em);  
+        }
+    </style>
+
+    <script>
+        function show_version() {
+            alert("𝗖𝗛𝗔𝗠𝗣𝗦𝗦 𝗧𝗶𝗺𝗶𝗻𝗴 𝗣𝗶𝗽𝗲𝗹𝗶𝗻𝗲 \nGit Hash: {{ app.pipeline_version }} \nLoaded PSRDIR: {{ sources.psr_dir }}");
+        }
+
+        function save_as(blob, filename) {
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement("a");
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(function() {
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            }, 0);
+        }
+
+        function zip_download(outfile, filenames, urls) {
+            var zip = new JSZip();
+            var count = urls.length;
+            var zipFilename = outfile + '.zip';
+            $('#zip_download').fadeIn();
+            $('#zip_download_progress').text('Downloading ' + count + ' files...');
+            urls.forEach(function(url, i) {
+                JSZipUtils.getBinaryContent(url, function (err, data) {
+                    if(err) {
+                        throw err;
+                    }
+                    zip.file(outfile + "/" + filenames[i], data, {binary: true});
+                    count--;
+
+                    $('#zip_download_progress').text('Downloading... (' + count + ' files remaining)');
+                    if (count == 0) {
+                        $('#zip_download_progress').text('Zipping...');
+                        zip.generateAsync({type: 'blob'}).then(function(content) {
+                            save_as(content, zipFilename);
+                            $('#zip_download_progress').text('Saved as ' + zipFilename + '. ');
+                            setTimeout(() => {
+                                $('#zip_download').fadeOut();
+                            }, 1500);
+                        });
+                    }
+                });
+            });
+        }
+    </script>
+</head>
+
+<body>
+    {% if show_sidebar: %}
+    <div class="offcanvas offcanvas-start show text-bg-dark" tabindex="-1" id="offcanvasDark" data-bs-scroll="true" data-bs-keyboard="false" data-bs-backdrop="false" aria-labelledby="offcanvasDarkLabel" style="width: 3.5em; z-index: 0; ">
+        <div class="offcanvas-body" >
+            <ul class="nav nav-pills nav-flush flex-column mb-auto text-center">
+                <li class="nav-item" style="margin-bottom: 1.5em; ">
+                    <a href="/" style="color: white; ">
+                        <i class="bi bi-speedometer"></i>
+                    </a>
+                </li>
+                <li class="nav-item" style="margin-bottom: 1.5em; ">
+                    <a href="/ephemeris" style="color: white; ">
+                        <i class="bi bi-list-columns-reverse"></i>
+                    </a>
+                </li>
+                <li class="nav-item" style="margin-bottom: 1.5em; ">
+                    <a href="/plots" style="color: white; ">
+                        <i class="bi bi-graph-up"></i>
+                    </a>
+                </li>
+            </ul>
+        </div>
+        <div class="offcanvas-body" style="position: absolute; bottom: 0; left: 50%; width: 20em; transform: translate(-50%, -220%) rotate(-90deg); line-height: 0.8em; text-overflow: ellipsis; " onclick="show_version()">
+            <b>CHAMPSS Timing Pipeline</b><br>
+            <small>{{ sources.psr_dir }}</small>
+        </div>
+    </div>
+    <br>
+    {% endif %}
+    {% if show_sidebar: %}
+    <div style="margin-left: 4.5em; padding-left: 5px; padding-right: 20px; ">
+    {% else %}
+    <div style="padding: 0; ">
+    {% endif %}
+        {% block content %}
+        {% endblock %}
+<!--        <center>-->
+<!--            <br>-->
+<!--            <div style="width: 100%; bottom: 0; position: fixed; padding-bottom: 15px; z-index: -1; font-size: 0.75em; color: #888; ">-->
+<!--                <small>CHAMPSS Timing Pipeline ({{ app.pipeline_version }})</small>-->
+<!--            </div>-->
+<!--        </center>-->
+    </div>
+
+    <div class="card" id="zip_download" style="position: fixed; bottom: 15px; right: 15px; z-index: 1000; display: none; width: 30em; ">
+        <div class="card-body" style="background-color: #000000; color: #ffffff; ">
+            <code style="font-size: 0.75em; color: #ffffff; " id="zip_download_progress"></code>
+        </div>
+    </div>
+
+    <script>
+        const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+        const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    </script>
+</body>
+</html>

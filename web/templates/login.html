@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+
+{% block title %}Login{% endblock %}
+
+{% block content %}
+
+<div class="card" style="width: 30rem; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); ">
+    <div class="card-body">
+        <form method="post" action="/login">
+            <div class="mb-3">
+                <label for="password" class="form-label">Password</label>
+                <input type="password" class="form-control" id="password" name="password" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Continue</button>
+        </form>
+    </div>
+</div>
+
+{% if show_msg %}
+<div class="alert alert-danger" role="alert">
+    {{ show_msg }}
+</div>
+{% endif %}
+
+{% endblock %}

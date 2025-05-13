@@ -1,0 +1,268 @@
+{% extends 'base.html' %}
+
+{% block title %}CHAMPSS Timing Monitor{% endblock %}
+
+{% block content %}
+    <div style="position: relative; width: 100%; ">
+        <div style="float: right;">
+            {% if warning_filter == 1 %}
+                <a href="/?dates={{ date_filter }}&tag={{ tag_filter }}&warning=0" class="badge rounded-pill text-bg-warning">#warning</a>
+            {% else %}
+                <a href="/?dates={{ date_filter }}&tag={{ tag_filter }}&warning=1" class="badge rounded-pill text-bg-light">#warning</a>
+            {% endif %}
+            <span style="color: #888; ">·</span>
+            {% if date_filter == "today" %}
+                <a href="/?dates=none&tag={{ tag_filter }}&warning={{  warning_filter }}" class="badge rounded-pill text-bg-primary">#today</a>
+            {% else %}
+                <a href="/?dates=today&tag={{ tag_filter }}&warning={{  warning_filter }}" class="badge rounded-pill text-bg-light">#today</a>
+            {% endif %}
+            {% if date_filter == "week" %}
+                <a href="/?dates=none&tag={{ tag_filter }}&warning={{  warning_filter }}" class="badge rounded-pill text-bg-success">#week</a>
+            {% else %}
+                <a href="/?dates=week&tag={{ tag_filter }}&warning={{  warning_filter }}" class="badge rounded-pill text-bg-light">#week</a>
+            {% endif %}
+            <span style="color: #888; ">·</span>
+            {% for this_tag in sources.tags %}
+                {% if tag_filter == this_tag %}
+                    <a href="/?dates={{ date_filter }}&tag=all&warning={{  warning_filter }}" class="badge rounded-pill text-bg-dark">#{{ this_tag }}</a>
+                {% else %}
+                    <a href="/?dates={{ date_filter }}&tag={{ this_tag }}&warning={{  warning_filter }}" class="badge rounded-pill text-bg-light">#{{ this_tag }}</a>
+                {% endif %}
+            {% endfor %}
+        </div>
+        <h3>Dashboard</h3>
+    </div>
+    {% if date_filter == "none" and tag_filter == "all" %}
+        <div class="card" style="margin-bottom: 15px; " xmlns="http://www.w3.org/1999/html">
+            <div class="card-body">
+                <div class="heatmap" id="heatmap"></div>
+                <small style="float: left; position: absolute; font-size: 0.75em; ">Number of TOAs the pipeline has processed for each day. </small>
+                <div class="heatmap" id="heatmap_legend" style="flex-direction: row-reverse; height: 15px; "></div>
+            </div>
+        </div>
+    {% endif %}
+    <script>
+        var values = {{ sources.heatmap["val_normalized"] | safe }};
+        var counts = {{ sources.heatmap["val"] | safe }};
+        var dates = {{ sources.heatmap["key"] | safe }};
+
+        function generateHeatmap() {
+            const heatmap = document.getElementById("heatmap");
+
+            for (let i = 0; i < values.length; i++) {
+                const square = document.createElement("a");
+                square.classList.add("square");
+                square.setAttribute("value", values[i]);
+
+                if(values[i] > 1) {
+                    values[i] = 1;
+                }
+
+                if (values[i] === 0) {
+                    square.style.backgroundColor = "#eee";
+                    square.style.opacity = 1;
+                } else {
+                    square.style.backgroundColor = "#216e39";
+                    // square.style.backgroundColor = "#000";
+                    square.style.opacity = values[i] / 1;
+                }
+
+                if(square.style.opacity < 0.2) {
+                    square.style.opacity = 0.2;
+                }
+
+                square.setAttribute("data-bs-toggle", "tooltip");
+                square.setAttribute("data-bs-placement", "top");
+
+                if(counts[i] > 0){
+                    square.setAttribute("data-bs-title", counts[i] + " TOA(s) on " + dates[i]);
+                } else {
+                    square.setAttribute("data-bs-title", "No TOA on " + dates[i]);
+                }
+
+                heatmap.appendChild(square);
+            }
+
+            const legend_data = [0, 0.2, 0.4, 0.6, 0.8, 1]
+            const legend = document.getElementById("heatmap_legend");
+
+            // add "less" on the left in text
+            const less = document.createElement("span");
+            less.style = "font-size: 0.75em; padding-left: 7px; padding-right: 7px;"
+            less.innerHTML = "Less";
+            legend.appendChild(less);
+
+            for (let i = 0; i < legend_data.length; i++) {
+                const square = document.createElement("a");
+                square.classList.add("square");
+                square.setAttribute("value", legend_data[i]);
+
+                if (legend_data[i] === 0) {
+                    square.style.backgroundColor = "#eee";
+                    square.style.opacity = 0.75;
+                } else {
+                    // square.style.backgroundColor = "#216e39";
+                    square.style.backgroundColor = "#216e39";
+                    // square.style.backgroundColor = "#000";
+                    square.style.opacity = legend_data[i] / 1;
+                }
+
+                if(square.style.opacity < 0.2) {
+                    square.style.opacity = 0.2;
+                }
+
+                legend.appendChild(square);
+            }
+
+            // add "more" on the right in text
+            const more = document.createElement("span");
+            more.style = "font-size: 0.75em; padding-left: 7px; padding-right: 7px;";
+            more.innerHTML = " More";
+            legend.appendChild(more);
+
+        }
+
+        generateHeatmap();
+    </script>
+    <div class="row">
+        {% for this_source in sources %}
+            {% if tag_filter == "all" or tag_filter == this_source.config["metadata"]["tag"] %}
+                <div class="col-lg-6" id="div_{{this_source.psr_id_esc}}" style="cursor:pointer;">
+                    <div class="card" id="card_{{this_source.psr_id_esc}}" style="margin-bottom: 15px; " xmlns="http://www.w3.org/1999/html">
+                        <div class="card-body">
+                            <small style="float: right; ">Updated on {{this_source.get_last_updated()}}</small>
+                            <h4 style="margin-bottom: 0;">{{this_source.psr_id}} 
+                                <span class="badge text-bg-dark rounded-pill index-tag">#{{this_source.config["metadata"]["tag"]}}</span>
+                                <span class="badge text-bg-success rounded-pill index-tag" style="display: none; " id="tag_week_{{this_source.psr_id_esc}}">#week</span>
+                                <span class="badge text-bg-primary rounded-pill index-tag" style="display: none; " id="tag_today_{{this_source.psr_id_esc}}">#today</span>
+                                <span class="badge text-bg-warning rounded-pill index-tag" style="display: none; " id="tag_warnings_{{this_source.psr_id_esc}}">#warning</span>
+                            </h4>
+
+                            <div class="collapse" id="diagnostic_pdf_{{this_source.psr_id_esc}}">
+                                <br>
+                                <center></center><small>Double-click to view full diagnostic information.</small></center>
+                                <object id="diagnostic_pdf" data="/diagnostic/{{this_source.psr_id}}/pdf" type="application/pdf" style="width: 100%; aspect-ratio: 1.77; border: 0; border-radius: 5px; "></object>
+                            </div>
+
+                            <div id="resids_{{this_source.psr_id_esc}}" style="width:100%;height:5em;"></div>
+
+                            <script>
+                                // $('#div_{{this_source.psr_id_esc}}').on('click', function() {
+                                //     // If already open, go to top of page
+                                //     if ($('#diagnostic_pdf_{{this_source.psr_id_esc}}').hasClass('show')) {
+                                //         $('.collapse').collapse('hide');
+                                //         return
+                                //     }
+                                //
+                                //     $('.collapse').collapse('hide');
+                                //     $('#diagnostic_pdf_{{this_source.psr_id_esc}}').collapse('toggle');
+                                //     console.log('clicked');
+                                // });
+                                //
+                                // $('#div_{{this_source.psr_id_esc}}').on('dblclick', function() {
+                                //     window.location.href='/diagnostic/{{this_source.psr_id}}';
+                                // });
+
+                                $('#div_{{this_source.psr_id_esc}}').on('click', function() {
+                                    window.open('/diagnostic/{{this_source.psr_id}}', '_blank');
+                                });
+                            </script>
+
+                            <script>
+                                var resids = {{this_source.get_resids() | safe}};
+                                var resids_plot = {
+                                    x: resids["mjd"],
+                                    y: resids["val"],
+                                    error_y: {
+                                        type: 'data',
+                                        array: resids["err"],
+                                        visible: true
+                                    },
+                                    mode: 'markers',
+                                    type: 'scatter',
+                                    marker: {
+                                        color: 'black',
+                                        size: 5
+                                    }
+                                };
+                                var resids_layout = {
+                                    // title: 'Residuals for {{this_source.psr_id}}',
+                                    xaxis: {
+                                        // title: 'MJD',
+                                        showticklabels: false,
+                                        showline: false,
+                                        showgrid: false,
+                                        zeroline: true
+                                    },
+                                    yaxis: {
+                                        // title: 'Residual (us)',
+                                        showticklabels: false,
+                                        showline: false,
+                                        showgrid: false,
+                                        zeroline: true
+                                    },
+                                    showlegend: false,
+                                    margin: {'t':0,'l':0,'b':0,'r':0}
+                                };
+
+                                var zero_line = {
+                                    x: [resids["mjd"][0], resids["mjd"][resids["mjd"].length-1]],
+                                    y: [0, 0],
+                                    mode: 'lines',
+                                    type: 'scatter',
+                                    line: {
+                                        color: 'grey',
+                                        width: 1
+                                    }
+                                };
+
+                                var config = {
+                                    responsive: true
+                                };
+
+                                Plotly.newPlot('resids_{{this_source.psr_id_esc}}', [zero_line, resids_plot], resids_layout, config);
+                                
+                                if(dates.length > 7) {
+                                    if(resids.updated > dates[dates.length-7]) {
+                                        $('#card_{{this_source.psr_id_esc}}').addClass('border-success');
+                                        $('#tag_week_{{this_source.psr_id_esc}}').show();
+                                    } else {
+                                        {% if date_filter == "week" %}
+                                            $('#div_{{this_source.psr_id_esc}}').hide();
+                                        {% endif %}
+                                    }
+                                }
+                                
+                                console.log(dates[dates.length-1])
+                                console.log(resids.updated)
+
+                                if(resids.updated >= dates[dates.length-1]) {
+                                    $('#card_{{this_source.psr_id_esc}}').removeClass('border-success');
+                                    $('#card_{{this_source.psr_id_esc}}').addClass('border-primary');
+                                    $('#tag_today_{{this_source.psr_id_esc}}').show();
+                                } else {
+                                    {% if date_filter == "today" %}
+                                        $('#div_{{this_source.psr_id_esc}}').hide();
+                                    {% endif %}
+                                }
+
+                                if({{ this_source.checker_warnings_length }} > 0) {
+                                    $('#tag_warnings_{{this_source.psr_id_esc}}').show();
+                                } else {
+                                    {% if warning_filter == 1 %}
+                                        $('#div_{{this_source.psr_id_esc}}').hide();
+                                    {% endif %}
+                                }
+                            </script>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        {% endfor %}
+        <div id="test"></div>
+    </div>
+<script>
+    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+    const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+</script>
+{% endblock %}

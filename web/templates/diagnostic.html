@@ -1,0 +1,883 @@
+{% extends 'base.html' %}
+
+{% block title %}Diagnostic information for {{source_id}}{% endblock %}
+
+{% block content %}
+
+    <div class="row">
+        {% if sources[source_id].checker_warnings != [] %}
+            <div class="col-md-12">
+                {% for warning in sources[source_id].checker_warnings %}
+                    {% if warning["level"] == 0 %}
+                        <div class="alert alert-success" role="alert">
+                            <b>Info:</b> {{ warning["message"] }}
+                        </div>
+                    {% elif warning["level"] == 1 %}
+                        <div class="alert alert-warning" role="alert">
+                            <b>Warning:</b> {{ warning["message"] }}
+                        </div>
+                    {% elif warning["level"] == 2 %}
+                        <div class="alert alert-danger" role="alert">
+                            <b>Critical:</b> {{ warning["message"] }}
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+            <!-- <script>
+                $(document).ready(function() {
+                    $('html, body').animate({
+                        scrollTop: $("#div_title").offset().top - 15
+                    }, 1000);
+                });
+            </script> -->
+        {% endif %}
+        <div class="col-md-12" id="div_title">
+            <div style="float: right">
+                <div class="btn-group" role="group">
+                    <!-- <button type="button" class="btn btn-outline-dark btn-sm" id="show_pulse_profiles">Pulse Profiles</button>
+                    <button type="button" class="btn btn-outline-dark btn-sm" data-bs-toggle="modal" data-bs-target="#processing_log_modal">Processing Log</button> -->
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-outline-dark btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false" data-bs-reference="parent">
+                            Tools
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><h6 class="dropdown-header">Diagnostic</h6></li>
+                            <li><a class="dropdown-item" href="#" id="show_pulse_profiles">Pulse Profiles Browser</a></li>
+                            <li><a class="dropdown-item" href="#" id="show_dealias_info" data-bs-toggle="modal" data-bs-target="#dealias_diagnostics_modal">Dealias Solution Diagnostics </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><h6 class="dropdown-header">Debug</h6></li>
+                            <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#processing_log_modal">Processing Log Viewer</a></li>
+                        </ul>
+                    </div>
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-dark btn-sm" id="download_all">Download</button>
+                        <button type="button" class="btn btn-dark btn-sm dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false" data-bs-reference="parent">
+                            <span class="visually-hidden">Toggle Dropdown</span>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><h6 class="dropdown-header">Diagnostic</h6></li>
+                            <li><a class="dropdown-item" href="{{ request.base_url }}/pdf" target="_blank">Diagnostic Plot (.pdf)</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><h6 class="dropdown-header">Timing</h6></li>
+                            <li><a class="dropdown-item" href="{{ request.base_url }}/parfile">Ephemeris Parfile (.par)</a></li>
+                            <li><a class="dropdown-item" href="{{ request.base_url }}/timfile">TOA Timfile (.tim)</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><h6 class="dropdown-header">Debug</h6></li>
+                            <li><a class="dropdown-item" href="{{ request.base_url }}/dbfile">Database File (.sqlite3.db)</a></li>
+                        </ul>
+                    </div>
+                </div>
+                <!-- <button type="button" class="btn btn-outline-primary btn-sm" id="btn_download_diagnostic">Download Diagnostic PDF</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="btn_download_parfile">Download Parfile</button> -->
+            </div>
+            <h3>{{ source_id }} <small style="font-size: 0.5em;"><span class="badge text-bg-dark rounded-pill" style="position: absolute; font-size: 0.45em; transform: translateY(0.75em);">#{{sources[source_id].config["metadata"]["tag"]}}</span> Last updated on {{ sources[source_id].get_last_updated() }} </small></h3>
+        </div>
+        <hr>
+        <h5>Summary</h5>
+        <div class="col-md-4">
+            <pre style="font-size: 0.70em;" id="pre_parfile">{{ sources[source_id].get_parfile() }}</pre>
+            <div id="dp_left" style="display: none; ">
+                <pre style="font-size: 0.70em; " id="pre_parfile">{{ sources[source_id].get_summary().split("Derived Parameters:")[1] }}</pre>
+            </div>
+        </div>
+        <div class="col-md-8">
+            <div id="diagnostic_pdf_div">
+                <div class="card">
+                    <div class="card-body" style="width: 100%; aspect-ratio: 1.70; cursor: pointer; ">
+<!--                        <object id="diagnostic_pdf" data="{{ request.base_url }}/pdf" type="application/pdf" style="width: 100%; aspect-ratio: 1.77; border: 0; border-radius: 5px; "></object>-->
+                        <div id="diagnostic_pdf" style="width: 100%; border: 0; border-radius: 5px; display: none; "></div>
+                        <div id="diagnostic_pdf_placeholder" >
+                            <div style="position: absolute; bottom: 10px; right: 0px; ">
+                                <button class="btn btn-dark btn-sm" type="button" style="scale: 0.75; border-radius: 5em;" disabled>
+                                    <span class="spinner-grow spinner-grow-sm" aria-hidden="true"></span>
+                                    <span role="status">Loading diagnostics data...</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="dp_right" style="display: none; ">
+                <br>
+                <pre style="font-size: 0.70em; text-wrap: auto; ">{{ sources[source_id].get_summary().split("Derived Parameters:")[1].strip().replace("\n", "    ") }}</pre>
+            </div>
+        </div>
+        <hr style="margin-top: 30px; ">
+        <h5>
+            Source Coincidences
+            <div style="float: right; font-size: 0.5em; transform: scale(0.75, 0.75); transform-origin: right; ">
+                <div class="btn-group" role="group" aria-label="Basic example">
+                    <button type="button" id="show_dss" class="btn btn-light btn-sm">DSS/Optical</button>
+                    <button type="button" id="show_wise" class="btn btn-light btn-sm">WISE/HII</button>
+                    <button type="button" id="show_fermi" class="btn btn-light btn-sm">Fermi/𝛾-ray</button>
+                </div>
+            </div>
+        </h5>
+        <div class="row" style="margin-bottom: 15px; padding-right: 0;">
+            <div class="col-md-4" style="border-radius: 0.5rem; " id="atlas_view">
+                <div class="card" style="height: 400px; ">
+                    <div class="card-body">
+                        <div id="aladin_lite_dss_card" style="height: 100%; display: none;">
+                            <div id='aladin_lite_dss_content' style='width: 100%; height: 100%; display: none; '></div>
+                            <!-- <div id="aladin_lite_dss_placeholder" style="position: absolute; bottom: 10px; right: 0px; ">
+                                <button class="btn btn-dark btn-sm" type="button" style="scale: 0.75; border-radius: 5em;" disabled>
+                                    <span class="spinner-grow spinner-grow-sm" aria-hidden="true"></span>
+                                    <span role="status">Loading DSS data...</span>
+                                </button>
+                            </div> -->
+                        </div>
+                        <div id="aladin_lite_halpha_card" style="height: 100%; display: none;">
+                            <div id='aladin_lite_halpha_content' style='width: 100%; height: 100%; display: none; '></div>
+                            <!-- <div id="aladin_lite_halpha_placeholder" style="position: absolute; bottom: 10px; right: 0px; ">
+                                <button class="btn btn-dark btn-sm" type="button" style="scale: 0.75; border-radius: 5em;" disabled>
+                                    <span class="spinner-grow spinner-grow-sm" aria-hidden="true"></span>
+                                    <span role="status">Loading Hɑ data...</span>
+                                </button>
+                            </div> -->
+                        </div>
+                        <div id="aladin_lite_fermi_card" style="height: 100%; display: none;">
+                            <div id='aladin_lite_fermi_content' style='width: 100%; height: 100%; display: none; '></div>
+                            <!-- <div id="aladin_lite_fermi_placeholder" style="position: absolute; bottom: 10px; right: 0px; ">
+                                <button class="btn btn-dark btn-sm" type="button" style="scale: 0.75; border-radius: 5em;" disabled>
+                                    <span class="spinner-grow spinner-grow-sm" aria-hidden="true"></span>
+                                    <span role="status">Loading Fermi data...</span>
+                                </button>
+                            </div> -->
+                        </div>
+                    </div>
+                    <div id="aladin_lite_placeholder" style="position: absolute; bottom: 10px; right: 0px; ">
+                        <button class="btn btn-dark btn-sm" type="button" style="scale: 0.75; border-radius: 5em;" disabled>
+                            <span class="spinner-grow spinner-grow-sm" aria-hidden="true"></span>
+                            <span role="status">Loading atlas data...</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-8" style="padding-right: 0; ">
+                <div class="card" style="height: 400px; margin-bottom: 15px; width: 100%; overflow: scroll; ">
+                    <div class="card-body">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Name</th>
+                                    <th scope="col">R.A. (deg)</th>
+                                    <th scope="col">Dec. (deg)</th>
+                                    <th scope="col">Catalog</th>
+                                    <th scope="col">Distance (arcsec)</th>
+                                    <th scope="col">Notes</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for source in sources[source_id].source_coincidences: %}
+                                    <tr class='table__{{ source["catalog"].replace(" ", "_") }}' style="cursor: pointer; ">
+                                        <td><a href="javascript:aladin.gotoRaDec({{ source["ra"] }}, {{ source["dec"] }}, 0.5);">{{ source["name"] }}</a></td>
+                                        <td>{{ deg2dms(source["ra"] / 360 * 24) }}</td>
+                                        <td>{{ deg2dms(source["dec"]) }}</td>
+                                        <td>{{ source["catalog"] }}</td>
+                                        <td>{{ round(source["distance"] * 3600, 2) }}</td>
+                                        <td>{{ source["notes"] }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        <div style="text-align: center; color: #888; ">
+                        {% if sources[source_id].source_coincidences == [] %}
+                                <small><i>No source coincidences found within {{ sources[source_id].source_coincidences_radius }} deg / {{ sources[source_id].source_coincidences_radius * 3600 }} arcsec.</i></small>
+                        {% else %}
+                                <small><i>{{ sources[source_id].source_coincidences | length }} source coincidences found within {{ sources[source_id].source_coincidences_radius }} deg / {{ sources[source_id].source_coincidences_radius * 3600 }} arcsec.</i></small>
+                        {% endif %}
+                    </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <hr style="margin-top: 30px; ">
+        <h5>Diagnostics</h5>
+        <div class="col-md-12">
+            <div class="card" style="margin-bottom: 15px; ">
+                <div class="card-body" style="padding: 3px; ">
+                    <div style="width: 100%; height: 300px; ">
+                        <div id="residuals" style="width: 100%; height: 100%; "></div>
+                    </div>
+                </div>
+
+                <script>
+                    var resids = {{ sources[source_id].get_resids() | safe }};
+                    var trace = {
+                        x: resids["mjd"],
+                        y: resids["val"],
+                        error_y: {
+                            type: 'data',
+                            array: resids["err"],
+                            visible: true
+                        },
+                        mode: 'markers',
+                        type: 'scatter',
+                        marker: {
+                            color: 'black'
+                        }
+                    };
+                    var layout = {
+                        title: 'Timing Residuals',
+                        xaxis: {
+                            title: 'MJD',
+                            showline: true,
+                            showgrid: true,
+                            zeroline: true, 
+                            exponentformat: 'none'
+                        },
+                        yaxis: {
+                            title: 'Residuals [phase]',
+                            showline: true,
+                            showgrid: true,
+                            zeroline: true, 
+                            exponentformat: 'power'
+                        },
+                        showlegend: false,
+                        margin: {'t':50,'l':110,'b':60,'r':40}
+                    };
+                    var config = {
+                        responsive: true
+                    };
+                    Plotly.newPlot('residuals', [trace], layout, config);
+                </script>
+            </div>
+        </div>
+        <div class="col-md-6">
+            {% for param in sources[source_id].get_statistics(): %}
+                <div class="card" style="margin-bottom: 15px; ">
+                    <div class="card-body" style="padding: 3px; ">
+                        <div style="width: 100%; height: 300px; ">
+                            <div id="stat_{{ param }}" style="width: 100%; height: 100%; "></div>
+                        </div>
+                    </div>
+                </div>
+                <script>
+                    var display_name = "{{ param }}";
+                    var label_name = "{{ param }}";
+                    if(display_name == "chi2") {
+                        display_name = "Chi-squared";
+                        label_name = "χ²";
+                    } else if(display_name == "chi2r") {
+                        display_name = "Chi-squared Reduced";
+                        label_name = "χ² Reduced";
+                    } else if(display_name == "rms") {
+                        display_name = "Root Mean Square";
+                        label_name = "RMS [phase]";
+                    } 
+                    var trace = {
+                        x: {{ sources[source_id].get_statistics()[param]["mjd"] | safe}},
+                        y: {{ sources[source_id].get_statistics()[param]["val"] | safe}},
+                        mode: 'markers',
+                        type: 'scatter',
+                        marker: {
+                            color: 'black'
+                        }
+                    };
+                    var layout = {
+                        title: display_name,
+                        xaxis: {
+                            title: 'MJD',
+                            showline: true,
+                            showgrid: true,
+                            zeroline: true, 
+                            exponentformat: 'none'
+                        },
+                        yaxis: {
+                            title: label_name,
+                            showline: true,
+                            showgrid: true,
+                            zeroline: true, 
+                            exponentformat: 'power'
+                        },
+                        showlegend: false,
+                        margin: {'t':50,'l':110,'b':60,'r':40}
+                    };
+                    var config = {
+                        responsive: true
+                    };
+                    Plotly.newPlot('stat_{{ param }}', [trace], layout, config);
+                </script>
+            {% endfor %}
+        </div>
+        <div class="col-md-6">
+            {% for param in sources[source_id].parameter_info: %}
+                <div class="card" style="margin-bottom: 15px; ">
+                    <div class="card-body" style="padding: 3px; ">
+                        <div style="width: 100%; height: 300px; ">
+                            <div id="param_{{ param }}" style="width: 100%; height: 100%; "></div>
+                        </div>
+                    </div>
+                </div>
+                <script>
+                    var display_name = "{{ param }}";
+                    var label_name = "{{ param }}";
+                    if(display_name == "RAJ") {
+                        display_name = "Right Ascension";
+                        label_name = "RA [deg]";
+                    } else if(display_name == "DECJ") {
+                        display_name = "Declination";
+                        label_name = "Dec [deg]";
+                    } else if(display_name == "F0") {
+                        display_name = "Spin Frequency";
+                        label_name = "F0 [Hz]";
+                    } else if(display_name == "F1") {
+                        display_name = "Spin Frequency Derivative";
+                        label_name = "F1 [Hz/s]";
+                    } else if(display_name == "F2") {
+                        display_name = "Spin Frequency 2nd Derivative";
+                        label_name = "F2 [Hz/s²]";
+                    } else if(display_name == "F3") {
+                        display_name = "Spin Frequency 3rd Derivative";
+                        label_name = "F3 [Hz/s³]";
+                    } else if(display_name == "DM") {
+                        display_name = "Dispersion Measure";
+                        label_name = "DM [pc/cm³]";
+                    } 
+
+                    var trace = {
+                        x: {{ sources[source_id].parameter_info[param]["mjd"] | safe}},
+                        y: {{ sources[source_id].parameter_info[param]["val"] | safe}},
+                        mode: 'markers',
+                        type: 'scatter',
+                        marker: {
+                            color: 'black'
+                        }
+                    };
+                    var layout = {
+                        title: display_name, 
+                        xaxis: {
+                            title: 'MJD',
+                            showline: true,
+                            showgrid: true,
+                            zeroline: true, 
+                            exponentformat: 'none'
+                        },
+                        yaxis: {
+                            title: label_name,
+                            showline: true,
+                            showgrid: true,
+                            zeroline: true, 
+                            exponentformat: 'power'
+                        },
+                        showlegend: false,
+                        margin: {'t':50,'l':110,'b':60,'r':40}
+                    };
+                    var config = {
+                        responsive: true
+                    };
+                    Plotly.newPlot('param_{{ param }}', [trace], layout, config);
+                </script>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="modal modal-xl" id="processing_log_modal" tabindex="-1" aria-labelledby="processing_log_modal" aria-hidden="true" style="backdrop-filter: blur(15px); cursor: pointer; ">
+        <div class="modal-dialog" style="height: 95%;  max-width: 95%; ">
+            <div class="modal-content" style="height: 100%; cursor: default; ">
+                <div class="modal-body" style="height: 100%; padding: 6px; ">
+                    <div style="height: 100%; ">
+                        <pre id="processing_log_div" style="height: 100%; overflow-y: scroll; font-size: 12px; cursor: text; "></pre>
+                    </div>
+                    <small style="text-align: center; color: #fff; opacity: 75%; font-weight: 600; font-size: 12px; cursor: pointer; margin-top: 0.72em; position: absolute; " onclick="$('#processing_log_modal').modal('hide'); "><i>Click here or press ESC to close...</i></small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal modal-xl" id="dealias_diagnostics_modal" tabindex="-1" aria-labelledby="dealias_diagnostics_modal" aria-hidden="true" style="backdrop-filter: blur(15px); cursor: pointer; ">
+        <div class="modal-dialog" style="height: 95%;  max-width: 95%; ">
+            <div class="modal-content" style="cursor: default; height: 100%; background-color: unset; border: none; ">
+                <div class="modal-body" style="height: 100%; padding: 6px; background-color: unset; border: none; z-index: 999; ">
+                    <div class="row" style="height: 100%; ">
+                        <div class="col-md-10" style="position: relative; left: 50%; transform: translateX(-50%); ">
+                            <div class="card">
+                                <div class="card-body">
+                                    <!-- <iframe src="{{ request.base_url }}/dealias/diagnostics" style="width: 100%; height: 100px; "></iframe> -->
+                                    <div id="dealias_diagnostics_pdf_div" style="width: 100%; height: 100%; aspect-ratio: 1.5; ">
+                                        <div id="dealias_diagnostics_pdf" style="display: none; width: 100%; height: 100%; "></div>
+                                        <div id="dealias_diagnostics_pdf_placeholder" style="position: absolute; bottom: 10px; right: 0px; ">
+                                            <button class="btn btn-dark btn-sm" type="button" style="scale: 0.75; border-radius: 5em;" disabled>
+                                                <span class="spinner-grow spinner-grow-sm" aria-hidden="true"></span>
+                                                <span role="status">Loading diagnostics data...</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                     <script>
+                                        function load_dealias_diagnostics() {
+                                            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://mozilla.github.io/pdf.js/build/pdf.worker.mjs';
+
+                                            // pdfjsLib.getDocument({data: pdf_data}).promise.then(function(pdf) {
+                                            var loadingTask = pdfjsLib.getDocument("{{ request.base_url }}/dealias/diagnostics");
+                                            loadingTask.promise.then(function(pdf) {
+                                                pdf.getPage(1).then(function(page) {
+                                                    var scale = 2;
+                                                    var viewport = page.getViewport({ scale: scale });
+                                                    var canvas = document.createElement('canvas');
+                                                    var context = canvas.getContext('2d');
+                                                    canvas.height = viewport.height;
+                                                    canvas.width = viewport.width;
+                                                    canvas.style.width = '100%';
+                                                    var renderContext = {
+                                                        canvasContext: context,
+                                                        viewport: viewport
+                                                    };
+                                                    page.render(renderContext).promise.then(function() {
+                                                        $("#dealias_diagnostics_pdf").empty();
+                                                        document.getElementById('dealias_diagnostics_pdf').appendChild(canvas);
+                                                        $("#dealias_diagnostics_pdf_placeholder").hide();
+                                                        setTimeout(() => {
+                                                            $("#dealias_diagnostics_pdf").fadeIn();
+                                                        }, 0);
+                                                    });
+                                                });
+                                            });
+                                        }
+
+                                        $("#show_dealias_info").on("click", function() {
+                                            load_dealias_diagnostics();
+                                        });
+                                     </script>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-10" style="position: relative; left: 50%; transform: translateX(-50%); margin-top: 1em; ">
+                            <div class="card" style="height: 100%; ">
+                                <div class="card-body" style="height: 100%; ">
+                                    <pre id="dealias_log_div" style="height: 100%; overflow-y: scroll; font-size: 12px; cursor: text; "></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <small style="top: 1em; left: 1em; color: #fff; opacity: 75%; font-weight: 600; font-size: 12px; cursor: pointer; position: fixed; height: 100%; width: 100%; z-index: 998;" onclick="$('#dealias_diagnostics_modal').modal('hide'); "></small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        $("#show_pulse_profiles").on("click", function() {
+            // default window size
+            var win_width = 1920;
+            var win_height = 1080;
+
+            // if the screen is smaller than 1920x1080, then resize the window
+            if (screen.width < 1920) {
+                win_width = screen.width;
+            }
+            if (screen.height < 1080) {
+                win_height = screen.height;
+            }
+
+            // open the pulse profiles browser
+            let newWin = window.open("{{ request.base_url }}/pulse_profiles", "pp_browser_{{ sources[source_id].psr_id_esc }}", 'width=1920,height=1080');
+        });
+    </script>
+
+    <script>
+        function diagnostic_pdf_fullscreen() {
+            if ($("#diagnostic_pdf_div").attr("style")) {
+                $("#diagnostic_pdf_div").removeAttr("style");
+                return;
+            }
+            $("#diagnostic_pdf_div").css("width", "100%");
+            $("#diagnostic_pdf_div").css("height", "100%");
+            $("#diagnostic_pdf_div").css("position", "fixed");
+            $("#diagnostic_pdf_div").css("top", "0");
+            $("#diagnostic_pdf_div").css("left", "0");
+            $("#diagnostic_pdf_div").css("padding", "3%");
+            $("#diagnostic_pdf_div").css("z-index", "1000");
+            $("#diagnostic_pdf_div").css("backdrop-filter", "blur(15px)");
+            $("#diagnostic_pdf_div").css("background-color", "rgba(0, 0, 0, 0.5)");
+            $("#diagnostic_pdf_div").css("overflow-y", "scroll");
+            $("#diagnostic_pdf_div").css("overflow-x", "hidden");
+        }
+
+        $("#diagnostic_pdf_div").on("click", function() {
+            diagnostic_pdf_fullscreen();
+        });
+    </script>
+
+    <script type="module">
+        var pdf_data = atob("{{ sources[source_id].get_diagnostic_pdf_base64() | safe }}");
+        var { pdfjsLib } = globalThis;
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://mozilla.github.io/pdf.js/build/pdf.worker.mjs';
+
+        pdfjsLib.getDocument({data: pdf_data}).promise.then(function(pdf) {
+            pdf.getPage(1).then(function(page) {
+                var scale = 2;
+                var viewport = page.getViewport({ scale: scale });
+                var canvas = document.createElement('canvas');
+                var context = canvas.getContext('2d');
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+                canvas.style.width = '100%';
+                var renderContext = {
+                    canvasContext: context,
+                    viewport: viewport
+                };
+                page.render(renderContext).promise.then(function() {
+                    document.getElementById('diagnostic_pdf').appendChild(canvas);
+                    $("#diagnostic_pdf_placeholder").hide();
+                    setTimeout(() => {
+                        $("#diagnostic_pdf").fadeIn();
+                    }, 0);
+                });
+            });
+        });
+    </script>
+
+    <!-- <script>
+        function saveAs(blob, filename) {
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement("a");
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(function() {
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            }, 0);
+        }
+        $("#btn_download_diagnostic").on("click", function() {
+            window.open("{{ request.base_url }}/pdf", "_blank");
+        });
+        $("#btn_download_parfile").on("click", function() {
+            var parfile_content = $("#pre_parfile").text()
+            var blob = new Blob([parfile_content], { type: "text/plain;charset=utf-8" });
+            saveAs(blob, "{{ source_id }}.par");
+        });
+    </script> -->
+
+    <script type="module" type="text/javascript">
+    import { AnsiUp } from 'https://cdn.jsdelivr.net/npm/ansi_up@6.0.2/ansi_up.min.js'
+    var ansi_up = new AnsiUp();
+    var processing_log = `{{ sources[source_id].get_processing_log(to_json=False).replace("\n", "\\n") | safe }}`;
+    $("#processing_log_div").html(ansi_up.ansi_to_html(processing_log));
+    var dealias_log = `{{ sources[source_id].get_dealias_log(to_json=False).replace("\n", "\\n") | safe }}`;
+    $("#dealias_log_div").html(ansi_up.ansi_to_html(dealias_log));
+    </script>
+
+    <script>
+        function show_derived_parameters() {
+            // if height of the parfile column is greater than the diagnostic pdf column, then show the derived parameters on the right
+            if ($("#pre_parfile").height() >= $("#diagnostic_pdf_div").height()) {
+                $("#dp_left").hide();
+                $("#dp_right").fadeIn();
+            } else {
+                $("#dp_right").hide();
+                $("#dp_left").fadeIn();
+            }
+        }
+
+        $(document).ready(function() {
+            setTimeout(() => {
+                show_derived_parameters();
+            }, 300);
+            $(window).resize(function() {
+                show_derived_parameters();
+            });
+        });
+    </script>
+
+    <script>
+        $("#download_all").on("click", function() {
+            var urls = [
+                "{{ request.base_url }}/pdf",
+                "{{ request.base_url }}/parfile",
+                "{{ request.base_url }}/timfile",
+                "{{ request.base_url }}/dbfile"
+            ];
+            var filenames = [
+                "{{ source_id }}/timing_diagnostics.pdf",
+                "{{ source_id }}/pulsar.par",
+                "{{ source_id }}/pulsar.tim",
+                "{{ source_id }}/champss_timing.sqlite3.db"
+            ];
+            zip_download(
+                'champss_timing_{{ source_id }}__' + new Date().toISOString().replace(/T/, ' ').replace(/\..+/, '').replace(/:/g, '-'),
+                filenames,
+                urls
+            );
+        });
+    </script>
+
+
+    <script src='https://aladin.cds.unistra.fr/AladinLite/api/v3/latest/aladin.js' charset='utf-8'></script>
+    <script>
+        var aladin;
+        var psr_id = "{{ source_id }}";
+        var source_ra = {{ sources[source_id].last_timing_info["fitted_params"]["RAJ"] }} / 24 * 360;
+        var source_dec = {{ sources[source_id].last_timing_info["fitted_params"]["DECJ"] }};
+        var source_pos_unc = {{sources[source_id].get_source_position_error() | safe }};
+        var source_coincidences = {{ sources[source_id].source_coincidences | safe }};
+        var dss_loaded = false;
+        var wise_loaded = false;
+        var fermi_loaded = false;
+
+        function load_dss() {
+            if (dss_loaded) {
+                return;
+            }
+
+            A.init.then(() => {
+                // initialize Aladin Lite
+                aladin = A.aladin('#aladin_lite_dss_content', {fov:0.75, target: `${source_ra} ${source_dec}`, survey: 'P/DSS2/color'});
+
+                // mark pulsar with plus
+                var cat_source = A.catalog({name: "Timing Position", shape: "cross", color: '#5d5', sourceSize: 10});
+                aladin.addCatalog(cat_source);
+                cat_source.addSources([
+                    A.source(
+                        source_ra,
+                        source_dec,
+                        {
+                            popupTitle: psr_id,
+                            popupDesc: "Timing Position"
+                        }
+                    )
+                ]);
+
+                // create error ellipse
+                var beam_overlay = A.graphicOverlay({name: "CHIME Beam Size / Query Region", color: '#5d5', lineWidth: 0.1});
+                aladin.addOverlay(beam_overlay);
+                beam_overlay.add(A.ellipse(source_ra, source_dec, 0.25, 0.25, 0, {lineWidth: 0.75}));
+                var pos_overlay = A.graphicOverlay({name: "Timing Position Uncertainty", color: '#5d5', lineWidth: 1});
+                aladin.addOverlay(pos_overlay);
+                pos_overlay.add(A.ellipse(source_ra, source_dec, source_pos_unc["DECJ"], source_pos_unc["RAJ"], 0));
+
+                // show coincidences
+                var cat_coincidence = A.catalog({name: 'Source Coincidences', sourceSize: 10, shape: 'x', color: 'red'});
+                aladin.addCatalog(cat_coincidence);
+                for (var i = 0; i < source_coincidences.length; i++) {
+                    if (source_coincidences[i]["catalog"] != "SIMBAD Query") {
+                        continue;
+                    }
+
+                    cat_coincidence.addSources([
+                    A.source(
+                        source_coincidences[i]["ra"],
+                        source_coincidences[i]["dec"],
+                        {
+                            popupTitle: source_coincidences[i]["catalog"] + ": " + source_coincidences[i]["name"],
+                            popupDesc: source_coincidences[i]["notes"]
+                        }
+                    )
+                    ]);
+                }
+
+                // show the content
+                // $("#aladin_lite_dss_placeholder").hide();
+                $("#aladin_lite_placeholder").hide();
+                $("#aladin_lite_dss_content").fadeIn();
+                
+                dss_loaded = true;
+            });
+        }
+        
+        function load_wise() {
+            if (wise_loaded) {
+                return;
+            }
+
+            A.init.then(() => {
+                // initialize Aladin Lite
+                aladin = A.aladin('#aladin_lite_halpha_content', {fov:0.75, target: `${source_ra} ${source_dec}`, survey: 'CDS/P/allWISE/color'});
+
+                // mark pulsar with plus
+                var cat_source = A.catalog({name: "Timing Position", shape: "cross", color: '#5d5', sourceSize: 10});
+                aladin.addCatalog(cat_source);
+                cat_source.addSources([
+                    A.source(
+                        source_ra,
+                        source_dec,
+                        {
+                            popupTitle: psr_id,
+                            popupDesc: "Timing Position"
+                        }
+                    )
+                ]);
+
+                // create error ellipse
+                var beam_overlay = A.graphicOverlay({name: "CHIME Beam Size / Query Region", color: '#5d5', lineWidth: 0.1});
+                aladin.addOverlay(beam_overlay);
+                beam_overlay.add(A.ellipse(source_ra, source_dec, 0.25, 0.25, 0, {lineWidth: 0.75}));
+                var pos_overlay = A.graphicOverlay({name: "Timing Position Uncertainty", color: '#5d5', lineWidth: 1});
+                aladin.addOverlay(pos_overlay);
+                pos_overlay.add(A.ellipse(source_ra, source_dec, source_pos_unc["DECJ"], source_pos_unc["RAJ"], 0));
+
+                // show coincidences
+                var cat_coincidence = A.catalog({name: 'Source Coincidences', sourceSize: 10, shape: 'x', color: 'red'});
+                aladin.addCatalog(cat_coincidence);
+                for (var i = 0; i < source_coincidences.length; i++) {
+                    if (source_coincidences[i]["catalog"] != "WISE") {
+                        continue;
+                    }
+                    
+                    cat_coincidence.addSources([
+                    A.source(
+                        source_coincidences[i]["ra"],
+                        source_coincidences[i]["dec"],
+                        {
+                            popupTitle: source_coincidences[i]["catalog"] + ": " + source_coincidences[i]["name"],
+                            popupDesc: source_coincidences[i]["notes"]
+                        }
+                    )
+                    ]);
+                }
+
+                // show the content
+                // $("#aladin_lite_halpha_placeholder").hide();
+                $("#aladin_lite_placeholder").hide();
+                $("#aladin_lite_halpha_content").fadeIn();
+
+                wise_loaded = true;
+            });
+        }
+        
+        function load_fermi() {
+            if (fermi_loaded) {
+                return;
+            }
+
+            A.init.then(() => {
+                // initialize Aladin Lite
+                aladin = A.aladin('#aladin_lite_fermi_content', {fov:0.75, target: `${source_ra} ${source_dec}`, survey: 'P/Fermi/color'});
+
+                // mark pulsar with plus
+                var cat_source = A.catalog({name: "Timing Position", shape: "cross", color: '#5d5', sourceSize: 10});
+                aladin.addCatalog(cat_source);
+                cat_source.addSources([
+                    A.source(
+                        source_ra,
+                        source_dec,
+                        {
+                            popupTitle: psr_id,
+                            popupDesc: "Timing Position"
+                        }
+                    )
+                ]);
+
+                // create error ellipse
+                var beam_overlay = A.graphicOverlay({name: "CHIME Beam Size / Query Region", color: '#5d5', lineWidth: 0.1});
+                aladin.addOverlay(beam_overlay);
+                beam_overlay.add(A.ellipse(source_ra, source_dec, 0.25, 0.25, 0, {lineWidth: 0.75}));
+                var pos_overlay = A.graphicOverlay({name: "Timing Position Uncertainty", color: '#5d5', lineWidth: 1});
+                aladin.addOverlay(pos_overlay);
+                pos_overlay.add(A.ellipse(source_ra, source_dec, source_pos_unc["DECJ"], source_pos_unc["RAJ"], 0));
+
+                // show coincidences
+                var cat_coincidence = A.catalog({name: 'Source Coincidences', sourceSize: 10, shape: 'x', color: 'red'});
+                aladin.addCatalog(cat_coincidence);
+                for (var i = 0; i < source_coincidences.length; i++) {
+                    if (source_coincidences[i]["catalog"] != "Fermi") {
+                        continue;
+                    }
+
+                    cat_coincidence.addSources([
+                    A.source(
+                        source_coincidences[i]["ra"],
+                        source_coincidences[i]["dec"],
+                        {
+                            popupTitle: source_coincidences[i]["catalog"] + ": " + source_coincidences[i]["name"],
+                            popupDesc: source_coincidences[i]["notes"]
+                        }
+                    )
+                    ]);
+                }
+
+                // show the content
+                // $("#aladin_lite_fermi_placeholder").hide();
+                $("#aladin_lite_placeholder").hide();
+                $("#aladin_lite_fermi_content").fadeIn();
+
+                fermi_loaded = true;
+            });
+        }
+    </script>
+
+    <script>
+        function reset_atlas_view() {
+            // hide all cards
+            $("#aladin_lite_dss_card").hide();
+            $("#aladin_lite_halpha_card").hide();
+            $("#aladin_lite_fermi_card").hide();
+
+            // reset button style
+            $("#show_dss").removeClass("btn-dark");
+            $("#show_dss").addClass("btn-light");
+            $("#show_wise").removeClass("btn-dark");
+            $("#show_wise").addClass("btn-light");
+            $("#show_fermi").removeClass("btn-dark");
+            $("#show_fermi").addClass("btn-light");
+
+            // reset table style
+            $(".table__SIMBAD_Query").css("font-weight", "unset");
+            $(".table__WISE").css("font-weight", "unset");
+            $(".table__Fermi").css("font-weight", "unset");
+        }
+        $("#show_dss,.table__SIMBAD_Query").on("click", function() {
+            // reset view
+            reset_atlas_view();
+
+            // show panel
+            $("#aladin_lite_dss_card").fadeIn();
+
+            // update button style
+            $("#show_dss").removeClass("btn-light");
+            $("#show_dss").addClass("btn-dark");
+
+            // highlight the DSS data in the table
+            $(".table__SIMBAD_Query").css("font-weight", "bold");
+            
+            load_dss();
+        });
+        $("#show_wise,.table__WISE").on("click", function() {
+            // reset view
+            reset_atlas_view();
+
+            // show panel
+            $("#aladin_lite_halpha_card").fadeIn();
+
+            // update button style
+            $("#show_wise").removeClass("btn-light");
+            $("#show_wise").addClass("btn-dark");
+
+            // highlight the WISE data in the table
+            $(".table__WISE").css("font-weight", "bold");
+
+            load_wise();
+        });
+        $("#show_fermi,.table__Fermi").on("click", function() {
+            // reset view
+            reset_atlas_view();
+
+            // show panel
+            $("#aladin_lite_fermi_card").fadeIn();
+
+            // update button style
+            $("#show_fermi").removeClass("btn-light");
+            $("#show_fermi").addClass("btn-dark");
+
+            // highlight the Fermi data in the table
+            $(".table__Fermi").css("font-weight", "bold");
+
+            load_fermi();
+        });
+
+
+        setTimeout(() => {
+            {% if sources[source_id].source_coincidences_map_default == 'SIMBAD Query' %}
+            $("#show_dss").click();
+            {% endif %}
+            {% if sources[source_id].source_coincidences_map_default == 'WISE' %}
+                $("#show_wise").click();
+            {% endif %}
+            {% if sources[source_id].source_coincidences_map_default == 'Fermi' %}
+                $("#show_fermi").click();
+            {% endif %}
+        }, 500);
+    </script>
+    
+{% endblock %}
