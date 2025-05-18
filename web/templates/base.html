@@ -128,9 +128,14 @@
                 </li>
             </ul>
         </div>
-        <div class="offcanvas-body" style="position: absolute; bottom: 0; left: 50%; width: 20em; transform: translate(-50%, -220%) rotate(-90deg); line-height: 0.8em; text-overflow: ellipsis; " onclick="show_version()">
-            <b>CHAMPSS Timing Pipeline</b><br>
+        <!-- <div class="offcanvas-body" style="position: absolute; bottom: 0; left: 50%; width: 20em; transform: translate(-50%, -220%) rotate(-90deg); line-height: 0.9em; text-overflow: ellipsis; " onclick="show_version()">
+            <b style="font-size: 1.1em; margin-left: -0.1em; ">CHAMPSS Timing Pipeline</b><br>
             <small>{{ sources.psr_dir }}</small>
+        </div> -->
+        <div class="offcanvas-body" style="writing-mode: tb-rl; rotate: 180deg; text-orientation: mixed; line-height: 0.9em; cursor: pointer; margin-left: -0.01em; " onclick="show_version()">
+            <b style="font-size: 1em; margin-left: -0.1em; ">CHAMPSS Timing Pipeline</b><br>
+            <!-- <small>{{ sources.psr_dir }}</small> -->
+            <small style="font-family: monospace; font-size: 0.7em; ">{{ app.pipeline_version }}</small>
         </div>
     </div>
     <br>
