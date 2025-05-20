@@ -7,7 +7,7 @@ import time
 import glob
 import datetime
 import requests
-from backend.pipecore import checker
+from backend.pipecore.checker import checker
 from backend.utils.notification import notification
 from backend.datastores.database import database
 from cli.config import CLIConfig
