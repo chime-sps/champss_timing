@@ -6,11 +6,11 @@ import traceback
 import astropy.units as u
 import numpy as np
 
-from .champss_checker import champss_checker
 from .io.archive import ArchiveReader
 from .pipecore.timing import timing
 from .pipecore.plot import plot
 from .pipecore.config import config
+from .pipecore.checker import checker
 from .datastores.database import database
 from .datastores.archive_cache import archive_cache
 from .utils.logger import logger
@@ -187,7 +187,7 @@ class champss_timing:
             plot(db_hdl=self.db_hdl).diagnostic(savefig=self.path_diagnostic_plot)
 
             # Run checker
-            champss_checker(self.path_psr_dir, self.db_hdl, self.noti_hdl, self.psr_id).check(send_noti=True)
+            checker(psr_dir=self.path_psr_dir, db_hdl=self.db_hdl, noti_hdl=self.noti_hdl, psr_id=self.psr_id, logger=self.logger.copy()).check()
 
             # End of the script
             self.logger.success("Script finished. ")
