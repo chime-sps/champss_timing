@@ -65,7 +65,7 @@ class print_handler:
         print("\033[1;32;40m(Alert -> " + message + ")\033[0m")
         
 class notification:
-    def __init__(self, messager_token):
+    def __init__(self, messager_token=False):
         if not messager_token:
             self.sh = print_handler()
         else:
