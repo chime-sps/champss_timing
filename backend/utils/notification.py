@@ -1,9 +1,16 @@
 import os
 import time
-from slack_bolt import App
-from slack_bolt.adapter.socket_mode import SocketModeHandler
-
 from .utils import utils
+from .logger import logger
+
+try:
+    # Try to import slack api
+    from slack_bolt import App
+    from slack_bolt.adapter.socket_mode import SocketModeHandler
+    slack_bolt_ok = True
+except ImportError:
+    # Ask handler to use basic messager
+    slack_bolt_ok = False
 
 class slack_handler:
     def __init__(self, slack_token):
@@ -65,10 +72,18 @@ class print_handler:
         print("\033[1;32;40m(Alert -> " + message + ")\033[0m")
         
 class notification:
-    def __init__(self, messager_token=False):
+    def __init__(self, messager_token=False, logger=logger()):
+        # Get logger
+        self.logger = logger
+
+        # Initialize messager
         if not messager_token:
             self.sh = print_handler()
         else:
+            if not slack_bolt_ok:
+                raise Exception("Slack API (\"slack_bolt\") is not installed. To enable slack alerts, please try to install the package first! ")
+            
+            # Initialize slack_handler if all sanity checks are passed. 
             self.sh = slack_handler(messager_token)
 
     def send_urgent_message(self, message, psr_id="psr_id_not_provided"):
