@@ -24,7 +24,7 @@ class StackTemplateState:
         elif shift_meth == "fourier":
             self.shifts_utils = fourier_shifts
         else:
-            raise ValueError(f"Unknown shift type: {shifts}. Use 'discrete' or 'fourier'.")
+            raise ValueError(f"Unknown shift type: {shift_meth}. Use 'discrete' or 'fourier'.")
 
     def stack_template(self):
         """
