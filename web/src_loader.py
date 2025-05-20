@@ -6,7 +6,7 @@ import base64
 import numpy as np
 import hashlib
 from scipy.spatial import KDTree
-from pipecore.checker import checker
+from backend.pipecore.checker import checker
 from backend.datastores.database import database
 
 from backend.utils.utils import utils
