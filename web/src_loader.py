@@ -6,7 +6,7 @@ import base64
 import numpy as np
 import hashlib
 from scipy.spatial import KDTree
-from backend.champss_checker import champss_checker
+from pipecore.checker import checker
 from backend.datastores.database import database
 
 from backend.utils.utils import utils
@@ -182,12 +182,13 @@ class src_loader():
         return self.db.get_all_config()
     
     def get_checker_warnings(self):
-        warnings = champss_checker(self.source_dir, self.db).check(send_noti=False)
+        warnings = checker(psr_dir=self.source_dir, db_hdl=self.db).check()
 
         warnings_formatted = []
-        for key in warnings.keys():
-            if warnings[key]["level"] > 0:
-                warnings_formatted.append(warnings[key])
+        for checker_module in warnings.keys():
+            for key in warnings[checker_module].keys():
+                if warnings[checker_module][key]["level"] > 0:
+                    warnings_formatted.append(warnings[checker_module][key])
                 
         return warnings_formatted
     

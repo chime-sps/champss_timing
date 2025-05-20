@@ -7,7 +7,7 @@ import time
 import glob
 import datetime
 import requests
-from backend.champss_checker import champss_checker
+from backend.pipecore import checker
 from backend.utils.notification import notification
 from backend.datastores.database import database
 from cli.config import CLIConfig
@@ -43,17 +43,18 @@ for source in glob.glob(os.path.join(TIMING_SOURCES, "*", "*.db")):
     try:
         with database(source) as db_hdl:
             if db_hdl.get_last_timing_info()["timestamp"] > time.time() - 43200:
-                checker_res = champss_checker(
+                checker_res = checker(
                     psr_dir=os.path.dirname(source),
                     db_hdl=db_hdl,
                     noti_hdl=noti, 
                     psr_id=source.split("/")[-2]
-                ).check(send_noti=True)
+                ).check()
                 
                 # check if all checkers are passed
-                for checker_key in checker_res.keys():
-                    if checker_res[checker_key]["level"] > 0:
-                        all_checkers_passed = False
+                for checker_module in checker_res.keys():
+                    for checker_key in checker_res[checker_module].keys():
+                        if checker_res[checker_module][checker_key]["level"] > 0:
+                            all_checkers_passed = False
     except Exception as e:
         noti.send_urgent_message(f"Error while checking {source}: {str(e)}")
         all_checkers_passed = False
