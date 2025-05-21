@@ -10,6 +10,7 @@ import requests
 import traceback
 import threading
 from .loaders import dir_loader
+from .loaders import notes_loader
 from .services import login as login_hdl
 from .services import api as api_hdl
 from backend.utils.utils import utils
@@ -18,7 +19,8 @@ from backend.utils.logger import logger
 app = Flask(__name__)
 app.sources = None
 app.login = None
-app.api = None
+app.api_public = None
+app.api_private = None
 app.update = None
 app.last_request = 0
 app.pipeline_version = utils.get_version_hash()
@@ -27,7 +29,7 @@ app.logger = logger()
 
 @app.before_request
 def before_request():
-    if request.endpoint != 'login' and request.endpoint != 'api':
+    if request.endpoint != 'login' and request.endpoint != 'api_public':
         if not app.login.has_logged_in():
             return redirect(url_for('login'))
 
@@ -97,6 +99,17 @@ def ephemeris():
         min=min,
         max=max, 
         tag_filter=tag_filter, 
+        show_sidebar=True
+    )
+
+@app.route('/notes')
+def notes():
+    return render_template(
+        'notes.html',
+        app=app,
+        sources=app.sources,
+        notes=app.notes.fetch(),
+        len=len,
         show_sidebar=True
     )
 
@@ -211,15 +224,21 @@ def dealias_diagnostics_(source_id):
     return dealias_diagnostics(source_id)
 
 @app.route('/public/api/<endpoint>', methods=['GET', 'POST'])
-def api(endpoint):
-    return app.api.handle(endpoint, request)
+def api_public(endpoint):
+    return app.api_public.handle(endpoint, request)
 
-def run(psr_dir, port, password=False, debug=False, update_hdl=None, slack_token=None):
+@app.route('/api/<endpoint>', methods=['GET', 'POST'])
+def api_private(endpoint):
+    return app.api_private.handle(endpoint, request)
+
+def run(psr_dir, port, password=False, debug=False, update_hdl=None, slack_token=None, notebook_path="./runnotes.db"):
     global app
 
     app.login = login_hdl.login(session, password)
-    app.api = api_hdl.api(app)
+    app.api_public = api_hdl.PublicAPI(app)
+    app.api_private = api_hdl.PrivateAPI(app)
     app.update = update_hdl
+    app.notes = notes_loader.notes_loader(notebook_path, app)
 
     if debug:
         app.debug = True
@@ -229,6 +248,9 @@ def run(psr_dir, port, password=False, debug=False, update_hdl=None, slack_token
         app.update()
 
     with dir_loader.dir_loader(psr_dir, app) as app.sources:
+        # Get the list of pulsars
+        app.psr_ids = [s.psr_id for s in app.sources]
+
         # Start the slack run notes service
         if slack_token is not None:
             app.logger.info("Slack token provided, initializing run notes service.")
@@ -236,9 +258,9 @@ def run(psr_dir, port, password=False, debug=False, update_hdl=None, slack_token
             from .services.run_notes import SlackRunNotes
             threading.Thread(
                 target=SlackRunNotes(
-                    notebook_path="./runnotes.db",
+                    notebook_path=notebook_path,
                     slack_token=slack_token, 
-                    psrs=[s.psr_id for s in app.sources]
+                    psrs=app.psr_ids
                 ).start
             ).start()
             app.logger.info("Slack run notes service started.")

@@ -1,6 +1,6 @@
 import threading
 
-class api:
+class PublicAPI:
     def __init__(self, app):
         self.app = app
 
@@ -24,4 +24,22 @@ class api:
             return self.update_psrdir()
         if endpoint == "heartbeat":
             return "ok"
+        return "Invalid endpoint."
+
+
+class PrivateAPI:
+    def __init__(self, app):
+        self.app = app
+
+    def get_notes_by_psr(self, psr, group_by_date):
+        notes = self.app.notes.fetch(tag=psr, group_by_date=group_by_date)
+        return notes
+
+    def handle(self, endpoint, request):
+        if endpoint == "get_notes_by_psr":
+            psr = request.args.get("psr")
+            group_by_date = request.args.get("group_by_date", "true").lower() == "true"
+            if psr is None:
+                return "PSR not provided."
+            return self.get_notes_by_psr(psr, group_by_date)
         return "Invalid endpoint."

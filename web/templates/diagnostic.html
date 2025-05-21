@@ -106,7 +106,7 @@
         <h5>
             Source Coincidences
             <div style="float: right; font-size: 0.5em; transform: scale(0.75, 0.75); transform-origin: right; ">
-                <div class="btn-group" role="group" aria-label="Basic example">
+                <div class="btn-group" role="group">
                     <button type="button" id="show_dss" class="btn btn-light btn-sm">DSS/Optical</button>
                     <button type="button" id="show_wise" class="btn btn-light btn-sm">WISE/HII</button>
                     <button type="button" id="show_fermi" class="btn btn-light btn-sm">Fermi/𝛾-ray</button>
@@ -192,8 +192,29 @@
             </div>
         </div>
         <hr style="margin-top: 30px; ">
-        <h5>Diagnostics</h5>
-        <div class="col-md-12">
+        <h5>
+            Diagnostics
+            <div style="float: right; font-size: 0.5em; transform: scale(0.75, 0.75); transform-origin: right; ">
+                <div class="btn-group" role="group">
+                    <button type="button" id="show_diag_data" class="btn btn-dark btn-sm">Diagnostic Plots</button>
+                    <button type="button" id="show_diag_notes" class="btn btn-light btn-sm">Run Notes</button>
+                </div>
+            </div>
+        </h5>
+        <div id="runnotes_div" style="display: none; ">
+            <div class="col-md-12" style="min-height: 30em; ">
+                <div id="runnotes_div_placeholder">
+                    <span class="placeholder col-7"></span><br>
+                    <span class="placeholder col-4"></span><br>
+                    <span class="placeholder col-4"></span><br>
+                    <span class="placeholder col-6"></span><br>
+                    <span class="placeholder col-8"></span>
+                </div>
+                <pre id="runnotes_body" style="display: none;"></pre>
+            </div>
+        </div>
+
+        <div class="col-md-12 diagplots_divs">
             <div class="card" style="margin-bottom: 15px; ">
                 <div class="card-body" style="padding: 3px; ">
                     <div style="width: 100%; height: 300px; ">
@@ -243,7 +264,7 @@
                 </script>
             </div>
         </div>
-        <div class="col-md-6">
+        <div class="col-md-6 diagplots_divs">
             {% for param in sources[source_id].get_statistics(): %}
                 <div class="card" style="margin-bottom: 15px; ">
                     <div class="card-body" style="padding: 3px; ">
@@ -300,7 +321,7 @@
                 </script>
             {% endfor %}
         </div>
-        <div class="col-md-6">
+        <div class="col-md-6 diagplots_divs">
             {% for param in sources[source_id].parameter_info: %}
                 <div class="card" style="margin-bottom: 15px; ">
                     <div class="card-body" style="padding: 3px; ">
@@ -879,5 +900,66 @@
             {% endif %}
         }, 500);
     </script>
-    
+
+    <script>
+        function load_runnotes() {
+            $("#runnotes_div_placeholder").show()
+            var endpoint = "/api/get_notes_by_psr?psr={{ source_id }}&group_by_date=false";
+            $.get(endpoint, function(notes) {
+                var notes_body = $("#runnotes_body");
+                notes_body.empty();
+                
+                var note_text = ""; 
+                for (var i = 0; i < notes.length; i++) {
+                    var timestamp = notes[i]["timestamp"];
+                    var content = notes[i]["content"];
+                    var user = notes[i]["user"];
+                    
+                    // parse timestamp
+                    var time_text = new Date(timestamp * 1000);
+                    var time_text = time_text.toLocaleString();
+                    
+                    // append to note text
+                    note_text = note_text + "[" + time_text + "] " + user + ": " + content + "\n";
+                }
+
+                // In case no notes
+                if (note_text == "") {
+                    note_text = "[No run notes for this source]";
+                }
+
+                // set the text
+                notes_body.html(note_text);
+
+                // hide the loading spinner
+                $("#runnotes_div_placeholder").hide();
+                $("#runnotes_body").fadeIn();
+                
+            }).fail(function() {
+                // hide the loading spinner
+                $("#runnotes_div_placeholder").hide();
+                $("#runnotes_body").fadeIn();
+                $("#runnotes_body").html("[Error loading run notes, please try again later]");
+            });
+        }
+        $(document).ready(function() {
+            $("#show_diag_notes").on("click", function() {
+                $(".diagplots_divs").hide()
+                $("#runnotes_div").fadeIn();
+                $("#show_diag_notes").removeClass("btn-light");
+                $("#show_diag_notes").addClass("btn-dark");
+                $("#show_diag_data").removeClass("btn-dark");
+                $("#show_diag_data").addClass("btn-light");
+                load_runnotes();
+            });
+            $("#show_diag_data").on("click", function() {
+                $(".diagplots_divs").fadeIn();
+                $("#runnotes_div").hide();
+                $("#show_diag_data").removeClass("btn-light");
+                $("#show_diag_data").addClass("btn-dark");
+                $("#show_diag_notes").removeClass("btn-dark");
+                $("#show_diag_notes").addClass("btn-light");
+            });
+        });
+    </script>
 {% endblock %}

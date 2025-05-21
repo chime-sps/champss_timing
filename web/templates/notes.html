@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+
+{% block title %}CHAMPSS Timing Monitor - Run Notes{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h3>
+            Run Notes
+        </h3>
+        {% for date in notes %}
+        <hr>
+        <h5>{{ date }}</h5>
+            {% for note in notes[date] %}
+                <div id="notes_{{ note['id']}}" style="cursor: default; ">
+                    {% if note["tag"] == "main" %}
+                        <span style="transform: scale(0.9); transform-origin: left; min-width: 10em; " class="badge rounded-pill text-bg-primary">{{ note["tag"] }}</span>
+                    {% elif note["tag"] in app.psr_ids %}
+                        <span style="transform: scale(0.9); transform-origin: left; min-width: 10em; " class="badge rounded-pill text-bg-dark">{{ note["tag"] }}</span>
+                    {% else %}
+                        <span style="transform: scale(0.9); transform-origin: left; min-width: 10em; " class="badge rounded-pill text-bg-light">{{ note["tag"] }}</span>
+                    {% endif %}
+
+                    <span id="notes_{{ note['id']}}_text">
+                        @{{ note["user"] }}: {{ note["content"] }}
+                    </span>
+
+                    <div style="float: right; margin-bottom: -0.5em; color: #888; ">
+                        <code style="color: unset; " id="notes_{{ note['id']}}_time">{{ note["time"] }}</code>
+                    </div >
+                    <br>
+
+                    <script>
+                        // hover events
+                        $(document).ready(function() {
+                            $('#notes_{{ note["id"] }}').hover(function() {
+                                $('#notes_{{ note['id']}}_time').css('font-weight', 'bold');
+                                $('#notes_{{ note['id']}}_time').css('color', 'black');
+                                $('#notes_{{ note['id']}}_time').css('text-decoration', 'underline');
+                                $('#notes_{{ note['id']}}_text').css('text-decoration', 'underline');
+                            }, function() {
+                                $('#notes_{{ note['id']}}_time').css('font-weight', 'unset');
+                                $('#notes_{{ note['id']}}_time').css('color', 'unset');
+                                $('#notes_{{ note['id']}}_time').css('text-decoration', 'unset');
+                                $('#notes_{{ note['id']}}_text').css('text-decoration', 'unset');
+                            });
+                        });
+                    </script>
+                </div>
+            {% endfor %}
+        {% endfor %}
+        {% if len(notes) == 0 %}
+            <div style="text-align: center; color: #888; margin-top:25%; ">
+                <h5>No notes available</h5>
+                Add the first note by starting the Slackbot service and sending <code>@bot post [some notes]</code> to any channel.
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+
+{% endblock %}

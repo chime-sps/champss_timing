@@ -193,3 +193,12 @@ class utils:
             raise Exception("Failed to determine raw data format")
 
         return None
+
+    @staticmethod
+    def is_pulsar_name(name):
+        if name.startswith("J") or name.startswith("B"):
+            if len(name) >= 8:
+                if name[5] == "+" or name[5] == "-":
+                    return True
+        
+        return False

@@ -3,6 +3,7 @@ import time
 import json
 import sqlite3
 import threading
+import shutil
 from queue import Queue
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
@@ -23,14 +24,17 @@ class RunNotes:
 
         # Connect to the database
         if self.readonly:
+            # Get tmp path name
+            self.notebook_path = os.path.abspath(f"{notebook_path}.readonly{utils.get_rand_string()}.tmp")
+
             # check if database exists
             if not os.path.exists(notebook_path):
-                raise Exception(f"Database {notebook_path} does not exist. Please provide a valid database file.")
-
-            # copy the database to a temporary file
-            self.notebook_path = os.path.abspath(f"{notebook_path}.readonly{utils.get_rand_string()}.tmp")
-            shutil.copyfile(notebook_path, self.notebook_path)
-            self.logger.debug(f"Readonly temporary readonly notebook created at {self.notebook_path}")
+                # Create the database file
+                RunNotes(self.notebook_path, readonly=False, check_same_thread=False).initialize()
+            else:
+                # copy the database to a temporary file
+                shutil.copyfile(notebook_path, self.notebook_path)
+                self.logger.debug(f"Readonly temporary readonly notebook created at {self.notebook_path}")
 
             # open the temporary database in readonly mode
             self.conn = sqlite3.connect("file://" + self.notebook_path + "?mode=ro", uri=True, check_same_thread=False)
@@ -190,7 +194,7 @@ class RunNotes:
             formatted_notes.append(formatted_note)
         return formatted_notes
 
-    def read(self, user=None, tag=None, time_range=None):
+    def read(self, user=None, tag=None, time_range=None, sort=True, limit=1000):
         # Read data from the database
         query = 'SELECT * FROM notebooks WHERE 1=1'
         params = []
@@ -206,6 +210,13 @@ class RunNotes:
         if time_range:
             query += ' AND timestamp BETWEEN ? AND ?'
             params.extend(time_range)
+
+        if sort:
+            query += ' ORDER BY timestamp DESC'
+
+        if limit:
+            query += ' LIMIT ?'
+            params.append(limit)
 
         self.cursor.execute(query, params)
         return self.format(self.cursor.fetchall())
