@@ -63,7 +63,7 @@ class Main:
             if os.path.exists(diagnostic_path):
                 results["glitch"]["level"] = 2
                 results["glitch"]["id"] = "glitch_detected"
-                results["glitch"]["message"] = "Glitch-like event detected. Please check the following glitch diagnostic plot. "
+                results["glitch"]["message"] = "Glitch-like event detected. Please check the posted glitch diagnostic plot. "
                 results["glitch"]["attachments"] = [diagnostic_path]
                 self.logger.info(f"Glitch diagnostic plot generated successfully -> {diagnostic_path}")
             else:

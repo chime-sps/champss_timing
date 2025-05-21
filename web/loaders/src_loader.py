@@ -346,7 +346,7 @@ class src_loader():
 
         if data is None:
             data = json.loads(
-                open(os.path.dirname(__file__) + "/data/source_coincidence_data.json", "r").read()
+                open(os.path.dirname(__file__) + "/../data/source_coincidence_data.json", "r").read()
             )
         self.source_coincidences_catalogs = data["catalogs"]
 

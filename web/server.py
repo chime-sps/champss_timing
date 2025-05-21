@@ -9,10 +9,11 @@ import time
 import requests
 import traceback
 import threading
-from . import dir_loader
-from . import login as login_hdl
-from . import api as api_hdl
+from .loaders import dir_loader
+from .services import login as login_hdl
+from .services import api as api_hdl
 from backend.utils.utils import utils
+from backend.utils.logger import logger
 
 app = Flask(__name__)
 app.sources = None
@@ -22,6 +23,7 @@ app.update = None
 app.last_request = 0
 app.pipeline_version = utils.get_version_hash()
 app.secret_key = utils.get_rand_string()
+app.logger = logger()
 
 @app.before_request
 def before_request():
@@ -212,7 +214,7 @@ def dealias_diagnostics_(source_id):
 def api(endpoint):
     return app.api.handle(endpoint, request)
 
-def run(psr_dir, port, password=False, debug=False, update_hdl=None):
+def run(psr_dir, port, password=False, debug=False, update_hdl=None, slack_token=None):
     global app
 
     app.login = login_hdl.login(session, password)
@@ -227,4 +229,19 @@ def run(psr_dir, port, password=False, debug=False, update_hdl=None):
         app.update()
 
     with dir_loader.dir_loader(psr_dir, app) as app.sources:
+        # Start the slack run notes service
+        if slack_token is not None:
+            app.logger.info("Slack token provided, initializing run notes service.")
+            
+            from .services.run_notes import SlackRunNotes
+            threading.Thread(
+                target=SlackRunNotes(
+                    notebook_path="./runnotes.db",
+                    slack_token=slack_token, 
+                    psrs=[s.psr_id for s in app.sources]
+                ).start
+            ).start()
+            app.logger.info("Slack run notes service started.")
+
+        # Start the web server
         app.run(port = port)
