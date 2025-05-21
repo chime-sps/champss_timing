@@ -1,9 +1,11 @@
 import copy
 import numpy as np
 import matplotlib.pyplot as plt
+from astropy.coordinates import SkyCoord
 
 from ..utils.correlation import discrete_shifts, fourier_shifts
 from ..utils.logger import logger
+from ..io.template_writer import TemplateWriter
 
 class StackTemplateState:
     def __init__(self, profiles, shift_meth):
@@ -157,3 +159,19 @@ class StackTemplate:
         Get the template and aligned profiles.
         """
         return self.get_template(), self.get_aligned_profiles()
+
+    def to_archive(self, filename, psr="Template", dm=0, overwrite=True):
+        """
+        Write the template to a PSRCHIVE compatible format.
+        """
+        
+        with TemplateWriter(filename, overwrite=overwrite) as writer:
+            # Write the data to the archive
+            writer.write(self.get_template(), interpolate=True)
+
+            # Set the metadata
+            writer.set_source(psr)
+            writer.set_dm(dm)
+            
+            # Unload the archive
+            writer.unload()

@@ -1,6 +1,11 @@
 import numpy as np
 from scipy.ndimage import fourier_shift
-from scipy.signal import butter, filtfilt, gaussian
+from scipy.signal import butter, filtfilt
+
+try:
+    from scipy.signal import gaussian
+except ImportError:
+    from scipy.signal.windows import gaussian
 
 class discrete_shifts:
     """
