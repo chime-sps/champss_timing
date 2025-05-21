@@ -34,6 +34,7 @@ if __name__ == "__main__":
         "pipeline": "Run the main pipeline.",
         "server": "Run the pipeline web server.",
         "dealias": "Resolve dealiasing in pulsar period solution.",
+        "template": "Generate a template for the pulsar.",
         "truncate": "Truncate source database.",
         "masterdb": "Run master database utilities.",
         "config": "Show or edit the configuration file.", 
