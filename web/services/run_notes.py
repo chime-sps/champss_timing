@@ -34,7 +34,7 @@ class RunNotes:
             else:
                 # copy the database to a temporary file
                 shutil.copyfile(notebook_path, self.notebook_path)
-                self.logger.debug(f"Readonly temporary readonly notebook created at {self.notebook_path}")
+                self.logger.debug(f"Readonly temporary notebook created at {self.notebook_path}")
 
             # open the temporary database in readonly mode
             self.conn = sqlite3.connect("file://" + self.notebook_path + "?mode=ro", uri=True, check_same_thread=False)
@@ -237,6 +237,11 @@ class RunNotes:
         # Stop the worker thread
         if hasattr(self, 'worker_thread'):
             self.stop_worker()
+
+        # Clean up the temporary file if in readonly mode
+        if self.readonly and os.path.exists(self.notebook_path):
+            os.remove(self.notebook_path)
+            self.logger.debug(f"Readonly temporary notebook removed from {self.notebook_path}")
 
 class SlackRunNotes:
     def __init__(self, notebook_path, slack_token, psrs=[]):

@@ -210,7 +210,9 @@
                     <span class="placeholder col-6"></span><br>
                     <span class="placeholder col-8"></span>
                 </div>
-                <pre id="runnotes_body" style="display: none;"></pre>
+                <div id="runnotes_body_div" style="display: none; ">
+                    <pre id="runnotes_body_pre" style="text-wrap: auto;"></pre>
+                </div>
             </div>
         </div>
 
@@ -903,12 +905,14 @@
 
     <script>
         function load_runnotes() {
-            $("#runnotes_div_placeholder").show()
+            // in case the notes is loaded
+            if ($("#runnotes_body_pre").html() != "") {
+                return; 
+            }
+            
             var endpoint = "/api/get_notes_by_psr?psr={{ source_id }}&group_by_date=false";
             $.get(endpoint, function(notes) {
-                var notes_body = $("#runnotes_body");
-                notes_body.empty();
-                
+                // format the notes
                 var note_text = ""; 
                 for (var i = 0; i < notes.length; i++) {
                     var timestamp = notes[i]["timestamp"];
@@ -929,17 +933,19 @@
                 }
 
                 // set the text
-                notes_body.html(note_text);
+                $("#runnotes_body_pre").html(note_text);
 
                 // hide the loading spinner
                 $("#runnotes_div_placeholder").hide();
-                $("#runnotes_body").fadeIn();
+                $("#runnotes_body_div").fadeIn();
+                $("#runnotes_body_div").attr("style", "text-wrap: auto; ");
                 
             }).fail(function() {
                 // hide the loading spinner
                 $("#runnotes_div_placeholder").hide();
-                $("#runnotes_body").fadeIn();
-                $("#runnotes_body").html("[Error loading run notes, please try again later]");
+                $("#runnotes_body_div").fadeIn();
+                $("#runnotes_body_div").attr("style", "text-wrap: auto; ");
+                $("#runnotes_body_pre").html("[Error loading run notes, please try again later]");
             });
         }
         $(document).ready(function() {
@@ -950,7 +956,9 @@
                 $("#show_diag_notes").addClass("btn-dark");
                 $("#show_diag_data").removeClass("btn-dark");
                 $("#show_diag_data").addClass("btn-light");
-                load_runnotes();
+                setTimeout(() => {
+                    load_runnotes();
+                }, 50);
             });
             $("#show_diag_data").on("click", function() {
                 $(".diagplots_divs").fadeIn();
