@@ -45,7 +45,7 @@ class tmg_master:
         self.self_check = self_check
         self.logger = logger
         self.allowed_formats = ["archive", "filterbank"]
-        self.allowed_backends = ["champss", "chimepsr_fm", "chimepsr_fil"]
+        # self.allowed_backends = ["champss", "chimepsr_fm", "chimepsr_fil"]
         self.allowed_status = ["good", "corrupted"]
         self.fast_mode = fast_mode
         self.fast_mode_mem_gb = mem_gb
@@ -156,8 +156,8 @@ class tmg_master:
         if format not in self.allowed_formats:
             raise Exception(f"Unrecognized format {format}. Allowed formats: {self.allowed_formats}")
 
-        if backend not in self.allowed_backends:
-            raise Exception(f"Unrecognized backend {backend}. Allowed backends: {self.allowed_backends}")
+        # if backend not in self.allowed_backends:
+        #     raise Exception(f"Unrecognized backend {backend}. Allowed backends: {self.allowed_backends}")
 
         if status not in self.allowed_status:
             raise Exception(f"Unrecognized status {status}. Allowed statuses: {self.allowed_status}")
@@ -283,8 +283,8 @@ class tmg_master:
         if backend is not None:
             if not force_update:
                 raise Exception("It is not make sense to update BACKEND. If this is necessary, please set force_update=True to bypass this check.")
-            if backend not in self.allowed_backends:
-                raise Exception(f"Unrecognized backend {backend}. Allowed backends: {self.allowed_backends}")
+            # if backend not in self.allowed_backends:
+            #     raise Exception(f"Unrecognized backend {backend}. Allowed backends: {self.allowed_backends}")
             update_query += "backend = ?, "
             update_values.append(backend)
         if status is not None:
@@ -447,6 +447,10 @@ class tmg_master:
         self.cur.execute("SELECT DISTINCT psr_id FROM " + table)
         
         return [res[0] for res in self.cur.fetchall()]
+
+    def get_backends(self):
+        self.cur.execute("SELECT DISTINCT backend FROM raw_data")
+        return [res[0] for res in self.cur.fetchall()]
     
     def get_ar_ids(self, psr_id):
         self.cur.execute("SELECT ar_id FROM raw_data WHERE psr_id = ?", (psr_id,))
@@ -467,78 +471,93 @@ class tmg_master:
         self.cur.execute("SELECT COUNT(*) FROM raw_data WHERE psr_id = ? AND mjd >= ? AND mjd <= ?", (psr_id, mjd_range[0], mjd_range[1]))
         return self.cur.fetchone()[0]
 
-    def get_timing_data_config(self, psr, mjd_range=None):
+    def get_timing_data_config(self, psr, backends=[], labels={}, mjd_range=None):
+        def get_mjd_idx(d):
+            return round(d["mjd"], 1)
+
+        # Get all data if no mjd_range is provided
         if mjd_range is None:
             self.cur.execute("SELECT * FROM raw_data WHERE psr_id = ? AND status != 'corrupted'", (psr,))
         else:
             self.cur.execute("SELECT * FROM raw_data WHERE psr_id = ? AND status != 'corrupted' AND mjd >= ? AND mjd <= ?", (psr, mjd_range[0], mjd_range[1]))
         
+        # Make sure all backends that exists in the database are included
+        for b in backends:
+            if b not in backends:
+                backends.append(b)
+
+        # Initialize parameters
         psr_config = {}
-        counts = {"pulsar": 0, "psrfil": 0, "champss": 0, "total": 0}
+        counts = {"total": 0}
         db_data = self.format_raw_data_all(self.cur.fetchall())
 
-        def get_mjd_idx(d):
-            return round(d["mjd"], 1)
+        # Initialze counts for each backend
+        for b in backends:
+            if b not in counts:
+                counts[b] = 0
 
         # Initialize indexes
         for d in db_data:
             psr_config[get_mjd_idx(d)] = []
 
         # Fill in data
-        for d in db_data:
-            if d["backend"] not in ["champss", "chimepsr_fm", "chimepsr_fil"]: # those backends are processed in the later parts
-                psr_config[get_mjd_idx(d)].append({
-                    "path": d["location"],
-                    "label": d["backend"], 
-                    "rcvr": d["backend"],
-                    "mjd": d["mjd"], 
-                    "arch_dm": 0 # no longer need this information. 
-                })
+        for bknd in backends:
+            for d in db_data:
+                if d["backend"] == bknd:
+                    # If label is provided, use it, otherwise use the backend name
+                    this_label = d["backend"]
+                    if bknd in labels:
+                        this_label = labels[bknd]
 
-                # Initialize counts
-                if d["backend"] not in counts:
-                    counts[d["backend"]] = 0
+                    # Append information
+                    psr_config[get_mjd_idx(d)].append({
+                        "path": d["location"],
+                        "label": this_label, 
+                        "rcvr": d["backend"],
+                        "mjd": d["mjd"], 
+                        "arch_dm": 0 # no longer need this information. 
+                    })
 
-                # Update counts
-                counts[d["backend"]] = counts.get(d["backend"], 0) + 1
-                counts["total"] += 1
+                    # Update counts
+                    counts[d["backend"]] = counts.get(d["backend"], 0) + 1
+                    counts["total"] += 1
 
-        # Legacy functionality for CHAMPSS Timing 
-        # (keeping this due to a weird naming before:( 
-        # This shouldn't affect anything other than CHAMPSS timing backends)
-        for d in db_data:
-            if d["backend"] == "chimepsr_fm":
-                psr_config[get_mjd_idx(d)].append({
-                    "path": d["location"],
-                    "label": "CHIME/Pulsar Fold Mode", 
-                    "rcvr": "pulsar",
-                    "mjd": d["mjd"], 
-                    "arch_dm": 0 # no longer need this information. 
-                })
-                counts["pulsar"] += 1
-                counts["total"] += 1
-        for d in db_data:
-            if d["backend"] == "chimepsr_fil":
-                psr_config[get_mjd_idx(d)].append({
-                    "path": d["location"],
-                    "label": "CHIME/Pulsar Search Mode", 
-                    "rcvr": "psrfil",
-                    "mjd": d["mjd"], 
-                    "arch_dm": 0 # no longer need this information. 
-                })
-                counts["psrfil"] += 1
-                counts["total"] += 1
-        for d in db_data:
-            if d["backend"] == "champss":
-                psr_config[get_mjd_idx(d)].append({
-                    "path": d["location"],
-                    "label": "CHAMPSS Fold Mode", 
-                    "rcvr": "champss",
-                    "mjd": d["mjd"], 
-                    "arch_dm": 0 # no longer need this information. 
-                })
-                counts["champss"] += 1
-                counts["total"] += 1
+        # # Legacy functionality for CHAMPSS Timing 
+        # # (keeping this due to a weird naming before:( 
+        # # This shouldn't affect anything other than CHAMPSS timing backends)
+        # for d in db_data:
+        #     if d["backend"] == "chimepsr_fm":
+        #         psr_config[get_mjd_idx(d)].append({
+        #             "path": d["location"],
+        #             "label": "CHIME/Pulsar Fold Mode", 
+        #             "rcvr": "pulsar",
+        #             "mjd": d["mjd"], 
+        #             "arch_dm": 0 # no longer need this information. 
+        #         })
+        #         counts["pulsar"] += 1
+        #         counts["total"] += 1
+        # for d in db_data:
+        #     if d["backend"] == "chimepsr_fil":
+        #         psr_config[get_mjd_idx(d)].append({
+        #             "path": d["location"],
+        #             "label": "CHIME/Pulsar Search Mode", 
+        #             "rcvr": "psrfil",
+        #             "mjd": d["mjd"], 
+        #             "arch_dm": 0 # no longer need this information. 
+        #         })
+        #         counts["psrfil"] += 1
+        #         counts["total"] += 1
+        # for d in db_data:
+        #     if d["backend"] == "champss":
+        #         psr_config[get_mjd_idx(d)].append({
+        #             "path": d["location"],
+        #             "label": "CHAMPSS Fold Mode", 
+        #             "rcvr": "champss",
+        #             "mjd": d["mjd"], 
+        #             "arch_dm": 0 # no longer need this information. 
+        #         })
+        #         counts["champss"] += 1
+        #         counts["total"] += 1
                 
 
         # sort by mjd

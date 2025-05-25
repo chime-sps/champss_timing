@@ -37,7 +37,7 @@ MASTER_DB_PATH = TIMING_SOURCES_PATH + "/TMGMaster.sqlite3.db"
 CONFIG_FILENAME = "champss_timing.config"
 MODEL_FILENAME = "pulsar.par"
 TEMPLATE_FILENAME = "paas.std"
-JUMPS = cli_config.config["toa_jumps"]
+BACKENDS = cli_config.config["backends"]
 N_POOL = args.ncpus
 
 # Slack tokens
@@ -55,6 +55,13 @@ if args.slack_token is not None:
 else:
     print("Disabling slack notification.")
     SLACK_TOKEN = False
+
+# Format jumps and labels
+JUMPS = {}
+LABELS = {}
+for bknd in BACKENDS:
+    JUMPS[bknd] = BACKENDS[bknd]["jump"]
+    LABELS[bknd] = BACKENDS[bknd]["label"]
 
 # Initialize hamdlers
 logger = logger.logger()
@@ -88,7 +95,7 @@ with tmg_master.tmg_master(MASTER_DB_PATH, readonly=True) as tm_hdl:
             continue
 
         # Query master db
-        filenames, counts = tm_hdl.get_timing_data_config(pulsar)
+        filenames, counts = tm_hdl.get_timing_data_config(pulsar, backends=list(BACKENDS.keys()), labels=LABELS)
 
         # Create pulsar data
         this_pulsar_data = {
