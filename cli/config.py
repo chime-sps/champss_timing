@@ -17,10 +17,14 @@ class CLIConfig:
                     "SLACK_APP_TOKEN": "SLACK_APP_TOKEN_HERE"
                 }
             }, 
-            "toa_jumps": {
-                "chimepsr_fil": [0.25165824, 0.00039286]
+            "toa_jumps": { 
+                # key corresponds to the -rcvr flag in timfile 
+                # (supposed to be the same as the key in data_paths, but we had weird naming in the past, so we keep it)
+                "psrfil": [0, 0]
+                "champss": [0, 0]
             }, 
             "data_paths": {
+                # key corresponds to the -rcvr flag in timfile
                 "champss": "PATH_TO_CHAMPSS_DATA",
                 "chimepsr_fm": "PATH_TO_CHIMEPSR_FODEMODE_DATA",
                 "chimepsr_fil": "PATH_TO_CHIMEPSR_FILTERBANK_DATA",
@@ -61,14 +65,16 @@ class CLIConfig:
                 print(f"Key '{k}' not found in the config. Using default value.")
                 continue
             
-            # Merge user-defined keys
-            if k == "user_defined":
-                dest[k] = source[k]
-                continue
+            dest[k] = source[k] # only check the first level!!
 
-            if isinstance(v, dict):
-                dest[k] = self.recursively_update_dict(v, source[k])
-            else:
-                dest[k] = source[k]
+            # # Merge user-defined keys
+            # if k == "user_defined":
+            #     dest[k] = source[k]
+            #     continue
+
+            # if isinstance(v, dict):
+            #     dest[k] = self.recursively_update_dict(v, source[k])
+            # else:
+            #     dest[k] = source[k]
 
         return dest

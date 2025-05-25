@@ -480,8 +480,32 @@ class tmg_master:
         def get_mjd_idx(d):
             return round(d["mjd"], 1)
 
+        # Initialize indexes
         for d in db_data:
             psr_config[get_mjd_idx(d)] = []
+
+        # Fill in data
+        for d in db_data:
+            if d["backend"] not in ["champss", "chimepsr_fm", "chimepsr_fil"]: # those backends are processed in the later parts
+                psr_config[get_mjd_idx(d)].append({
+                    "path": d["location"],
+                    "label": d["backend"], 
+                    "rcvr": d["backend"],
+                    "mjd": d["mjd"], 
+                    "arch_dm": 0 # no longer need this information. 
+                })
+
+                # Initialize counts
+                if d["backend"] not in counts:
+                    counts[d["backend"]] = 0
+
+                # Update counts
+                counts[d["backend"]] = counts.get(d["backend"], 0) + 1
+                counts["total"] += 1
+
+        # Legacy functionality for CHAMPSS Timing 
+        # (keeping this due to a weird naming before:( 
+        # This shouldn't affect anything other than CHAMPSS timing backends)
         for d in db_data:
             if d["backend"] == "chimepsr_fm":
                 psr_config[get_mjd_idx(d)].append({
@@ -515,6 +539,7 @@ class tmg_master:
                 })
                 counts["champss"] += 1
                 counts["total"] += 1
+                
 
         # sort by mjd
         psr_config = dict(sorted(psr_config.items()))
