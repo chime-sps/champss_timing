@@ -34,12 +34,10 @@ time.sleep(3)
 # Define
 TIMING_SOURCES_PATH = "./timing_sources"
 MASTER_DB_PATH = TIMING_SOURCES_PATH + "/TMGMaster.sqlite3.db"
-JUMP_CHAMPSS = [0, 0]
-JUMP_PULSAR = [0, 0]
-JUMP_PULSAR_FIL = [0.25165824, 0.00039286]
 CONFIG_FILENAME = "champss_timing.config"
 MODEL_FILENAME = "pulsar.par"
 TEMPLATE_FILENAME = "paas.std"
+JUMPS = cli_config.config["toa_jumps"]
 N_POOL = args.ncpus
 
 # Slack tokens
@@ -124,19 +122,12 @@ for d in pulsar_data:
     timing_results.append({"psr": d['id'], "n_files": d['counts']["total"], "success": True, "n_timed": 0})
 
     try:
-        # Create jump info
-        jumps = {
-            "champss": JUMP_CHAMPSS,
-            "pulsar": JUMP_PULSAR,
-            "psrfil": JUMP_PULSAR_FIL
-        }
-
         # Start timing
         logger.debug(f"Starting pipeline for {d['id']}")
         with champss_timing.champss_timing(
                 psr_dir=d["dir"],
                 data_archives=d["data"],
-                toa_jumps=jumps, 
+                toa_jumps=JUMPS, 
                 logger=logger.copy(),
                 slack_token=SLACK_TOKEN,
                 n_pools=N_POOL
