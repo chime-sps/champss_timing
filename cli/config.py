@@ -19,9 +19,12 @@ class CLIConfig:
             }, 
             "toa_jumps": { 
                 # key corresponds to the -rcvr flag in timfile 
-                # (supposed to be the same as the key in data_paths, but we had weird naming in the past, so we keep it)
-                "psrfil": [0, 0]
-                "champss": [0, 0]
+                # They are supposed to be the same as the key in data_paths, but we had weird naming in the past, so we keep it. 
+                # Please make sure to keep them consistent in the future 
+                # (and the code is already updated to use the key in data_paths for those rcvrs other than the following)
+                "psrfil": [0, 0], 
+                "champss": [0, 0], 
+                "pulsar": [0, 0]
             }, 
             "data_paths": {
                 # key corresponds to the -rcvr flag in timfile
