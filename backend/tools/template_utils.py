@@ -40,7 +40,7 @@ class StackTemplateState:
                 continue
 
             # find shift
-            lag = self.shifts_utils.find_shift(profile, self.template)
+            lag = self.shifts_utils.find_shift(self.template, profile)
 
             # shift the profile
             aligned_profiles.append(self.shifts_utils.roll(profile, -lag))
@@ -86,7 +86,7 @@ class StackTemplate:
     """
     This class creates a template.
     """
-    def __init__(self, profiles, size=1024, shift_meth="discrete", verbose=False, logger=logger()):
+    def __init__(self, profiles, size=1024, shift_meth="fourier", verbose=False, logger=logger()):
         # make sure the profiles are the same size
         for i, profile in enumerate(profiles):
             if len(profile) != size:

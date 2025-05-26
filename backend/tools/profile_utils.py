@@ -2,7 +2,7 @@ import copy
 import datetime
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.stats import shapiro, kstest, norm, chisquare
+from scipy.stats import shapiro, kstest, norm, chisquare, chi2
 
 from .template_utils import StackTemplate
 from ..utils.stats_utils import stats_utils
@@ -134,7 +134,7 @@ class ProfileStacker:
         stacked_profile = self.stack_meth(profiles, axis=0)
         return stacked_profile
 
-    def get_profiles_in_time(self, same_binsize=True, max_binsize=30):
+    def get_profiles_in_time(self, same_binsize=True, max_binsize=30, min_binsize=1):
         """
         Get the profiles in time.
         """
@@ -149,10 +149,12 @@ class ProfileStacker:
             # pop the first profile
             this_profile.append(all_profiles.pop(0))
 
-            # run test
-            if self.test(self.stack_meth(this_profile, axis=0)):
-                bins.append(len(this_profile))
-                this_profile = []
+            # min bin size
+            if len(this_profile) >= min_binsize:
+                # run test
+                if self.test(self.stack_meth(this_profile, axis=0)) or len(this_profile) >= max_binsize:
+                    bins.append(len(this_profile))
+                    this_profile = []
 
         # If no bins
         if len(bins) == 0:
@@ -163,9 +165,11 @@ class ProfileStacker:
             avg_bin_size = int(np.mean(bins))
             bins = [avg_bin_size] * (len(self.profiles) // avg_bin_size)
 
-        # Apply max bin size
-        if max_binsize is not None:
-            bins = [min(b, max_binsize) for b in bins]
+        # # Apply max/min bin size
+        # if max_binsize is not None:
+        #     bins = [min(b, max_binsize) for b in bins]
+        # if min_binsize is not None:
+        #     bins = [max(b, min_binsize) for b in bins]
 
         # Bin data
         for i in range(len(bins)):
@@ -189,7 +193,7 @@ class ProfileAnalyzer(StackTemplate):
     Analysis pulse profile changes
     """
 
-    def __init__(self, profiles, mjds=None, size=1024, shift_meth="discrete", zoom_in=False, verbose=False, logger=logger()):
+    def __init__(self, profiles, mjds=None, size=1024, shift_meth="fourier", zoom_in=False, verbose=False, logger=logger()):
         """
         Initialize the ProfileAnalyzer class.
 
@@ -231,8 +235,13 @@ class ProfileAnalyzer(StackTemplate):
             # threshold=3,
             # verbose=verbose,
         ).get_profiles_in_time(
-            same_binsize=True
+            same_binsize=True, 
+            max_binsize=30,
+            min_binsize=3,
         )
+
+        # Injections
+        self.injected_idxes = []
 
     def zoom_in(self, data, percent=0.25):
         """
@@ -260,7 +269,6 @@ class ProfileAnalyzer(StackTemplate):
         """
 
         # Inject fake profile changes
-        injected_idxes = []
         for i in range(n):
             # Random offset and scale
             injection_i = np.random.randint(0, len(self.binned_profiles))
@@ -272,9 +280,9 @@ class ProfileAnalyzer(StackTemplate):
             self.binned_profiles[injection_i] -= np.mean(self.binned_profiles[injection_i])
             self.binned_profiles[injection_i] /= np.std(self.binned_profiles[injection_i])
 
-            injected_idxes.append(injection_i)
+            self.injected_idxes.append(injection_i)
 
-        return injected_idxes
+        return self.injected_idxes
 
     def get_binned_residuals(self):
         """
@@ -307,8 +315,8 @@ class ProfileAnalyzer(StackTemplate):
         residuals = self.get_binned_residuals()**2
 
         # Get the chi-squares
-        chisquares = np.array([chisquare(residual, ddof=len(residuals)-1)[0] for residual in residuals])
-        # chisquares = np.array([shapiro(residual)[1] for residual in residuals])
+        # chisquares = np.array([chisquare(residual)[0] for residual in residuals])
+        chisquares = np.array([chisquare(residual, f_exp=np.full(len(residual), np.mean(residual)))[0] for residual in residuals])
 
         return chisquares
 
@@ -333,6 +341,28 @@ class ProfileAnalyzer(StackTemplate):
 
         return np.array(rms)
 
+    def get_binned_residual_kstest(self):
+        """
+        Get the residuals of the profiles.
+
+        Returns
+        -------
+        list
+            List of KS test results.
+        """
+
+        # Get the residuals
+        residuals = self.get_binned_residuals()
+
+        # Get the KS test results
+        ks_results = []
+        for residual in residuals:
+            # Get the KS test result
+            ks_results.append(kstest(residual, 'norm')[1])
+            # ks_results.append(kstest(residual, 'poisson', args=(np.mean(residual),))[1])
+
+        return np.array(ks_results)
+
     def get_threshold_and_outliers(self, statistic="rms", threshold=3):
         if statistic == "rms":
             # Get the RMS
@@ -347,11 +377,26 @@ class ProfileAnalyzer(StackTemplate):
             # Get the chi-squares
             chisquares = self.get_binned_residual_chisquares()
 
-            # Get thresholds
-            threshold = stats_utils.mad_outlier_thresholds(chisquares, z_score=threshold, return_interval=True)[1]
+            # # Get thresholds
+            # threshold = stats_utils.mad_outlier_thresholds(chisquares, z_score=threshold, return_interval=True)[1]
+
+            # # Get the outliers
+            # outliers = np.where(chisquares > threshold)[0]
+
+            # Get thresholds (note: the distribution is no longer normal, so we use the chi-square distribution!!)
+            threshold = chi2.ppf(0.95, len(self.get_template())-1)
 
             # Get the outliers
             outliers = np.where(chisquares > threshold)[0]
+        elif statistic == "kstest":
+            # Get the KS test results
+            ks_results = self.get_binned_residual_kstest()
+
+            # Get thresholds
+            threshold = 0.05
+
+            # Get the outliers
+            outliers = np.where(ks_results < threshold)[0]
         else:
             raise ValueError(f"Statistic {statistic} not allowed. Allowed statistics are: rms, chisquare")
 
@@ -400,6 +445,7 @@ class ProfileAnalyzer(StackTemplate):
         # Get the threshold and outliers
         chisquares_thres, chisquares_outliers = self.get_threshold_and_outliers(statistic="chisquare", threshold=3)
         rms_thres, rms_outliers = self.get_threshold_and_outliers(statistic="rms", threshold=3)
+        kstest_thres, kstest_outliers = self.get_threshold_and_outliers(statistic="kstest", threshold=0.05)
 
         # Plot
         fig, ax = plt.subplots(2, 4, figsize=(15, 12), height_ratios=[1, 4.5], gridspec_kw={'hspace': 0, 'wspace': 0})
@@ -421,7 +467,7 @@ class ProfileAnalyzer(StackTemplate):
         ax[0, 1].set_title('Residuals')
         ax[0, 1].set_xticks([])
         ax[0, 1].set_yticks([])
-        ax[1, 1].matshow(residuals, cmap="gray_r", aspect="auto", vmin=vmin, vmax=vmax)
+        ax[1, 1].matshow(residuals, cmap="gray_r", aspect="auto")#, vmin=vmin, vmax=vmax)
         ax[1, 1].invert_yaxis()
         ax[1, 1].tick_params(axis='x', labeltop=False, labelbottom=True)
         ax[1, 1].set_xlabel('Phase')
@@ -438,8 +484,13 @@ class ProfileAnalyzer(StackTemplate):
         ax[1, 2].axvline(rms_thres, color='r', linestyle='--', label='Threshold')
         for i in rms_outliers:
             ax[1, 2].axhline(i, color='r', linestyle='-', alpha=0.5, linewidth=0.5)
+        for i in self.injected_idxes:
+            ax[1, 2].axhline(i, color='g', linestyle='-', alpha=0.5, linewidth=0.5)
         ## Chi-squares
-        ax[0, 3].hist(chisquares, facecolor="none", edgecolor="k", bins=50, histtype='step')
+        log_bins = np.logspace(np.log10(np.min(chisquares)), np.log10(np.max(chisquares)), 50)
+        # ax[0, 3].hist(chisquares, facecolor="none", edgecolor="k", bins=50, histtype='step')
+        ax[0, 3].hist(chisquares, facecolor="none", edgecolor="k", bins=log_bins, histtype='step')
+        ax[0, 3].set_xscale('log')
         ax[0, 3].set_title('Chi-squares')
         ax[0, 3].set_xticks([])
         ax[0, 3].set_yticks([])
@@ -448,13 +499,31 @@ class ProfileAnalyzer(StackTemplate):
         ax[1, 3].set_xlabel('Chi-squares Statistics')
         ax[1, 3].set_yticks([])
         ax[1, 3].axvline(chisquares_thres, color='r', linestyle='--')
+        ax[1, 3].set_xscale('log')
         for i in chisquares_outliers:
             ax[1, 3].axhline(i, color='r', linestyle='-', alpha=0.5, linewidth=0.5)
+        for i in self.injected_idxes:
+            ax[1, 3].axhline(i, color='g', linestyle='--', alpha=0.5, linewidth=0.5)
+        # ## K-S test
+        # log_bins = np.logspace(np.log10(np.min(self.get_binned_residual_kstest())), np.log10(np.max(self.get_binned_residual_kstest())), 50)
+        # ax[0, 4].hist(self.get_binned_residual_kstest(), facecolor="none", edgecolor="k", bins=log_bins, histtype='step')
+        # ax[0, 4].set_xscale('log')
+        # ax[0, 4].set_title('K-S test')
+        # ax[0, 4].set_xticks([])
+        # ax[0, 4].set_yticks([])
+        # ax[0, 4].axvline(kstest_thres, color='r', linestyle='--')
+        # ax[1, 4].plot(self.get_binned_residual_kstest(), np.linspace(0, len(chisquares), len(chisquares)), "kx")
+        # ax[1, 4].set_xlabel('K-S test Statistics')
+        # ax[1, 4].set_yticks([])
+        # ax[1, 4].axvline(kstest_thres, color='r', linestyle='--')
+        # ax[1, 4].set_xscale('log')
+        # for i in kstest_outliers:
+        #     ax[1, 4].axhline(i, color='r', linestyle='-', alpha=0.5, linewidth=0.5)
         ## Set limits
         for i in range(len(ax[1, :])):
             ax[1, i].set_ylim(ax[1, 0].get_ylim())
             ax[0, i].set_xlim(ax[1, i].get_xlim())
-        ax[0, 1].set_ylim(ax[0, 0].get_ylim())
+        # ax[0, 1].set_ylim(ax[0, 0].get_ylim())
         ## Set y-ticks in time
         current_yticks = ax[1, 0].get_yticks()
         current_yticks = current_yticks[current_yticks >= 0]
