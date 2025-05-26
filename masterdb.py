@@ -15,9 +15,10 @@ cli_config = CLIConfig()
 
 # Initialize paths
 tmg_master_path = "./timing_sources/TMGMaster.sqlite3.db"
-champss_data__path = cli_config.config["data_paths"]["champss"]
-chimepsr_fm__data_path = cli_config.config["data_paths"]["chimepsr_fm"]
-chimepsr_fil__data_path = cli_config.config["data_paths"]["chimepsr_fil"]
+# champss_data__path = cli_config.config["data_paths"]["champss"]
+# chimepsr_fm__data_path = cli_config.config["data_paths"]["chimepsr_fm"]
+# chimepsr_fil__data_path = cli_config.config["data_paths"]["chimepsr_fil"]
+backends = cli_config.config["backends"]
 
 # Initialize parser
 parser = argparse.ArgumentParser(description="TMGMaster database utilities. ")
@@ -40,9 +41,7 @@ else:
 # Initialize CLI action handler
 cli_masterdb_hdl = CLIMasterDBHandler(
     db_path=tmg_master_path,
-    path_champss=champss_data__path, 
-    path_chimepsr_fm=chimepsr_fm__data_path, 
-    path_chimepsr_fil=chimepsr_fil__data_path, 
+    backends=backends, 
     fast_mode_mem_gb=fast_mode_mem_gb, 
     logger=logger.copy()
 )

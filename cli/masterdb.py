@@ -9,107 +9,137 @@ from backend.utils.utils import utils
 from backend.utils.logger import logger
 
 class CLIMasterDBHandler:
-    def __init__(self, db_path, path_champss, path_chimepsr_fm, path_chimepsr_fil, fast_mode_mem_gb, logger=logger()):
+    def __init__(self, db_path, backends, fast_mode_mem_gb, logger=logger()):
         self.db_path = db_path
-        self.path_champss = path_champss
-        self.path_chimepsr_fm = path_chimepsr_fm
-        self.path_chimepsr_fil = path_chimepsr_fil
+        self.backends = backends
         self.fast_mode_mem_gb = fast_mode_mem_gb
         self.logger = logger
 
-    def ls_champss(self, psr="*"):
-        return glob.glob(self.path_champss.replace("%PSR%", psr))
+    # def ls_champss(self, psr="*"):
+    #     return glob.glob(self.path_champss.replace("%PSR%", psr))
         
-    def ls_chimepsr_fm(self, psr="*"):
-        return glob.glob(self.path_chimepsr_fm.replace("%PSR%", psr))
+    # def ls_chimepsr_fm(self, psr="*"):
+    #     return glob.glob(self.path_chimepsr_fm.replace("%PSR%", psr))
 
-    def ls_chimepsr_fil(self, psr="*"):
-        return glob.glob(self.path_chimepsr_fil.replace("%PSR%", psr))
+    # def ls_chimepsr_fil(self, psr="*"):
+    #     return glob.glob(self.path_chimepsr_fil.replace("%PSR%", psr))
+
+    def ls(self, path, psr="*"):
+        """
+        List files in the given path with the specified pulsar ID.
+        """
+        return glob.glob(path.replace("%PSR%", psr))
     
     def insert_data(self, placeholder_if_corrupted):
         with tmg_master(self.db_path, fast_mode=True, mem_gb=self.fast_mode_mem_gb) as tm_hdl:
             db_records = tm_hdl.get_ar_ids_idxed_by_psr_id()
 
-            # CHAMPSS
-            self.logger.info(f"Inserting raw data from CHAMPSS (path: {self.path_champss})")
-            # champss__files = glob.glob(champss_data__path.replace("%PSR%", "*"))
-            champss__files = self.ls_champss("*")
-            for i, path in enumerate(champss__files):
-                psr_id = path.split("/")[-2]
-                ar_id = utils.get_archive_id(path)
+            for bknd, info in self.backends.items():
+                self.logger.info(f"Inserting raw data from {info['label']} (path: {info['data_path']})")
+                files = self.ls(info['data_path'], "*")
+                for i, file in enumerate(files):
+                    psr_id = file.split("/")[-2] # TODO: there should be a better way to get the pulsar ID!!
+                    ar_id = utils.get_archive_id(file)
 
-                if psr_id in db_records:
-                    if ar_id in db_records[psr_id]:
-                        continue
+                    if psr_id in db_records:
+                        if ar_id in db_records[psr_id]:
+                            continue
 
-                self.logger.debug(f"[{i+1}/{len(champss__files)}] Inserting: {psr_id} -> {path}", end="\r")
+                    self.logger.debug(f"[{i+1}/{len(files)}] Inserting: {psr_id} -> {file}", end="\r", layer=1)
 
-                try:
-                    tm_hdl.insert_raw_data_from_file(
-                        psr_id = psr_id, 
-                        location = path, 
-                        backend = "champss", 
-                        format = "archive", 
-                        skip_if_exists = True, 
-                        placeholder_if_corrupted = placeholder_if_corrupted
-                    )
-                except Exception as e:
-                    self.logger.error(f"Failed to insert: {psr_id} -> {path} ({e})")
-                    self.logger.error(traceback.format_exc())
+                    try:
+                        tm_hdl.insert_raw_data_from_file(
+                            psr_id = psr_id, 
+                            location = file, 
+                            backend = bknd, 
+                            format = "auto", 
+                            skip_if_exists = True, 
+                            placeholder_if_corrupted = placeholder_if_corrupted
+                        )
+                    except Exception as e:
+                        self.logger.error(f"Failed to insert: {psr_id} -> {file} ({e})")
+                        self.logger.error(traceback.format_exc())
+
+            # # CHAMPSS
+            # self.logger.info(f"Inserting raw data from CHAMPSS (path: {self.path_champss})")
+            # # champss__files = glob.glob(champss_data__path.replace("%PSR%", "*"))
+            # champss__files = self.ls_champss("*")
+            # for i, path in enumerate(champss__files):
+            #     psr_id = path.split("/")[-2]
+            #     ar_id = utils.get_archive_id(path)
+
+            #     if psr_id in db_records:
+            #         if ar_id in db_records[psr_id]:
+            #             continue
+
+            #     self.logger.debug(f"[{i+1}/{len(champss__files)}] Inserting: {psr_id} -> {path}", end="\r")
+
+            #     try:
+            #         tm_hdl.insert_raw_data_from_file(
+            #             psr_id = psr_id, 
+            #             location = path, 
+            #             backend = "champss", 
+            #             format = "archive", 
+            #             skip_if_exists = True, 
+            #             placeholder_if_corrupted = placeholder_if_corrupted
+            #         )
+            #     except Exception as e:
+            #         self.logger.error(f"Failed to insert: {psr_id} -> {path} ({e})")
+            #         self.logger.error(traceback.format_exc())
             
-            # CHIME/Pulsar Fold-mode
-            self.logger.info(f"Inserting raw data from CHIMEPSR_FM (path: {self.path_chimepsr_fm})")
-            # chimepsr_fm__files = glob.glob(chimepsr_fm__data_path.replace("%PSR%", "*"))
-            chimepsr_fm__files = self.ls_chimepsr_fm("*")
-            for i, path in enumerate(chimepsr_fm__files):
-                psr_id = path.split("/")[-2]
-                ar_id = utils.get_archive_id(path)
+            # # CHIME/Pulsar Fold-mode
+            # self.logger.info(f"Inserting raw data from CHIMEPSR_FM (path: {self.path_chimepsr_fm})")
+            # # chimepsr_fm__files = glob.glob(chimepsr_fm__data_path.replace("%PSR%", "*"))
+            # chimepsr_fm__files = self.ls_chimepsr_fm("*")
+            # for i, path in enumerate(chimepsr_fm__files):
+            #     psr_id = path.split("/")[-2]
+            #     ar_id = utils.get_archive_id(path)
 
-                if psr_id in db_records:
-                    if ar_id in db_records[psr_id]:
-                        continue
+            #     if psr_id in db_records:
+            #         if ar_id in db_records[psr_id]:
+            #             continue
 
-                self.logger.debug(f"[{i+1}/{len(chimepsr_fm__files)}] Inserting: {psr_id} -> {path}", end="\r")
+            #     self.logger.debug(f"[{i+1}/{len(chimepsr_fm__files)}] Inserting: {psr_id} -> {path}", end="\r")
 
-                try:
-                    tm_hdl.insert_raw_data_from_file(
-                        psr_id = psr_id, 
-                        location = path, 
-                        backend = "chimepsr_fm", 
-                        format = "archive", 
-                        skip_if_exists=True, 
-                        placeholder_if_corrupted = placeholder_if_corrupted
-                    )
-                except Exception as e:
-                    self.logger.error(f"Failed to insert: {psr_id} -> {path} ({e})")
-                    self.logger.error(traceback.format_exc())
+            #     try:
+            #         tm_hdl.insert_raw_data_from_file(
+            #             psr_id = psr_id, 
+            #             location = path, 
+            #             backend = "chimepsr_fm", 
+            #             format = "archive", 
+            #             skip_if_exists=True, 
+            #             placeholder_if_corrupted = placeholder_if_corrupted
+            #         )
+            #     except Exception as e:
+            #         self.logger.error(f"Failed to insert: {psr_id} -> {path} ({e})")
+            #         self.logger.error(traceback.format_exc())
 
-            # CHIME/Pulsar Filterbank
-            self.logger.info(f"Inserting raw data from CHIMEPSR_FIL (path: {self.path_chimepsr_fil})")
-            # chimepsr_fil__files = glob.glob(chimepsr_fil__data_path.replace("%PSR%", "*"))
-            chimepsr_fil__files = self.ls_chimepsr_fil("*")
-            for i, path in enumerate(chimepsr_fil__files):
-                psr_id = path.split("/")[-2]
-                ar_id = utils.get_archive_id(path)
+            # # CHIME/Pulsar Filterbank
+            # self.logger.info(f"Inserting raw data from CHIMEPSR_FIL (path: {self.path_chimepsr_fil})")
+            # # chimepsr_fil__files = glob.glob(chimepsr_fil__data_path.replace("%PSR%", "*"))
+            # chimepsr_fil__files = self.ls_chimepsr_fil("*")
+            # for i, path in enumerate(chimepsr_fil__files):
+            #     psr_id = path.split("/")[-2]
+            #     ar_id = utils.get_archive_id(path)
 
-                if psr_id in db_records:
-                    if ar_id in db_records[psr_id]:
-                        continue
+            #     if psr_id in db_records:
+            #         if ar_id in db_records[psr_id]:
+            #             continue
                         
-                self.logger.debug(f"[{i+1}/{len(chimepsr_fil__files)}] Inserting (skip if exist): {psr_id} -> {path}", end="\r")
+            #     self.logger.debug(f"[{i+1}/{len(chimepsr_fil__files)}] Inserting (skip if exist): {psr_id} -> {path}", end="\r")
                 
-                try:
-                    tm_hdl.insert_raw_data_from_file(
-                        psr_id = psr_id, 
-                        location = path, 
-                        backend = "chimepsr_fil", 
-                        format = "filterbank", 
-                        skip_if_exists=True, 
-                        placeholder_if_corrupted = placeholder_if_corrupted
-                    )
-                except Exception as e:
-                    self.logger.error(f"Failed to insert: {psr_id} -> {path} ({e})")
-                    self.logger.error(traceback.format_exc())
+            #     try:
+            #         tm_hdl.insert_raw_data_from_file(
+            #             psr_id = psr_id, 
+            #             location = path, 
+            #             backend = "chimepsr_fil", 
+            #             format = "filterbank", 
+            #             skip_if_exists=True, 
+            #             placeholder_if_corrupted = placeholder_if_corrupted
+            #         )
+            #     except Exception as e:
+            #         self.logger.error(f"Failed to insert: {psr_id} -> {path} ({e})")
+            #         self.logger.error(traceback.format_exc())
     
     def cleanup_raw_data(self):
         with tmg_master(self.db_path, fast_mode=True, mem_gb=self.fast_mode_mem_gb) as tm_hdl:

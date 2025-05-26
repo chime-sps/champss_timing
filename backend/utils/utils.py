@@ -174,8 +174,8 @@ class utils:
 
     @staticmethod
     def get_raw_data_format(filename, raise_exception=True):
-        from champss_timing.io.archive import ArchiveReader
-        from champss_timing.io.filterbank import FilterbankReader
+        from ..io.archive import ArchiveReader
+        from ..io.filterbank import FilterbankReader
 
         try:
             ArchiveReader(filename)

@@ -88,7 +88,8 @@ There is no standardized way to install the pipeline, as it is specifically desi
            }
        }
    ```
-   
+
+   **NOTE:** Please ensure that each pulsar's data is located in its respective folder (e.g., /path/to/B0525+21; thus, the the data_path will be /path/to/%PSR%/*.ar). Alternatively, modify the code in champss_timing/cli/masterdb.py (search for the line `psr_id = file.split("/")[-2]`) to match your data structure. There is a to-do item fix this restriction, but it is a temporary solution.
    
 
 ### Adding Pulsars to the Pipeline
