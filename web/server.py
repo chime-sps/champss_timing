@@ -231,7 +231,7 @@ def api_public(endpoint):
 def api_private(endpoint):
     return app.api_private.handle(endpoint, request)
 
-def run(psr_dir, port, host="", password=False, debug=False, update_hdl=None, slack_token=None, notebook_path="./runnotes.db"):
+def run(psr_dir, port, host="127.0.0.1", password=False, debug=False, update_hdl=None, slack_token=None, notebook_path="./runnotes.db"):
     global app
 
     app.login = login_hdl.login(session, password)
@@ -266,4 +266,4 @@ def run(psr_dir, port, host="", password=False, debug=False, update_hdl=None, sl
             app.logger.info("Slack run notes service started.")
 
         # Start the web server
-        app.run(host="127.0.0.1", port=port)
+        app.run(host=host, port=port)
