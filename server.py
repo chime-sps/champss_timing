@@ -20,6 +20,7 @@ cli_config = CLIConfig(load_error=False)
 # Initialize parser
 parser = argparse.ArgumentParser(description="CHAMPSS Timing Pipeline Web Server")
 parser.add_argument("-p", "--port", type=int, default=1508, help="Port number for the web server (default: 1508)")
+parser.add_argument("-h", "--host", type=str, default="127.0.0.1", help="Host address for the web server (default: 127.0.0.1)")
 parser.add_argument("-r", "--repo", type=str, default=None, help="Repository URL for the timing sources", required=False)
 parser.add_argument("-d", "--debug", action="store_true", help="Enable debug mode", default=False)
 parser.add_argument("-k", "--ssh-key", type=str, help="SSH key for the repository", default="")
@@ -82,6 +83,7 @@ if args.slack is not None:
 server.run(
     psr_dir=psr_dir, 
     update_hdl=update_repo, 
+    host=args.host,
     port=args.port, 
     debug=args.debug,
     password=password, 
