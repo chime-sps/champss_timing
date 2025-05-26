@@ -51,42 +51,35 @@ There is no standardized way to install the pipeline, as it is specifically desi
    ```
    
    Slack tokens and JUMP parameters may be left blank and added later. The pulsar name (%PSR%) and glob pattern can be used in data paths.  The following is an example of a configuration:
+   
    ```
    {
-       "slack_token": {
-           "test": {
-               "CHANNEL_ID": "XXXXX",
-               "SLACK_BOT_TOKEN": "xoxb-XXXXX",
-               "SLACK_APP_TOKEN": "xapp-XXXXX"
-           }
-       },
-       "toa_jumps": {
-           "chimepsr_fil": [
-               <JUMP value>,
-               <JUMP uncertainty>
-           ]
-       }, 
-       "data_paths": {
-           "champss": "/path/to/champss/%PSR%/*.ar", 
-           "chimepsr_fm": "/path/to/pulsar/fold_mode/%PSR%/*.ar", 
-           "chimepsr_fil": "/path/to/pulsar/filterbank/%PSR%/*.fil"
-       }, 
-       "user_defined": {
-           "monitor_url": "https://xxxxx", 
-           "uptime_url": "https://xxxxx", 
-           "heartbeat_url_narval_github": "xxxxx", 
-           "heartbeat_url_cedar_narval": "xxxxx", 
-           "globus": {
-               "client_id": "xxxxx",
-               "source_collection_id": "xxxxx",
-               "dest_collection_id": "xxxxx",
-               "source_dir_fm": "/path/on/other/cluster/pulsar/fold_mode",
-               "source_dir_fil": "/path/on/other/cluster/pulsar/filterbank",
-               "dest_dir": "/path/to/pulsar",
-               "transfer_scopes": [xxx, xxx, xxx],
-               "timing_sources_repo": "git@github.com:xxx/xxx.git"
-           }
-       }
+        "slack_token": {
+            "chime": {
+                "CHANNEL_ID": "CHANNEL_ID_HERE", 
+                "SLACK_BOT_TOKEN": "SLACK_BOT_TOKEN_HERE",
+                "SLACK_APP_TOKEN": "SLACK_APP_TOKEN_HERE"
+            }, 
+            "test": {
+                "CHANNEL_ID": "CHANNEL_ID_HERE", 
+                "SLACK_BOT_TOKEN": "SLACK_BOT_TOKEN_HERE",
+                "SLACK_APP_TOKEN": "SLACK_APP_TOKEN_HERE"
+            }
+        }, 
+        "backends": {
+            "champss": {
+                "label": "CHAMPSS Fold Mode", 
+                "data_path": "/PATH/TO/CHAMPSS/DATA",
+                "jump": [0, 0]
+            }, 
+            "backend2": {
+                "label": "NAME OF THE BACKEND",
+                "data_path": "/PATH/TO/BACKEND2/DATA",
+                "jump": [<val.>, <unc.>]
+            }
+        }, 
+        "user_defined": {}
+    }
    ```
 
    **NOTE:** Please ensure that each pulsar's data is located in its respective folder (e.g., /path/to/B0525+21; thus, the the data_path will be /path/to/%PSR%/*.ar). Alternatively, modify the code in champss_timing/cli/masterdb.py (search for the line `psr_id = file.split("/")[-2]`) to match your data structure. There is a to-do item fix this restriction, but it is a temporary solution.
