@@ -32,7 +32,7 @@ app.logger = logger()
 def before_request():
     if request.endpoint != 'login' and request.endpoint != 'api_public':
         if not app.login.has_logged_in():
-            return redirect(url_for('login'))
+            return redirect(app._url_for('login'))
 
     x_forwarded_proto = request.headers.get('X-Forwarded-Proto')
     if  x_forwarded_proto == 'https':
@@ -129,7 +129,7 @@ def login():
         if 'password' not in request.form:
             show_msg = "No password provided."
         elif app.login.checker(request.form['password']):
-            return redirect(url_for('index'))
+            return redirect(app._url_for('index'))
         else:
             show_msg = "Wrong password."
     return render_template(
