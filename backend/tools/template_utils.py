@@ -16,7 +16,7 @@ class StackTemplateState:
                 continue
 
             # normalize the profile
-            profiles[i] = (profile - np.mean(profile)) / np.std(profile)
+            profiles[i] = (profile - np.median(profile)) / np.std(profile)
 
         self.profiles = profiles
         self.template = np.median(np.array(profiles), axis=0)

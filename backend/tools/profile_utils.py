@@ -2,7 +2,9 @@ import copy
 import datetime
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.stats import shapiro, kstest, norm, chisquare, chi2
+from scipy.ndimage import gaussian_filter1d
+from scipy.signal import find_peaks
+from scipy.stats import shapiro, kstest, norm, chisquare, chi2, median_abs_deviation
 
 from .template_utils import StackTemplate
 from ..utils.stats_utils import stats_utils
@@ -284,6 +286,17 @@ class ProfileAnalyzer(StackTemplate):
 
         return self.injected_idxes
 
+    def get_binned_profiles(self):
+        """
+        Get the binned profiles.
+
+        Returns
+        -------
+        list
+            List of binned profiles.
+        """
+        return np.array(self.binned_profiles)
+
     def get_binned_residuals(self):
         """
         Get the residuals of the profiles.
@@ -362,6 +375,13 @@ class ProfileAnalyzer(StackTemplate):
             # ks_results.append(kstest(residual, 'poisson', args=(np.mean(residual),))[1])
 
         return np.array(ks_results)
+
+    def get_peak_fluences(self):
+        # Initialize the ProfilePeaks class
+        pp = ProfilePeaks(self.get_template(), self.get_binned_profiles(), logger=self.logger, verbose=self.verbose)
+
+        # Get the peak fluence
+        peak_fluences = pp.get_peak_fluences()
 
     def get_threshold_and_outliers(self, statistic="rms", threshold=3):
         if statistic == "rms":
@@ -521,7 +541,7 @@ class ProfileAnalyzer(StackTemplate):
         #     ax[1, 4].axhline(i, color='r', linestyle='-', alpha=0.5, linewidth=0.5)
         ## Set limits
         for i in range(len(ax[1, :])):
-            ax[1, i].set_ylim(ax[1, 0].get_ylim())
+            ax[1, i].set_ylim(ax[1, 0].get_ylim()[0] + 0.5, ax[1, 0].get_ylim()[1] - 0.5)
             ax[0, i].set_xlim(ax[1, i].get_xlim())
         # ax[0, 1].set_ylim(ax[0, 0].get_ylim())
         ## Set y-ticks in time
@@ -532,9 +552,289 @@ class ProfileAnalyzer(StackTemplate):
         ax[1, 0].set_yticklabels(time_labels)
         ax[1, 0].set_yticks(current_yticks)
         ## Info text
-        fig.text(0.001, 0, f"CHAMPSS Timing Pipeline ({utils.get_version_hash()}) ProfileAnalyzer | {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | MJDs on y-axis may not be uniform due to data gaps and binned profiles. ", fontsize=9, ha="left", va="bottom", family="monospace")
+        fig.text(0.001, 0, f"CHAMPSS Timing Pipeline ({utils.get_version_hash()}) profile_utils.ProfileAnalyzer | {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | MJDs on y-axis may not be uniform due to data gaps and binned profiles. ", fontsize=9, ha="left", va="bottom", family="monospace")
 
         plt.tight_layout()
+        if savefig is not None:
+            plt.savefig(savefig)
+        else:
+            plt.show()
+
+class ProfilePeaks:
+    def __init__(self, template, aligned_profiles, logger=logger(), verbose=False):
+        """
+        Initialize the ProfilePeaks class.
+
+        Parameters
+        ----------
+        template : np.ndarray
+            The template profile.
+        aligned_profiles : list of np.ndarray
+            List of aligned profiles.
+        logger : Logger, optional
+            Logger instance for logging, by default logger()
+        """
+        self.template = template
+        self.aligned_profiles = aligned_profiles
+        self.logger = logger
+        self.verbose = verbose
+
+        # Get peaks
+        self.peaks, self.peak_ranges, self.find_peak_threshold, self.smoothed_template = self.find_peaks()
+
+    def find_peaks(self, smooth_sigma=3, max_peaks=5):
+        """
+        Find the peaks in the template profile and aligned profiles.
+
+        Returns
+        -------
+        list of np.ndarray
+            List of peak indices for each aligned profile.
+        """
+
+        # Smooth the template profile
+        smoothed_template = gaussian_filter1d(self.template, sigma=smooth_sigma)
+
+        # Find peaks
+        threshold = np.mean(smoothed_template) + median_abs_deviation(smoothed_template) * 3  # Set threshold as mean + 3*MAD
+        peaks, props = find_peaks(smoothed_template, height=threshold)
+
+        # If more than max_peaks, keep only the highest peaks
+        if len(peaks) > max_peaks:
+            # Get the indices of the highest peaks
+            peak_heights = props['peak_heights']
+            sorted_indices = np.argsort(peak_heights)[-max_peaks:]
+            peaks = peaks[sorted_indices]
+
+        # Find range of each peak
+        peak_ranges = []
+        for peak in peaks:
+            # Find the left and right bounds of the peak
+            left_bound = np.where(smoothed_template[:peak] < threshold)[0][-1] if np.any(smoothed_template[:peak] < threshold) else 0
+            right_bound = np.where(smoothed_template[peak:] < threshold)[0][0] + peak if np.any(smoothed_template[peak:] < threshold) else len(smoothed_template) - 1
+            
+            # Append the range
+            peak_ranges.append((left_bound, right_bound))
+
+        if self.verbose:
+            plt.plot(self.template, label='Smoothed Template')
+            plt.plot(smoothed_template, label='Smoothed Template', linestyle='--')
+            for peak in peaks:
+                plt.axvline(peak, color='r', linestyle='--', label=f'Peak at {peak}')
+            for left_bound, right_bound in peak_ranges:
+                plt.axvspan(left_bound, right_bound, color='yellow', alpha=0.3)
+            plt.axhline(threshold, color='g', linestyle='--', label='Threshold')
+            plt.legend()
+            plt.show()
+
+        return peaks, peak_ranges, threshold, smoothed_template 
+
+    def get_peak_fluences(self):
+        """
+        Get the fluence of each peak on the aligned profiles.
+
+        Returns
+        -------
+        list of np.ndarray
+            List of peak fluence for each aligned profile.
+        """
+        peak_fluences = []
+        for profile in self.aligned_profiles:
+            this_peak_fluence = []
+            for this_peak_range in self.peak_ranges:
+                # Get the peak fluence
+                this_peak_fluence.append(
+                    np.sum(profile[this_peak_range[0]:this_peak_range[1]])
+                )
+            peak_fluences.append(np.array(this_peak_fluence))
+
+        # Transpose to get the index in the first dimension
+        peak_fluences = np.array(peak_fluences).T
+
+        if self.verbose:
+            _, ax = plt.subplots(len(peak_fluences), 1, figsize=(15, 5))
+            if len(peak_fluences) == 1:
+                ax = [ax]
+            for i, fluence in enumerate(peak_fluences):
+                ax[i].plot(fluence, "kx", label=f'Peak {i+1}')
+                ax[i].set_title(f'Peak {i+1} fluences')
+                ax[i].set_xlabel('Profile Index')
+                ax[i].set_ylabel('fluence')
+                ax[i].legend()
+
+        return peak_fluences
+
+    def get_outliers_thresholds(self, threshold=3):
+        """
+        Get the thresholds for outliers based on the peak fluences.
+
+        Parameters
+        ----------
+        threshold : float, optional
+            The threshold for outliers, by default 3
+
+        Returns
+        -------
+        tuple
+            Tuple containing the thresholds and the outliers.
+        """
+        # Get the peak fluences
+        peak_fluences = self.get_peak_fluences()
+
+        # Calculate thresholds
+        thresholds = []
+        for fluences in peak_fluences:
+            thresholds.append(
+                stats_utils.mad_outlier_thresholds(
+                    fluences, z_score=threshold
+                )
+            )
+
+        return thresholds
+
+    def get_outliers_thresholds_CL95(self, savefig=None):
+        """
+        Get the thresholds for outliers based on the peak fluences using a 95% confidence level.
+
+        Returns
+        -------
+        tuple
+            Tuple containing the thresholds and the outliers.
+        """
+
+        # Calculate thresholds
+        thresholds = self.get_outliers_thresholds(threshold=1.96)
+
+        # Plot
+        self.plot(threshold=1.96, savefig=savefig)
+
+        return thresholds
+
+    def get_outliers_thresholds_CL997(self, savefig=None):
+        """
+        Get the thresholds for outliers based on the peak fluences using a 99.7% confidence level.
+
+        Returns
+        -------
+        tuple
+            Tuple containing the thresholds and the outliers.
+        """
+
+        # Calculate thresholds
+        thresholds = self.get_outliers_thresholds(threshold=2.965)
+
+        # Plot
+        self.plot(threshold=2.965, savefig=savefig)
+
+        return thresholds
+    
+    def plot(self, threshold=3, savefig=None):
+        """
+        Plot the peaks and their fluences on the aligned profiles.
+        Parameters
+        ----------
+        threshold : float, optional
+            The threshold for outliers, by default 3 (i.e., z-score)
+        savefig : str, optional
+            Path to save the figure, by default None (i.e., show the figure)
+        """
+        
+        # Get the peak fluences
+        peak_fluences = self.get_peak_fluences()
+
+        # Get the thresholds and outliers
+        thresholds = self.get_outliers_thresholds(threshold=threshold)
+        outliers = []
+        for i, fluences in enumerate(peak_fluences):
+            # Get the outlier indices
+            outlier_indices_upper = np.where(fluences > thresholds[i][1])[0]
+            outlier_indices_lower = np.where(fluences < thresholds[i][0])[0]
+            outlier_indices = np.concatenate((outlier_indices_upper, outlier_indices_lower))
+            outliers.append(outlier_indices)
+
+        # Plot
+        fig, ax = plt.subplots(len(peak_fluences) + 1, 3, figsize=(16, 2 + 2 * len(peak_fluences)), width_ratios=(1, 4, 0.5), gridspec_kw={'hspace': 0, 'wspace': 0})
+
+        # Plot standard template
+        ax[0, 0].plot(self.smoothed_template, label='Template', color='k', lw=0.5)
+        # ax[0, 0].axhline(self.find_peak_threshold, color='k', linestyle='--', label='Threshold', lw=0.5)
+        ax[0, 0].hlines(self.find_peak_threshold, 0, len(self.smoothed_template), color='k', linestyle='--', lw=0.5)
+        ax[0, 0].text(0.025, self.find_peak_threshold + 0.05, 'peak finding threshold', va='bottom', ha='left', color='k', fontsize=8)
+        ax[0, 0].set_title('Template / Peaks', fontsize=9)
+        ax[0, 0].set_xticks([])
+        ax[0, 0].set_yticks([])
+        for side in ax[0, 0].spines.values():
+            side.set_visible(False)
+        ax[0, 0].set_xlim(0, len(self.smoothed_template) * 1.15)
+        # ax[0, 0].text(0.025, 0.95, 'Template', transform=ax[0, 0].transAxes, va='top', ha='left', color='k')
+
+        # Plot aligned profiles
+        ax[0, 1].set_title('Aligned Profiles / Fluences', fontsize=9)
+        ax[0, 1].matshow(np.array(self.aligned_profiles).T, aspect='auto', cmap='gray_r')
+        ax[0, 1].set_xticks([])
+        ax[0, 1].set_yticks([])
+
+        # Plot standard template without smoothing
+        ax[0, 2].plot(self.template, np.linspace(len(self.template), 0, len(self.template)), label='Template', color='k', lw=0.5, alpha=0.5)
+        ax[0, 2].set_title('Templ. / Fluences Dist.', fontsize=9)
+        ax[0, 2].set_xticks([])
+        ax[0, 2].set_yticks([])
+        ax[0, 2].set_ylim(0, len(self.template))
+        for i, peak in enumerate(self.peaks):
+            ax[0, 2].axhline(len(self.template) - peak, color='r', linestyle='--', label=f'Peak at {peak}', lw=0.5)
+            ax[0, 2].text(ax[0, 2].get_xlim()[1], len(self.template) - peak + 0.05, f'Peak #{i+1}', va='bottom', ha='right', color='r', fontsize=6)
+
+        # Plot fluences over profiles
+        for i, fluence in enumerate(peak_fluences):
+            ax_i = i + 1
+            ax[ax_i, 1].plot(fluence, "kx", label=f'Peak {i+1}')
+            ax[ax_i, 1].axhline(thresholds[i][0], color='r', linestyle='--', label='Lower Threshold', lw=1)
+            ax[ax_i, 1].axhline(thresholds[i][1], color='r', linestyle='--', label='Upper Threshold', lw=1)
+            # ax[ax_i, 1].text(0.0075, 0.95, f'Peak #{i+1}', transform=ax[ax_i, 1].transAxes, va='top', ha='left', color='r')
+            ax[ax_i, 1].set_xlabel('Profile Index')
+            ax[ax_i, 1].set_ylabel('Fluence')
+            ax[ax_i, 1].set_yticks([])
+            ax[ax_i, 1].set_xlim(-0.5, len(self.aligned_profiles) - 0.5)
+
+        # Plot template and peaks
+        for i, peak in enumerate(self.peaks):
+            ax_i = i + 1
+            ax[ax_i, 0].plot(self.smoothed_template, label='Template', color='k', lw=0.5)
+            ax[ax_i, 0].axvline(peak, color='r', linestyle='--', label=f'Peak at {peak}', lw=0.5)
+            ax[ax_i, 0].axvspan(self.peak_ranges[i][0], self.peak_ranges[i][1], color='yellow', alpha=0.3, label='Peak Range', lw=0.5)
+            ax[ax_i, 0].text(0.025, 0.95, f'Peak #{i+1}', transform=ax[ax_i, 0].transAxes, va='top', ha='left', color='r')
+            ax[ax_i, 0].set_xticks([])
+            ax[ax_i, 0].set_yticks([])
+            for side in ax[ax_i, 0].spines.values():
+                side.set_visible(False)
+            ax[ax_i, 0].set_xlim(0, len(self.smoothed_template) * 1.15)
+
+            for outlier_idx in outliers[i]:
+                ax[ax_i, 1].axvline(outlier_idx, color='red', linestyle='-', label='Outlier', lw=0.5)
+
+            axis_midpoint = (ax[ax_i, 0].get_ylim()[1] + ax[ax_i, 0].get_ylim()[0]) / 2
+            ax[ax_i, 0].set_ylim(
+                axis_midpoint - (axis_midpoint - ax[ax_i, 0].get_ylim()[0]) * 1.1,
+                axis_midpoint + (ax[ax_i, 0].get_ylim()[1] - axis_midpoint) * 1.1
+            )
+
+        # Plot histogram of peak fluences
+        for i, fluence in enumerate(peak_fluences):
+            ax_i = i + 1
+            ax[ax_i, 2].hist(fluence, bins=20, color='gray', histtype='step', orientation='horizontal')
+            ax[ax_i, 2].set_ylim(ax[ax_i, 1].get_ylim()[0], ax[ax_i, 1].get_ylim()[1])
+            ax[ax_i, 2].set_yticks([])
+            ax[ax_i, 2].set_xlabel('Count')
+            ax[ax_i, 2].set_xticks([])
+            ax[ax_i, 2].axhline(thresholds[i][0], color='r', linestyle='--', label='Lower Threshold', lw=1)
+            ax[ax_i, 2].axhline(thresholds[i][1], color='r', linestyle='--', label='Upper Threshold', lw=1)
+
+        # Info text
+        fig.text(0.001, 0, f"CHAMPSS Timing Pipeline ({utils.get_version_hash()}) profile_utils.ProfilePeaks | {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", fontsize=9, ha="left", va="bottom", family="monospace")
+        fig.text(0.999, 0, f"threshold z-score = {threshold}", fontsize=9, ha="right", va="bottom", family="monospace")
+        plt.tight_layout()
+
+        # Savefig
         if savefig is not None:
             plt.savefig(savefig)
         else:
