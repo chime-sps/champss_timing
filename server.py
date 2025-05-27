@@ -26,6 +26,7 @@ parser.add_argument("-k", "--ssh-key", type=str, help="SSH key for the repositor
 parser.add_argument("--slack", type=str, help="Slack token for the run notes service", default=None)
 parser.add_argument("--password", type=str, help="Password for the repository", default="")
 parser.add_argument("--host", type=str, default="127.0.0.1", help="Host address for the web server (default: 127.0.0.1)")
+parser.add_argument("--root", type=str, default="/", help="Root path for the web server (default: /)")
 args = parser.parse_args()
 
 # Initialize parameters
@@ -84,6 +85,7 @@ server.run(
     psr_dir=psr_dir, 
     update_hdl=update_repo, 
     host=args.host,
+    root=args.root,
     port=args.port, 
     debug=args.debug,
     password=password, 

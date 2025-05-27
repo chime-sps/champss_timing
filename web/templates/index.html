@@ -6,27 +6,27 @@
     <div style="position: relative; width: 100%; ">
         <div style="float: right;">
             {% if warning_filter == 1 %}
-                <a href="/?dates={{ date_filter }}&tag={{ tag_filter }}&warning=0" class="badge rounded-pill text-bg-warning">#warning</a>
+                <a href="{{ url_for("index") }}?dates={{ date_filter }}&tag={{ tag_filter }}&warning=0" class="badge rounded-pill text-bg-warning">#warning</a>
             {% else %}
-                <a href="/?dates={{ date_filter }}&tag={{ tag_filter }}&warning=1" class="badge rounded-pill text-bg-light">#warning</a>
+                <a href="{{ url_for("index") }}?dates={{ date_filter }}&tag={{ tag_filter }}&warning=1" class="badge rounded-pill text-bg-light">#warning</a>
             {% endif %}
             <span style="color: #888; ">·</span>
             {% if date_filter == "today" %}
-                <a href="/?dates=none&tag={{ tag_filter }}&warning={{  warning_filter }}" class="badge rounded-pill text-bg-primary">#today</a>
+                <a href="{{ url_for("index") }}?dates=none&tag={{ tag_filter }}&warning={{  warning_filter }}" class="badge rounded-pill text-bg-primary">#today</a>
             {% else %}
-                <a href="/?dates=today&tag={{ tag_filter }}&warning={{  warning_filter }}" class="badge rounded-pill text-bg-light">#today</a>
+                <a href="{{ url_for("index") }}?dates=today&tag={{ tag_filter }}&warning={{  warning_filter }}" class="badge rounded-pill text-bg-light">#today</a>
             {% endif %}
             {% if date_filter == "week" %}
-                <a href="/?dates=none&tag={{ tag_filter }}&warning={{  warning_filter }}" class="badge rounded-pill text-bg-success">#week</a>
+                <a href="{{ url_for("index") }}?dates=none&tag={{ tag_filter }}&warning={{  warning_filter }}" class="badge rounded-pill text-bg-success">#week</a>
             {% else %}
-                <a href="/?dates=week&tag={{ tag_filter }}&warning={{  warning_filter }}" class="badge rounded-pill text-bg-light">#week</a>
+                <a href="{{ url_for("index") }}?dates=week&tag={{ tag_filter }}&warning={{  warning_filter }}" class="badge rounded-pill text-bg-light">#week</a>
             {% endif %}
             <span style="color: #888; ">·</span>
             {% for this_tag in sources.tags %}
                 {% if tag_filter == this_tag %}
-                    <a href="/?dates={{ date_filter }}&tag=all&warning={{  warning_filter }}" class="badge rounded-pill text-bg-dark">#{{ this_tag }}</a>
+                    <a href="{{ url_for("index") }}?dates={{ date_filter }}&tag=all&warning={{  warning_filter }}" class="badge rounded-pill text-bg-dark">#{{ this_tag }}</a>
                 {% else %}
-                    <a href="/?dates={{ date_filter }}&tag={{ this_tag }}&warning={{  warning_filter }}" class="badge rounded-pill text-bg-light">#{{ this_tag }}</a>
+                    <a href="{{ url_for("index") }}?dates={{ date_filter }}&tag={{ this_tag }}&warning={{  warning_filter }}" class="badge rounded-pill text-bg-light">#{{ this_tag }}</a>
                 {% endif %}
             {% endfor %}
         </div>
@@ -141,7 +141,7 @@
                             <div class="collapse" id="diagnostic_pdf_{{this_source.psr_id_esc}}">
                                 <br>
                                 <center></center><small>Double-click to view full diagnostic information.</small></center>
-                                <object id="diagnostic_pdf" data="/diagnostic/{{this_source.psr_id}}/pdf" type="application/pdf" style="width: 100%; aspect-ratio: 1.77; border: 0; border-radius: 5px; "></object>
+                                <object id="diagnostic_pdf" data="{{ url_for("diagnostic", source_id=this_source.psr_id) }}/pdf" type="application/pdf" style="width: 100%; aspect-ratio: 1.77; border: 0; border-radius: 5px; "></object>
                             </div>
 
                             <div id="resids_{{this_source.psr_id_esc}}" style="width:100%;height:5em;"></div>
@@ -160,11 +160,11 @@
                                 // });
                                 //
                                 // $('#div_{{this_source.psr_id_esc}}').on('dblclick', function() {
-                                //     window.location.href='/diagnostic/{{this_source.psr_id}}';
+                                //     window.location.href='{{ url_for("diagnostic", source_id=this_source.psr_id) }}';
                                 // });
 
                                 $('#div_{{this_source.psr_id_esc}}').on('click', function() {
-                                    window.open('/diagnostic/{{this_source.psr_id}}', '_blank');
+                                    window.open('{{ url_for("diagnostic", source_id=this_source.psr_id) }}', '_blank');
                                 });
                             </script>
 

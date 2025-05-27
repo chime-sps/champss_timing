@@ -910,7 +910,7 @@
                 return; 
             }
             
-            var endpoint = "/api/get_notes_by_psr?psr={{ source_id }}&group_by_date=false";
+            var endpoint = "{{ url_for("api_private", api="get_notes_by_psr") }}?psr={{ source_id }}&group_by_date=false";
             $.get(endpoint, function(notes) {
                 // format the notes
                 var note_text = ""; 

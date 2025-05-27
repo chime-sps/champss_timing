@@ -209,7 +209,7 @@
     document.getElementById('skymap').on('plotly_click', function(data){
         console.log(data.points);
         var psr_id = data.points[0].customdata;
-        preview('/diagnostic/' + psr_id);
+        preview('{{ url_for("diagnostic", source_id="")}}' + psr_id);
     });
 </script>
 
@@ -286,7 +286,7 @@
     document.getElementById('ppdot').on('plotly_click', function(data){
         console.log(data.points);
         var psr_id = data.points[0].customdata;
-        preview('/diagnostic/' + psr_id);
+        preview('{{ url_for("diagnostic", source_id="")}}' + psr_id);
     });
 </script>
 
@@ -331,7 +331,7 @@
     document.getElementById('pdm').on('plotly_click', function(data){
         console.log(data.points);
         var psr_id = data.points[0].customdata;
-        preview('/diagnostic/' + psr_id);
+        preview('{{ url_for("diagnostic", source_id="")}}' + psr_id);
     });
 </script>
 
@@ -375,7 +375,7 @@
     document.getElementById('ntoachi2r').on('plotly_click', function(data){
         console.log(data.points);
         var psr_id = data.points[0].customdata;
-        preview('/diagnostic/' + psr_id);
+        preview('{{ url_for("diagnostic", source_id="")}}' + psr_id);
     });
 </script>
 

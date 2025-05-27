@@ -5,6 +5,7 @@ from flask import request
 from flask import session
 from flask import redirect
 
+import copy
 import time
 import requests
 import traceback
@@ -63,6 +64,7 @@ def index():
     return render_template(
         'index.html',
         app=app,
+        url_for=app._url_for,
         sources=app.sources,
         request=request, 
         tag_filter=tag_filter, 
@@ -76,6 +78,7 @@ def plots():
     return render_template(
         'plots.html',
         app=app,
+        url_for=app._url_for,
         sources=app.sources,
         request=request, 
         show_sidebar=True
@@ -90,6 +93,7 @@ def ephemeris():
     return render_template(
         'ephemeris.html',
         app=app,
+        url_for=app._url_for,
         sources=app.sources,
         request=request, 
         f02p0=utils.f02p0,
@@ -107,6 +111,7 @@ def notes():
     return render_template(
         'notes.html',
         app=app,
+        url_for=app._url_for,
         sources=app.sources,
         notes=app.notes.fetch(),
         len=len,
@@ -130,6 +135,7 @@ def login():
     return render_template(
         'login.html',
         app=app,
+        url_for=app._url_for,
         sources=app.sources,
         request=request,
         show_msg=show_msg, 
@@ -145,6 +151,7 @@ def diagnostic(source_id):
     return render_template(
         'diagnostic.html',
         app=app,
+        url_for=app._url_for,
         source_id=source_id,
         sources=app.sources,
         request=request, 
@@ -158,6 +165,7 @@ def pulse_profiles(source_id):
     return render_template(
         'pulse_profiles.html',
         app=app,
+        url_for=app._url_for,
         source_id=source_id,
         sources=app.sources,
         request=request, 
@@ -223,15 +231,36 @@ def dealias_diagnostics(source_id):
 def dealias_diagnostics_(source_id):
     return dealias_diagnostics(source_id)
 
-@app.route('/public/api/<endpoint>', methods=['GET', 'POST'])
-def api_public(endpoint):
-    return app.api_public.handle(endpoint, request)
+@app.route('/public/api/<api>', methods=['GET', 'POST'])
+def api_public(api):
+    return app.api_public.handle(api, request)
 
-@app.route('/api/<endpoint>', methods=['GET', 'POST'])
-def api_private(endpoint):
-    return app.api_private.handle(endpoint, request)
+@app.route('/api/<api>', methods=['GET', 'POST'])
+def api_private(api):
+    return app.api_private.handle(api, request)
 
-def run(psr_dir, port, host="127.0.0.1", password=False, debug=False, update_hdl=None, slack_token=None, notebook_path="./runnotes.db"):
+class URLFormatter:
+    def __init__(self, app):
+        self.app = app
+
+    def __call__(self, *args, **kwargs):
+        # get url from the app
+        endpoint = app.url_for(*args, **kwargs)
+
+        # get app root from the app config
+        app_root = self.app.config['APPLICATION_ROOT']
+
+        # format app root
+        if app_root.endswith('/'):
+            app_root = app_root[:-1]
+
+        # format endpoint
+        if self.app.config['APPLICATION_ROOT'] != '/':
+            endpoint = app_root + endpoint
+
+        return endpoint
+
+def run(psr_dir, port, host="127.0.0.1", root="/", password=False, debug=False, update_hdl=None, slack_token=None, notebook_path="./runnotes.db"):
     global app
 
     app.login = login_hdl.login(session, password)
@@ -239,6 +268,8 @@ def run(psr_dir, port, host="127.0.0.1", password=False, debug=False, update_hdl
     app.api_private = api_hdl.PrivateAPI(app)
     app.update = update_hdl
     app.notes = notes_loader.notes_loader(notebook_path, app)
+    app.config['APPLICATION_ROOT'] = root
+    app._url_for = URLFormatter(app)
 
     if debug:
         app.debug = True

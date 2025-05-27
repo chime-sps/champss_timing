@@ -9,9 +9,9 @@
             <div id="header_tag_filter">
                 {% for this_tag in sources.tags %}
                     {% if tag_filter == this_tag %}
-                        <a href="/ephemeris?tag=all" class="badge rounded-pill text-bg-dark">#{{ this_tag }}</a>
+                        <a href="{{ url_for("ephemeris") }}?tag=all" class="badge rounded-pill text-bg-dark">#{{ this_tag }}</a>
                     {% else %}
-                        <a href="/ephemeris?tag={{ this_tag }}" class="badge rounded-pill text-bg-light">#{{ this_tag }}</a>
+                        <a href="{{ url_for("ephemeris") }}?tag={{ this_tag }}" class="badge rounded-pill text-bg-light">#{{ this_tag }}</a>
                     {% endif %}
                 {% endfor %}
             </div>
@@ -76,7 +76,7 @@
                                     <tr>
                                 {% endif %}
                                     <td><input type="checkbox" name="psr" value="{{ this_source.psr_id }}"></td>
-                                    <td><a href="/diagnostic/{{ this_source.psr_id }}" class="diagnostic_link" target="_blank">{{ this_source.psr_id }}</a> <span class="badge text-bg-dark rounded-pill index-tag">#{{this_source.config["metadata"]["tag"]}}</span></td>
+                                    <td><a href="{{ url_for("diagnostic", source_id=this_source.psr_id) }}" class="diagnostic_link" target="_blank">{{ this_source.psr_id }}</a> <span class="badge text-bg-dark rounded-pill index-tag">#{{this_source.config["metadata"]["tag"]}}</span></td>
                                     <td>{{ deg2dms(this_source.last_timing_info["fitted_params"]["RAJ"]) }}</td>
                                     <td>{{ deg2dms(this_source.last_timing_info["fitted_params"]["DECJ"]) }}</td>
                                     <td>{{ f02p0(this_source.last_timing_info["fitted_params"]["F0"]) }}</td>
@@ -135,7 +135,7 @@
     function open_in_new_tab() {
         var selected_pulsars = get_selected_pulsars();
         for (var i = 0; i < selected_pulsars.length; i++) {
-            window.open('/diagnostic/' + selected_pulsars[i]);
+            window.open("{{ url_for("diagnostic", source_id="")}}" + selected_pulsars[i]);
         }
     }
 
@@ -144,7 +144,7 @@
         var urls = [];
         var filenames = [];
         for (var i = 0; i < selected_pulsars.length; i++) {
-            urls.push('/diagnostic/' + selected_pulsars[i] + '/pdf');
+            urls.push("{{ url_for("diagnostic", source_id="")}}" + selected_pulsars[i] + '/pdf');
             filenames.push("champss_timing_" + selected_pulsars[i] + '.pdf');
         }
         zip_download(
@@ -159,7 +159,7 @@
         var urls = [];
         var filenames = [];
         for (var i = 0; i < selected_pulsars.length; i++) {
-            urls.push('/diagnostic/' + selected_pulsars[i] + '/parfile');
+            urls.push("{{ url_for("diagnostic", source_id="")}}" + selected_pulsars[i] + '/parfile');
             filenames.push("champss_timing_" + selected_pulsars[i] + '.par');
         }
         zip_download(
@@ -174,7 +174,7 @@
         var urls = [];
         var filenames = [];
         for (var i = 0; i < selected_pulsars.length; i++) {
-            urls.push('/diagnostic/' + selected_pulsars[i] + '/timfile');
+            urls.push("{{ url_for("diagnostic", source_id="")}}" + selected_pulsars[i] + '/timfile');
             filenames.push("champss_timing_" + selected_pulsars[i] + '.tim');
         }
         zip_download(
@@ -189,7 +189,7 @@
         var urls = [];
         var filenames = [];
         for (var i = 0; i < selected_pulsars.length; i++) {
-            urls.push('/diagnostic/' + selected_pulsars[i] + '/dbfile');
+            urls.push("{{ url_for("diagnostic", source_id="")}}" + selected_pulsars[i] + '/dbfile');
             filenames.push("champss_timing_" + selected_pulsars[i] + '.sqlite3.db');
         }
         zip_download(
@@ -205,20 +205,20 @@
         var filenames = [];
         for (var i = 0; i < selected_pulsars.length; i++) {
             // diagnostic
-            urls.push('/diagnostic/' + selected_pulsars[i] + '/pdf');
+            urls.push("{{ url_for("diagnostic", source_id="")}}" + selected_pulsars[i] + '/pdf');
             // filenames.push("champss_timing_" + selected_pulsars[i] + '.pdf');
             filenames.push(selected_pulsars[i] + '/timing_diagnostic.pdf');
 
             // timing
-            urls.push('/diagnostic/' + selected_pulsars[i] + '/parfile');
+            urls.push("{{ url_for("diagnostic", source_id="")}}" + selected_pulsars[i] + '/parfile');
             // filenames.push("champss_timing_" + selected_pulsars[i] + '.par');
             filenames.push(selected_pulsars[i] + '/pulsar.par');
-            urls.push('/diagnostic/' + selected_pulsars[i] + '/timfile');
+            urls.push("{{ url_for("diagnostic", source_id="")}}" + selected_pulsars[i] + '/timfile');
             // filenames.push("champss_timing_" + selected_pulsars[i] + '.tim');
             filenames.push(selected_pulsars[i] + '/pulsar.tim');
 
             // debug
-            urls.push('/diagnostic/' + selected_pulsars[i] + '/dbfile');
+            urls.push("{{ url_for("diagnostic", source_id="")}}" + selected_pulsars[i] + '/dbfile');
             // filenames.push("champss_timing_" + selected_pulsars[i] + '.sqlite3.db');
             filenames.push(selected_pulsars[i] + '/champss_timing.sqlite3.db');
         }
