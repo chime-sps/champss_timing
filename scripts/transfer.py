@@ -242,7 +242,7 @@ with tmg_master("./champss_timing_sources/TMGMaster.sqlite3.db", readonly=True) 
         # Cross-match fold mode
         for f in this_fm:
             if os.path.isfile(f):
-                if len(tm.get_raw_data(psr_id=pulsar, ar_id=utils.get_archive_id(f), backend="chimepsr_fm")) == 0:
+                if len(tm.get_raw_data(psr_id=pulsar, ar_id=utils.get_archive_id(f), backend="pulsar")) == 0:
                     files.append({
                         "src": f, 
                         "dest": dest_dir + "/fold_mode/" + pulsar + "/" + f.split("/")[-1]
@@ -251,7 +251,7 @@ with tmg_master("./champss_timing_sources/TMGMaster.sqlite3.db", readonly=True) 
         # Cross-match filterbank
         for f in this_fil:
             if os.path.isfile(f):
-                if len(tm.get_raw_data(psr_id=pulsar, ar_id=utils.get_archive_id(f), backend="chimepsr_fil")) == 0:
+                if len(tm.get_raw_data(psr_id=pulsar, ar_id=utils.get_archive_id(f), backend="psrfil")) == 0:
                     files.append({
                         "src": f, 
                         "dest": dest_dir + "/filterbank/" + pulsar + "/" + f.split("/")[-1]
