@@ -152,3 +152,6 @@ class logger():
 
         if clear:
             self.clear_log_cache()
+
+    def cli_alert(self):
+        print('\a')

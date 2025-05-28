@@ -23,6 +23,7 @@ parser = argparse.ArgumentParser(description="CHAMPSS Timing Main Pipeline.")
 parser.add_argument("--ncpus", type=int, help="Number of CPUs to use.")
 parser.add_argument("--psr", type=str, help="Pulsar name (run timing for all pulsars if not specified).")
 parser.add_argument("--slack-token", type=str, help="Slack token.")
+parser.add_argument("--no-beep", action="store_true", help="Disable beep sound at the end of the script.")
 args = parser.parse_args()
 
 print(f"Number of CPUs: {args.ncpus}")
@@ -173,3 +174,7 @@ timing_results_txt = (
 # Save summary
 with open(f"{TIMING_SOURCES_PATH}/timing_summary.txt", "w") as f:
     f.write(timing_results_txt)
+
+# Send alert when finished
+if not args.no_beep:
+    logger.cli_alert()

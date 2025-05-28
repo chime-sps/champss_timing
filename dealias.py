@@ -42,6 +42,7 @@ parser.add_argument("--max-execution-time", type=int, help="Maximum execution ti
 parser.add_argument("--mjd-range", type=str, help="MJD range to use for alias factor calculation (e.g., 59000:60000, inclusive).", default=None, required=False)
 parser.add_argument("--show-dealias-history", action="store_true", help="Show dealias history and skip processing.", required=False, default=False)
 parser.add_argument("--no-commit", action="store_true", help="Do not commit changes to the psrdir and database.", required=False, default=False)
+parser.add_argument("--no-beep", action="store_true", help="Do not beep when the process is finished.", required=False, default=False)
 args = parser.parse_args()
 
 
@@ -313,3 +314,7 @@ dealias_results_txt = (
         "============================================================="
 )
 logger.info(dealias_results_txt)
+
+# Send alert when finished
+if not args.no_beep:
+    logger.cli_alert()
