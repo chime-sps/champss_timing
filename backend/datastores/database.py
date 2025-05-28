@@ -642,7 +642,8 @@ class database:
         if self.readonly:
             # remove temporary database
             self.logger.info(f"Removing temporary database {self.psr_db}")
-            os.remove(self.psr_db)
+            if os.path.exists(self.psr_db):
+                os.remove(self.psr_db)
 
     def __enter__(self):
         self.initialize()

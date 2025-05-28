@@ -139,8 +139,9 @@ class tmg_master:
     def close(self):
         if self.readonly:
             self.conn.close()
-            os.remove(self.db_path)
-            self.logger.debug(f"Readonly temporary database removed from {self.db_path}")
+            if os.path.exists(self.db_path):
+                os.remove(self.db_path)
+                self.logger.debug(f"Readonly temporary database removed from {self.db_path}")
         else:
             self.conn.commit()
             self.conn.close()
