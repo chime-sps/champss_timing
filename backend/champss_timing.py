@@ -18,7 +18,7 @@ from .utils.utils import utils
 from .utils.notification import notification
 
 class champss_timing:
-    def __init__(self, psr_dir, data_archives, toa_jumps={}, slack_token=False, timing_mode="opd", n_pools=4, workspace_cleanup=True, logger=logger()):
+    def __init__(self, psr_dir, data_archives, toa_jumps={}, run_checkers=True, slack_token=False, timing_mode="opd", n_pools=4, workspace_cleanup=True, logger=logger()):
         """
         CHAMPSS timing pipeline
 
@@ -49,6 +49,7 @@ class champss_timing:
         # Parameters
         self.psr_id = None
         self.toa_jumps = toa_jumps
+        self.run_checkers = run_checkers
         self.path_psr_dir = psr_dir
         self.path_data_archives = data_archives
         self.path_db = f"{self.path_psr_dir}/champss_timing.sqlite3.db"
@@ -187,7 +188,8 @@ class champss_timing:
             plot(db_hdl=self.db_hdl).diagnostic(savefig=self.path_diagnostic_plot)
 
             # Run checker
-            checker(psr_dir=self.path_psr_dir, db_hdl=self.db_hdl, noti_hdl=self.noti_hdl, psr_id=self.psr_id, logger=self.logger.copy()).check()
+            if self.run_checkers:
+                checker(psr_dir=self.path_psr_dir, db_hdl=self.db_hdl, noti_hdl=self.noti_hdl, psr_id=self.psr_id, logger=self.logger.copy()).check()
 
             # End of the script
             self.logger.success("Script finished. ")

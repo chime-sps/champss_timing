@@ -24,11 +24,19 @@ parser.add_argument("--ncpus", type=int, help="Number of CPUs to use.")
 parser.add_argument("--psr", type=str, help="Pulsar name (run timing for all pulsars if not specified).")
 parser.add_argument("--slack-token", type=str, help="Slack token.")
 parser.add_argument("--no-beep", action="store_true", help="Disable beep sound at the end of the script.")
+parser.add_argument("--skip-checkers", action="store_true", help="Skip running checkers after timing.")
 args = parser.parse_args()
+
+# Get run_checkers
+run_checkers = True
+if args.skip_checkers:
+    run_checkers = False
+    print("Skipping checkers after timing.")
 
 print(f"Number of CPUs: {args.ncpus}")
 print(f"Pulsar: {args.psr}")
 print(f"Slack token: {args.slack_token}")
+print(f"Run checkers: {run_checkers}")
 print(f"Start timing... (press Ctrl+C to cancel)")
 time.sleep(3)
 
@@ -136,6 +144,7 @@ for d in pulsar_data:
                 psr_dir=d["dir"],
                 data_archives=d["data"],
                 toa_jumps=JUMPS, 
+                run_checkers=run_checkers,
                 logger=logger.copy(),
                 slack_token=SLACK_TOKEN,
                 n_pools=N_POOL
