@@ -2,6 +2,7 @@ import os
 import shutil
 import hashlib
 import tqdm
+import numpy as np
 from multiprocessing import Pool
 
 from .database import database
@@ -88,6 +89,7 @@ class archive_cache:
         shutil.copyfile(f"{self.cache_dir}/{self.utils.get_archive_id(filename)}", dest)
 
     def update_model(self, jumps, parfile="auto", n_pools="auto", tempdir="auto", cleanup=True):
+        # TODO: we might want replace this method with the one in processing.archive_shutils sometime in the future.
         if parfile == "auto":
             parfile = f"{self.psr_dir}/pulsar.par"
 
@@ -176,6 +178,14 @@ class archive_cache:
                         if this_toa_notes["remark"] == "INVALID_TOA":
                             self.utils.print_warning(f"Failed to apply jump for {jump_ars[i]} due to INVALID_TOA.")
                             continue
+                    
+                    # check if the archive is actually blank (so that the file before and after jump are the same)
+                    this_archive_info = self.db_hdl.get_archive_info_by_filename(self.utils.get_archive_id(jump_ars[i]))
+                    if this_archive_info["timestamp"] != 0:
+                        if np.std(this_archive_info["psr_amps"]) == 0:
+                            self.utils.print_warning(f"Failed to apply jump for {jump_ars[i]} due to blank archive (std=0).")
+                            continue
+
                     raise Exception(f"Failed to apply jump for {jump_ars[i]} ({i + 1}/{len(jump_ars)})")
 
         # update psr_amps in database
