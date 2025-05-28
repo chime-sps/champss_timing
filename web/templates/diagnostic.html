@@ -56,14 +56,14 @@
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li><h6 class="dropdown-header">Diagnostic</h6></li>
-                            <li><a class="dropdown-item" href="{{ request.base_url }}/pdf" target="_blank">Diagnostic Plot (.pdf)</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for("diagnostic", source_id=source_id) }}/pdf" target="_blank">Diagnostic Plot (.pdf)</a></li>
                             <li><hr class="dropdown-divider"></li>
                             <li><h6 class="dropdown-header">Timing</h6></li>
-                            <li><a class="dropdown-item" href="{{ request.base_url }}/parfile">Ephemeris Parfile (.par)</a></li>
-                            <li><a class="dropdown-item" href="{{ request.base_url }}/timfile">TOA Timfile (.tim)</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for("diagnostic", source_id=source_id) }}/parfile">Ephemeris Parfile (.par)</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for("diagnostic", source_id=source_id) }}/timfile">TOA Timfile (.tim)</a></li>
                             <li><hr class="dropdown-divider"></li>
                             <li><h6 class="dropdown-header">Debug</h6></li>
-                            <li><a class="dropdown-item" href="{{ request.base_url }}/dbfile">Database File (.sqlite3.db)</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for("diagnostic", source_id=source_id) }}/dbfile">Database File (.sqlite3.db)</a></li>
                         </ul>
                     </div>
                 </div>
@@ -84,7 +84,7 @@
             <div id="diagnostic_pdf_div">
                 <div class="card">
                     <div class="card-body" style="width: 100%; aspect-ratio: 1.70; cursor: pointer; ">
-<!--                        <object id="diagnostic_pdf" data="{{ request.base_url }}/pdf" type="application/pdf" style="width: 100%; aspect-ratio: 1.77; border: 0; border-radius: 5px; "></object>-->
+<!--                        <object id="diagnostic_pdf" data="{{ url_for("diagnostic", source_id=source_id) }}/pdf" type="application/pdf" style="width: 100%; aspect-ratio: 1.77; border: 0; border-radius: 5px; "></object>-->
                         <div id="diagnostic_pdf" style="width: 100%; border: 0; border-radius: 5px; display: none; "></div>
                         <div id="diagnostic_pdf_placeholder" >
                             <div style="position: absolute; bottom: 10px; right: 0px; ">
@@ -416,7 +416,7 @@
                         <div class="col-md-10" style="position: relative; left: 50%; transform: translateX(-50%); ">
                             <div class="card">
                                 <div class="card-body">
-                                    <!-- <iframe src="{{ request.base_url }}/dealias/diagnostics" style="width: 100%; height: 100px; "></iframe> -->
+                                    <!-- <iframe src="{{ url_for("diagnostic", source_id=source_id) }}/dealias/diagnostics" style="width: 100%; height: 100px; "></iframe> -->
                                     <div id="dealias_diagnostics_pdf_div" style="width: 100%; height: 100%; aspect-ratio: 1.5; ">
                                         <div id="dealias_diagnostics_pdf" style="display: none; width: 100%; height: 100%; "></div>
                                         <div id="dealias_diagnostics_pdf_placeholder" style="position: absolute; bottom: 10px; right: 0px; ">
@@ -431,7 +431,7 @@
                                             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://mozilla.github.io/pdf.js/build/pdf.worker.mjs';
 
                                             // pdfjsLib.getDocument({data: pdf_data}).promise.then(function(pdf) {
-                                            var loadingTask = pdfjsLib.getDocument("{{ request.base_url }}/dealias/diagnostics");
+                                            var loadingTask = pdfjsLib.getDocument("{{ url_for("diagnostic", source_id=source_id) }}/dealias/diagnostics");
                                             loadingTask.promise.then(function(pdf) {
                                                 pdf.getPage(1).then(function(page) {
                                                     var scale = 2;
@@ -493,7 +493,7 @@
             }
 
             // open the pulse profiles browser
-            let newWin = window.open("{{ request.base_url }}/pulse_profiles", "pp_browser_{{ sources[source_id].psr_id_esc }}", 'width=1920,height=1080');
+            let newWin = window.open("{{ url_for("diagnostic", source_id=source_id) }}/pulse_profiles", "pp_browser_{{ sources[source_id].psr_id_esc }}", 'width=1920,height=1080');
         });
     </script>
 
@@ -564,7 +564,7 @@
             }, 0);
         }
         $("#btn_download_diagnostic").on("click", function() {
-            window.open("{{ request.base_url }}/pdf", "_blank");
+            window.open("{{ url_for("diagnostic", source_id=source_id) }}/pdf", "_blank");
         });
         $("#btn_download_parfile").on("click", function() {
             var parfile_content = $("#pre_parfile").text()
@@ -607,10 +607,10 @@
     <script>
         $("#download_all").on("click", function() {
             var urls = [
-                "{{ request.base_url }}/pdf",
-                "{{ request.base_url }}/parfile",
-                "{{ request.base_url }}/timfile",
-                "{{ request.base_url }}/dbfile"
+                "{{ url_for("diagnostic", source_id=source_id) }}/pdf",
+                "{{ url_for("diagnostic", source_id=source_id) }}/parfile",
+                "{{ url_for("diagnostic", source_id=source_id) }}/timfile",
+                "{{ url_for("diagnostic", source_id=source_id) }}/dbfile"
             ];
             var filenames = [
                 "{{ source_id }}/timing_diagnostics.pdf",
