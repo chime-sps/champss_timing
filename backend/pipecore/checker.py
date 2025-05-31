@@ -103,6 +103,14 @@ class checker:
             except Exception as e:
                 self.logger.error(f"Failed to run {checker_name} checker: {e}")
                 self.logger.error(traceback.format_exc())
+                results[checker_name] = {
+                    "checker_runner": {
+                        'level': 2, 
+                        'id': 'checker_error', 
+                        'message': 'Checker failed to run. Please check the processing log to debug the issue.',
+                        'attachments': []
+                    }
+                }
                 continue
                 
             # Make sure the checker results are valid
