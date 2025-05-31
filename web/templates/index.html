@@ -32,6 +32,22 @@
         </div>
         <h3>Dashboard</h3>
     </div>
+    {% if not app.sources.is_updated_recently(threshold=259200 ) %}
+        <div class="alert alert-danger" role="alert">
+            <b>Critical:</b> No update has been triggered in the last 72 hours. Please check main pipeline processing logs and ensure the pipeline is running.
+            <i class="bi bi-exclamation-triangle" style="float: right; "></i>
+        </div>
+    {% elif not app.sources.is_updated_recently(threshold=172800) %}
+        <div class="alert alert-warning" role="alert">
+            <b>Warning:</b> No update has been triggered in the last 48 hours. If this is unexpected, please check main pipeline processing logs.
+            <i class="bi bi-question-octagon" style="float: right; "></i>
+        </div>
+    {% elif not app.sources.is_updated_recently(threshold=86400) %}
+        <div class="alert alert-info" role="alert">
+            No update has been triggered in the last 24 hours.
+            <i class="bi bi-info-square" style="float: right; "></i>
+        </div>
+    {% endif %}
     {% if date_filter == "none" and tag_filter == "all" %}
         <div class="card" style="margin-bottom: 15px; " xmlns="http://www.w3.org/1999/html">
             <div class="card-body">

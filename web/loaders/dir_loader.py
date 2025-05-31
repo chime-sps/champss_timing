@@ -1,7 +1,8 @@
 import glob
 import os
-import time
 import json
+import time
+import datetime
 import threading
 import numpy as np
 
@@ -19,6 +20,7 @@ class dir_loader():
         self.heatmap = {}
         self.plots = {}
         self.tags = []
+        self.last_updated = 0
 
     def initialize(self):
         self.running = True
@@ -39,6 +41,9 @@ class dir_loader():
 
         # Get tags
         self.get_tags()
+
+        # Set last_updated timestamp
+        self.last_updated = time.time()
 
         # # Start update checker
         # if self.auto_update:
@@ -184,6 +189,10 @@ class dir_loader():
     #             self.get_heatmap()
 
     def load_sources(self):
+        """
+        Load sources from the psr_dir directory.
+        """
+
         self.sources = []
 
         for source_dir in glob.glob(self.psr_dir + "/*"):
@@ -207,7 +216,48 @@ class dir_loader():
         self.sources.sort(key = lambda x: x.psr_id)
 
     def get_sources(self):
+        """
+        Get the list of sources.
+        """
+
         return self.sources
+    
+    def get_last_updated(self, format=True):
+        """
+        Get the last update time of the sources.
+        
+        Parameters
+        ----------
+        format : bool
+            If True, return the last update time as a formatted string.
+            If False, return the last update time as a timestamp.
+        """
+
+        if format:
+            if time.time() - self.last_updated < 3600:
+                return "Updated just now"
+            if time.time() - self.last_updated < 3 * 3600:
+                return "Updated hours ago"
+            if time.time() - self.last_updated < 24 * 3600:
+                return "Updated today"
+            if time.time() - self.last_updated < 2 * 24 * 3600:
+                return "Updated yesterday"
+            return "Updated on " + datetime.datetime.fromtimestamp(self.last_updated).strftime("%Y-%m-%d %H:%M:%S")
+
+        return self.last_updated
+    
+    def is_updated_recently(self, threshold=86400):
+        """
+        Check if the sources are updated recently.
+        
+        Parameters
+        ----------
+        threshold : int
+            The threshold in seconds to consider the sources as updated recently.
+            Default is 24 hours (86400 seconds).
+        """
+
+        return time.time() - self.last_updated < threshold
 
     # Handle with get item
     def __getitem__(self, key):

@@ -140,7 +140,7 @@
         <div class="offcanvas-body" style="writing-mode: tb-rl; rotate: 180deg; text-orientation: mixed; line-height: 0.9em; cursor: pointer; margin-left: -0.01em; " onclick="show_version()">
             <b style="font-size: 1em; margin-left: -0.1em; ">CHAMPSS Timing Pipeline</b><br>
             <!-- <small>{{ sources.psr_dir }}</small> -->
-            <small style="font-family: monospace; font-size: 0.7em; ">{{ app.pipeline_version }}</small>
+            <small style="font-size: 0.7em; ">{{ app.sources.get_last_updated() }}</small>
         </div>
     </div>
     <br>

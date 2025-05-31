@@ -63,7 +63,7 @@ class src_loader():
             self.last_timing_info["fitted_params"]["DECJ"],
             # radius=0.0166667
             radius=self.source_coincidences_radius, 
-            simbad=False
+            simbad=True
         )
 
         # Get checker warnings
