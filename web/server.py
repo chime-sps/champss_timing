@@ -276,7 +276,7 @@ def run(psr_dir, port, host="127.0.0.1", root="/", password=False, debug=False, 
         app.config.update(DEBUG=True)
 
     if app.update != None:
-        app.update()
+        app.update(dir=psr_dir)
 
     with dir_loader.dir_loader(psr_dir, app) as app.sources:
         # Get the list of pulsars

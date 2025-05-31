@@ -36,21 +36,21 @@ psr_dir = os.path.abspath(f"./timing_sources")
 password = args.password if args.password else False
 
 # Start the web server
-def update_repo():
+def update_repo(dir):
     '''
     Update the repository by removing the old directory and cloning a new one.
     '''
 
     if repo_url is None:
-        if not os.path.exists(psr_dir):
-            raise FileNotFoundError(f"Repository URL is not provided and the directory {psr_dir} does not exist.")
+        if not os.path.exists(dir):
+            raise FileNotFoundError(f"Repository URL is not provided and the directory {dir} does not exist.")
         print("No repository URL provided. Using existing directory.")
         return
 
     # Check if the directory exists
-    if os.path.exists(psr_dir):
+    if os.path.exists(dir):
         os.system(f"rm -rf " + os.path.abspath("./timing_sources"))
-        print("Remove the old directory: %s" % psr_dir)
+        print("Remove the old directory: %s" % dir)
 
     # Construct options
     multi_options = ["--depth", "1", "--single-branch", "--branch", "main"]
@@ -59,13 +59,13 @@ def update_repo():
 
     # Clone the repository
     if git is not None:
-        git.Repo.clone_from(repo_url, psr_dir, multi_options=multi_options, allow_unsafe_options=True)
-        print("Clone the new directory: %s (gitpython)" % psr_dir)
+        git.Repo.clone_from(repo_url, dir, multi_options=multi_options, allow_unsafe_options=True)
+        print("Clone the new directory: %s (gitpython)" % dir)
     else:
         # Use subprocess to clone the repository
-        cmd = ["git", "clone"] + multi_options + [repo_url, psr_dir]
+        cmd = ["git", "clone"] + multi_options + [repo_url, dir]
         subprocess.run(cmd, check=True)
-        print("Clone the new directory: %s (subprocess)" % psr_dir)
+        print("Clone the new directory: %s (subprocess)" % dir)
 
 # Parse slack token
 slack_token = None

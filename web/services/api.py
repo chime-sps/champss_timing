@@ -1,4 +1,7 @@
 import threading
+import shutil
+import copy
+import time
 
 class PublicAPI:
     def __init__(self, app):
@@ -12,9 +15,22 @@ class PublicAPI:
             # for source in self.app.sources:
             #     source.initialize()
             # self.app.sources.get_heatmap()
+
+            # Get the new directory into a new psrdir
+            psr_dir_temp = self.app.sources.psr_dir + "_temp" # Avoid conflicts with existing psr_dir
+            self.app.update(dir=psr_dir_temp)
+
+            # Clean up the existing source handlers
             self.app.sources.cleanup()
-            self.app.update()
+
+            # Remove the existing psr_dir and replace it with the new one
+            if shutil.os.path.exists(self.app.sources.psr_dir):
+                shutil.rmtree(self.app.sources.psr_dir)
+            shutil.move(psr_dir_temp, self.app.sources.psr_dir)
+
+            # Reinitialize the sources
             self.app.sources.initialize()
+
             return "Updated."
 
         return "Update handler is not set."
