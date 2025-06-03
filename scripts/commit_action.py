@@ -7,7 +7,7 @@ import time
 import glob
 import datetime
 import requests
-from champss_timing.backend.tools import monitoring
+from backend.tools import monitoring
 from backend.utils.notification import notification
 from backend.datastores.database import database
 from cli.config import CLIConfig

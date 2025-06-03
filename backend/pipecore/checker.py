@@ -161,6 +161,11 @@ class checker:
             self.logger.debug("Status is normal, no notification sent.", layer=1)
             return []
         
+        # Experimental: There is no warning for level 1 as of the monitoring report being added.
+        if check_result["level"] == 1:
+            self.logger.debug("Status is not urgent, skipping notification.", layer=1)
+            return []
+        
         # Send text message
         if check_result["level"] == 1:
             msg = f"*Checker Warning for {self.psr_id}*: `" + check_result["message"] + "`"
