@@ -1,5 +1,6 @@
 import numpy as np
 import os
+import datetime
 import matplotlib.pyplot as plt
 
 from ..utils.stats_utils import stats_utils
@@ -73,7 +74,7 @@ class BasicDistributionChecker:
 
         if self.verbose:
             print(f"Latest MJD: {latest_mjd}, Latest Value: {latest_val}, Receiver: {latest_rcvr}")
-            _, ax = plt.subplots(2, 1, figsize=(10, 6))
+            fig, ax = plt.subplots(2, 1, figsize=(10, 6))
             ax[0].plot(samples, 'x', label='Metric Values', c="k")
             ax[0].axhline(test_thresholds[0], color='red', linestyle='--', label='Lower Threshold')
             ax[0].axhline(test_thresholds[1], color='green', linestyle='--', label='Upper Threshold')
@@ -88,6 +89,7 @@ class BasicDistributionChecker:
             ax[1].set_ylabel('Frequency')
             ax[1].set_title('Sample Distribution')
             ax[1].legend()
+            fig.text(0.001, 0, f"CHAMPSS Timing Pipeline ({utils.get_version_hash()}) monitoring.basic.BasicDistributionChecker | {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", fontsize=9, ha="left", va="bottom", family="monospace")
             plt.tight_layout()
             if self.verbose_savefig is not None:
                 plt.savefig(self.verbose_savefig)

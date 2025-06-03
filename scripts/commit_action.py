@@ -43,7 +43,7 @@ SUMMARY_TEXT = "./champss_timing_sources/timing_summary.txt"
 MONITOR_URL = cli_config.config["user_defined"]["monitor_url"]
 MONITOR_PASSWORD = cli_config.config["user_defined"]["monitor_password"]
 UPTIME_URL = cli_config.config["user_defined"]["uptime_url"]
-SLACK_TOKEN = cli_config.config["slack_token"]["chime"]
+SLACK_TOKEN = cli_config.config["slack_token"]["test"]
 
 
 # Initialize the notification handler
@@ -65,7 +65,7 @@ for psrdir in psrdirs:
     if not os.path.exists(os.path.join(psrdir, "champss_timing.sqlite3.db")):
         continue
     mg.add_psrdir(psrdir)
-all_checkers_passed = mg.run_checkers(within_24h=True)
+all_checkers_passed = mg.run_checkers(within_24h=False)
 
 # Send summary
 if os.path.exists(SUMMARY_TEXT):
