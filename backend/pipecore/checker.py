@@ -125,6 +125,10 @@ class checker:
                     results[checker_name][key]["attachments"] = []
                 if type(results[checker_name][key]["attachments"] ) != list:
                     results[checker_name][key]["attachments"] = [results[checker_name][key]["attachments"]]
+                if "attachments_report_only" not in results[checker_name][key]:
+                    results[checker_name][key]["attachments_report_only"] = []
+                if type(results[checker_name][key]["attachments_report_only"]) != list:
+                    results[checker_name][key]["attachments_report_only"] = [results[checker_name][key]["attachments_report_only"]]
                 
                 # Replace shortcuts in attachment paths
                 for i, string in enumerate(results[checker_name][key]["attachments"]):
@@ -132,6 +136,13 @@ class checker:
                         results[checker_name][key]["attachments"][i] = string.replace("%DIAGNOSTIC_PLOT%", self.diagnostic_plot)
                     if "%PSR_DIR%" in string:
                         results[checker_name][key]["attachments"][i] = string.replace("%PSR_DIR%", self.psr_dir)
+                
+                # Replace shortcuts in attachment report only paths
+                for i, string in enumerate(results[checker_name][key]["attachments"]):
+                    if "%DIAGNOSTIC_PLOT%" in string:
+                        results[checker_name][key]["attachments_report_only"][i] = string.replace("%DIAGNOSTIC_PLOT%", self.diagnostic_plot)
+                    if "%PSR_DIR%" in string:
+                        results[checker_name][key]["attachments_report_only"][i] = string.replace("%PSR_DIR%", self.psr_dir)
 
         # Send text notification
         self.logger.debug(f"Sending text notification...")

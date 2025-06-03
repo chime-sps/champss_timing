@@ -114,7 +114,7 @@ class MonitoringReport:
                 tex += f"\\addcontentsline{{toc}}{{subsection}}{{{self.latex_text(id.upper())}}}\n"
 
                 # Get and remove duplicate attachments
-                attachments = list(set(result["attachments"]))
+                attachments = list(set(result["attachments"] + result["attachments_report_only"]))
                 for attachment in attachments:
                     if "champss_diagnostic.pdf" in attachment:
                         continue
@@ -132,46 +132,6 @@ class MonitoringReport:
                 # End minipage
                 tex += "\\end{minipage}\n"
                 tex += "\\hspace{0.02\\textwidth}\n"  # Add vertical space between items
-
-
-        # tex += "\n"
-
-        # # Remove duplicates from attachments
-        # attachments_ = list(set(attachments))
-        # attachments = []
-        # for attachment in attachments_:
-        #     if "champss_diagnostic.pdf" in attachment:
-        #             continue
-        #     attachments.append(attachment)
-        
-        # # Add additional attachments
-        # if len(attachments) > 0:
-        #     tex += "\\subsection*{Attachments}\n"
-        # if len(attachments) == 1:
-        #     for attachment in attachments:
-        #         tex += self.latex_figure(attachment, size=0.75)
-        # elif len(attachments) == 2:
-        #     # Begin multicol layout
-        #     tex += "\\begin{multicols}{2}\n"
-
-        #     # Insert each attachment
-        #     for attachment in attachments:
-        #         tex += self.latex_figure(attachment)
-
-        #     # End of multicol
-        #     tex += "\\end{multicols}\n"
-        # else:
-        #     # Begin multicol layout
-        #     tex += "\\begin{multicols}{3}\n"
-
-        #     # Insert each attachment
-        #     for attachment in attachments:
-        #         tex += self.latex_figure(attachment)
-
-        #     # End of multicol
-        #     tex += "\\end{multicols}\n"
-
-        # tex += "}"
 
         return tex
 
