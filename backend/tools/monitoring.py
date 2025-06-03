@@ -227,16 +227,25 @@ class MonitoringReport:
 
         # Front page
         tex += self.generate_front_page()
-        tex += "\n\\clearpage\n"
 
-        # Add each pulsar's summary
-        for psr_result in self.results:
-            if psr_result["n_warnings"] == 0:
-                continue  # Skip pulsars with no warnings
-            
-            # Generate summary
-            tex += self.generate_psr_summary(psr_result)
-            tex += "\n\\clearpage\n"
+
+        # In case of no warnings
+        if self.n_warnings == 0:
+            tex += "\\begin{framed}\n"
+            tex += "\\centering\n"
+            tex += "\\textbf{No warnings found for any pulsar.}\\hspace{0.5cm}\n\n"
+            tex += "\\textit{All pulsars that been checked are healthy and no issues have been detected.}\\hspace{0.5cm}\n"
+            tex += "\\end{framed}\n"
+        else:
+            # Add each pulsar's summary
+            for psr_result in self.results:
+                if psr_result["n_warnings"] == 0:
+                    continue  # Skip pulsars with no warnings
+                
+                # Generate summary
+                tex += "\n\\clearpage\n"
+                tex += self.generate_psr_summary(psr_result)
+
 
         # End of the document
         tex += "\\end{document}\n"
