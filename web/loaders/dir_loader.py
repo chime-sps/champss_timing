@@ -10,9 +10,10 @@ from .src_loader import src_loader
 from backend.utils.utils import utils
 
 class dir_loader():
-    def __init__(self, psr_dir, app):#, auto_update = False):
+    def __init__(self, psr_dir, app, query_simbad=True):#, auto_update = False):
         self.app = app
         self.psr_dir = psr_dir
+        self.query_simbad = query_simbad
         self.sources = []
         self.update_checker_thread = None
         self.running = False
@@ -210,7 +211,7 @@ class dir_loader():
 
             # Add sources to dictionary
             print(f"Adding {source_dir} to sources")
-            self.sources.append(src_loader(source_dir))
+            self.sources.append(src_loader(source_dir, query_simbad=self.query_simbad))
 
         # Sort sources by psr_id
         self.sources.sort(key = lambda x: x.psr_id)

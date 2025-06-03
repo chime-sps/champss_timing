@@ -7,7 +7,7 @@ import time
 import glob
 import datetime
 import requests
-from backend.pipecore.checker import checker
+from champss_timing.backend.tools import monitoring
 from backend.utils.notification import notification
 from backend.datastores.database import database
 from cli.config import CLIConfig
@@ -59,26 +59,13 @@ except Exception as e:
 noti.send_success_message("Timing sources committed to champss_timing_sources repo at " + datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
 # Run checker
-all_checkers_passed = True
-for source in glob.glob(os.path.join(TIMING_SOURCES, "*", "*.db")):
-    try:
-        with database(source) as db_hdl:
-            if db_hdl.get_last_timing_info()["timestamp"] > time.time() - 43200:
-                checker_res = checker(
-                    psr_dir=os.path.dirname(source),
-                    db_hdl=db_hdl,
-                    noti_hdl=noti, 
-                    psr_id=source.split("/")[-2]
-                ).check()
-                
-                # check if all checkers are passed
-                for checker_module in checker_res.keys():
-                    for checker_key in checker_res[checker_module].keys():
-                        if checker_res[checker_module][checker_key]["level"] > 0:
-                            all_checkers_passed = False
-    except Exception as e:
-        noti.send_urgent_message(f"Error while checking {source}: {str(e)}")
-        all_checkers_passed = False
+psrdirs = glob.glob(os.path.join(TIMING_SOURCES, "*"))
+mg = monitoring.Monitoring(noti_hdl=noti, verbose=True)
+for psrdir in psrdirs:
+    if not os.path.exists(os.path.join(psrdir, "champss_timing.sqlite3.db")):
+        continue
+    mg.add_psrdir(psrdir)
+all_checkers_passed = mg.run_checkers(within_24h=True)
 
 # Send summary
 if os.path.exists(SUMMARY_TEXT):

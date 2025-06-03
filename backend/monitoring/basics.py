@@ -5,10 +5,10 @@ import matplotlib.pyplot as plt
 from ..utils.stats_utils import stats_utils
 from ..utils.logger import logger
 
-class BasicChecker:
+class BasicDistributionChecker:
     def __init__(self, metric_mjds, metric_vals, metric_rcvrs=None, logger=logger(), verbose=False, verbose_title=""):
         """
-        Initialize the BasicChecker class.
+        Initialize the BasicDistributionChecker class.
 
         Parameters
         ----------
@@ -34,7 +34,7 @@ class BasicChecker:
         self.metric_vals = np.array(self.metric_vals)[sorted_indices]
         self.metric_rcvrs = np.array(self.metric_rcvrs)[sorted_indices]
 
-    def test(self, z_score_threshold=3, n_samples=365):
+    def test(self, z_score_threshold=3, n_samples=365, min_samples=7):
         """
         Perform the basic checks on the latest metric values.
 
@@ -63,7 +63,7 @@ class BasicChecker:
         if len(samples) > n_samples:
             samples = samples[-n_samples:]
 
-        if len(samples) < 7:
+        if len(samples) < min_samples:
             return "ok" # Want a larger sample size to get a robust statistic
 
         # Run the test
@@ -97,12 +97,12 @@ class BasicChecker:
 
         return "ok"
     
-    def test_95_997(self, n_samples=365):
+    def test_95_997(self, n_samples=365, min_samples=7):
         """
         Perform the basic checks on the latest metric values with a 95% and 99.7% confidence interval.
         """
         
-        return self.test(z_score_threshold=1.96, n_samples=n_samples), self.test(z_score_threshold=3, n_samples=n_samples)
+        return self.test(z_score_threshold=1.96, n_samples=n_samples, min_samples=min_samples), self.test(z_score_threshold=3, n_samples=n_samples, min_samples=min_samples)
 
 class Main:
     def __init__(self, db_hdl, basic_checker_results, psr_id, psr_dir, logger=logger()):
@@ -150,22 +150,47 @@ class Main:
                     self.metric_residuals["rcvrs"].append(toas_mjd_idxed[round(mjd, 5)]["notes"]["rcvr"])
                 else:
                     self.metric_residuals["rcvrs"].append(None)
+            self.metric_residuals = self.sort_by_mjd(self.metric_residuals)
             ## metric: toa errors
             for toa_entry in self.db_hdl.get_all_toas():
                 self.metric_toa_errs["mjds"].append(toa_entry["toa"])
                 self.metric_toa_errs["vals"].append(toa_entry["toa_err"])
                 self.metric_toa_errs["rcvrs"].append(toa_entry["notes"]["rcvr"])
+            self.metric_toa_errs = self.sort_by_mjd(self.metric_toa_errs)
             ## metric: snr
             self.metric_snrs["mjds"] = self.timing_info[-1]["obs_mjds"]
             for file in self.timing_info[-1]["files"]:
                 this_ar_entry = self.db_hdl.get_archive_info_by_filename(file)
                 self.metric_snrs["vals"].append(this_ar_entry["psr_snr"])
                 self.metric_snrs["rcvrs"].append(this_ar_entry["notes"]["rcvr"])
+            self.metric_snrs = self.sort_by_mjd(self.metric_snrs)
             ## metric: chi2 reduced
             for timing in self.timing_info:
                 # metric: chi2_reduced
                 self.metric_chi2rs["vals"].append(timing["chi2_reduced"])
                 self.metric_chi2rs["mjds"].append(np.max(timing["obs_mjds"]))
+            self.metric_chi2rs = self.sort_by_mjd(self.metric_chi2rs)
+
+    def sort_by_mjd(self, metric_dict):
+        """
+        Sort the metric dictionary by MJD.
+        
+        Parameters
+        ----------
+        metric_dict : dict
+            The metric dictionary to be sorted.
+        
+        Returns
+        -------
+        dict
+            The sorted metric dictionary.
+        """
+        
+        sorted_indices = np.argsort(metric_dict["mjds"])
+        for key in metric_dict:
+            metric_dict[key] = np.array(metric_dict[key])[sorted_indices].tolist()
+        
+        return metric_dict
     
     def check(self):
         """
@@ -184,33 +209,45 @@ class Main:
 
         # Basic distribution check
         if len(self.timing_info) > 180: # Need a longer time span to wait for the chi2r to stabilize
-            bckr = BasicChecker(
+            # Basic sanity check
+            if len(self.metric_chi2rs["vals"]) > 0:
+                if self.metric_chi2rs["vals"][-1] < 5:
+                    return {"level": 0, "id": "chi2r_ok", "message": "Chi2r is normal.", "attachments": []}
+                
+            # Distribution check
+            bckr = BasicDistributionChecker(
                 metric_mjds=self.metric_chi2rs["mjds"], 
                 metric_vals=self.metric_chi2rs["vals"],
                 metric_rcvrs=None,
                 verbose_title="Chi2 Reduced (no receiver)"
             )
             bckr_res95, bckr_res997 = bckr.test_95_997(n_samples=30)
-            if bckr_res997 != "ok":
-                return {"level": 2, "id": "chi2r_very_sudden_increase", "message": f"Chi2r is out of 3-sigma range of all chi2rs in the last 30 days ({bckr_res997}).", "attachments": ["%DIAGNOSTIC_PLOT%"]}
-            elif bckr_res95 != "ok":
-                return {"level": 1, "id": "chi2r_sudden_increase", "message": f"Chi2r is out of 2-sigma range of all chi2rs in the last 30 days ({bckr_res95}).", "attachments": ["%DIAGNOSTIC_PLOT%"]}
+            if bckr_res997 == "too_high":
+                return {"level": 2, "id": "chi2r_very_sudden_increase", "message": f"Chi2r is out of 3-sigma range of all chi2rs in the last 30 samples ({bckr_res997}).", "attachments": ["%DIAGNOSTIC_PLOT%"]}
+            elif bckr_res95 == "too_high":
+                return {"level": 1, "id": "chi2r_sudden_increase", "message": f"Chi2r is out of 2-sigma range of all chi2rs in the last 30 samples ({bckr_res95}).", "attachments": ["%DIAGNOSTIC_PLOT%"]}
         else:
-            bckr = BasicChecker(
+            # Basic sanity check
+            if len(self.metric_chi2rs["vals"]) > 0:
+                if self.metric_chi2rs["vals"][-1] < 10:
+                    return {"level": 0, "id": "chi2r_ok", "message": "Chi2r is normal.", "attachments": []}
+                
+            # Distribution check
+            bckr = BasicDistributionChecker(
                 metric_mjds=self.metric_chi2rs["mjds"],
                 metric_vals=self.metric_chi2rs["vals"],
                 metric_rcvrs=None,
                 verbose_title="Chi2 Reduced (no receiver)"
             )
             _, bckr_res997 = bckr.test_95_997(n_samples=7) # only check for very sudden increase
-            if bckr_res997 != "ok":
-                return {"level": 2, "id": "chi2r_very_sudden_increase", "message": f"Chi2r is out of 3-sigma range of all chi2rs in the last 7 days ({bckr_res997}).", "attachments": ["%DIAGNOSTIC_PLOT%"]}
+            if bckr_res997 == "too_high":
+                return {"level": 2, "id": "chi2r_very_sudden_increase", "message": f"Chi2r is out of 3-sigma range of all chi2rs in the last 7 samples ({bckr_res997}).", "attachments": ["%DIAGNOSTIC_PLOT%"]}
         
         # check if chi2r keeps increasing in the last 5 days
         if len(self.metric_chi2rs["vals"]) >= 8:
             chi2rs_7days = self.metric_chi2rs["vals"][-7:]
             if np.all(np.diff(chi2rs_7days) > 0):
-                return {"level": 1, "id": "chi2r_keeps_increasing", "message": "Chi2r keeps increasing in the last 7 days.", "attachments": ["%DIAGNOSTIC_PLOT%"]}
+                return {"level": 1, "id": "chi2r_keeps_increasing", "message": "Chi2r keeps increasing in the last 7 samples.", "attachments": ["%DIAGNOSTIC_PLOT%"]}
             
         return {"level": 0, "id": "chi2r_ok", "message": "Chi2r is normal.", "attachments": []}
     
@@ -218,30 +255,30 @@ class Main:
         self.logger.debug("Checking timing residuals...")
 
         # Check TOA_errors
-        bckr = BasicChecker(
+        bckr = BasicDistributionChecker(
             metric_mjds=self.metric_toa_errs["mjds"],
             metric_vals=self.metric_toa_errs["vals"],
             metric_rcvrs=self.metric_toa_errs["rcvrs"],
             verbose_title="TOA Errors (residuals_err)"
         )
-        bckr_res95, bckr_res997 = bckr.test_95_997(n_samples=365)
+        bckr_res95, bckr_res997 = bckr.test_95_997(n_samples=90)
         if bckr_res997 != "ok":
-            return {"level": 2, "id": "toa_error_very_sudden_increase", "message": f"TOA error is out of 3-sigma range of all TOA errors in the last 14 days ({bckr_res997}).", "attachments": ["%DIAGNOSTIC_PLOT%"]}
+            return {"level": 2, "id": "toa_error_very_sudden_increase", "message": f"TOA error is out of 3-sigma range of all TOA errors in the last 90 samples ({bckr_res997}).", "attachments": ["%DIAGNOSTIC_PLOT%"]}
         elif bckr_res95 != "ok":
-            return {"level": 1, "id": "toa_error_sudden_increase", "message": f"TOA error is out of 2-sigma range of all TOA errors in the last 14 days ({bckr_res95}).", "attachments": ["%DIAGNOSTIC_PLOT%"]}
+            return {"level": 1, "id": "toa_error_sudden_increase", "message": f"TOA error is out of 2-sigma range of all TOA errors in the last 90 samples ({bckr_res95}).", "attachments": ["%DIAGNOSTIC_PLOT%"]}
 
         # Check residuals
-        bckr = BasicChecker(
+        bckr = BasicDistributionChecker(
             metric_mjds=self.metric_residuals["mjds"],
             metric_vals=self.metric_residuals["vals"],
             metric_rcvrs=self.metric_residuals["rcvrs"],
             verbose_title="Residuals (residuals)"
         )
-        bckr_res95, bckr_res997 = bckr.test_95_997(n_samples=365)
-        if bckr_res997 != "ok":
-            return {"level": 2, "id": "residual_very_sudden_increase", "message": f"Residual is out of 3-sigma range of all residuals in the last 14 days ({bckr_res997}).", "attachments": ["%DIAGNOSTIC_PLOT%"]}
-        elif bckr_res95 != "ok":
-            return {"level": 1, "id": "residual_sudden_increase", "message": f"Residual is out of 2-sigma range of all residuals in the last 14 days ({bckr_res95}).", "attachments": ["%DIAGNOSTIC_PLOT%"]}
+        bckr_res95, bckr_res997 = bckr.test_95_997(n_samples=90)
+        if bckr_res997 != "ok" and self.metric_residuals["vals"][-1] > self.metric_toa_errs["vals"][-1]:
+            return {"level": 2, "id": "residual_very_sudden_increase", "message": f"Residual is out of 3-sigma range of all residuals in the last 90 samples ({bckr_res997}).", "attachments": ["%DIAGNOSTIC_PLOT%"]}
+        elif bckr_res95 != "ok" and self.metric_residuals["vals"][-1] > self.metric_toa_errs["vals"][-1]:
+            return {"level": 1, "id": "residual_sudden_increase", "message": f"Residual is out of 2-sigma range of all residuals in the last 90 samples ({bckr_res95}).", "attachments": ["%DIAGNOSTIC_PLOT%"]}
 
         return {"level": 0, "id": "residual_ok", "message": "Residual is normal.", "attachments": []}
 
@@ -249,25 +286,25 @@ class Main:
         self.logger.debug("Checking SNR...")
 
         # Basic distribution check
-        bckr = BasicChecker(
+        bckr = BasicDistributionChecker(
             metric_mjds=self.metric_snrs["mjds"],
             metric_vals=self.metric_snrs["vals"],
             metric_rcvrs=self.metric_snrs["rcvrs"],
             verbose_title="SNR"
         )
-        bckr_res95, bckr_res997 = bckr.test_95_997(n_samples=365)
+        bckr_res95, bckr_res997 = bckr.test_95_997(n_samples=90, min_samples=30)
         if bckr_res997 != "ok":
-            return {"level": 2, "id": "snr_very_sudden_change", "message": f"SNR is out of 3-sigma range of all SNRs in the last 14 days ({bckr_res997}).", "attachments": ["%DIAGNOSTIC_PLOT%"]}
+            return {"level": 2, "id": "snr_very_sudden_change", "message": f"SNR is out of 3-sigma range of all SNRs in the last 90 samples ({bckr_res997}).", "attachments": ["%DIAGNOSTIC_PLOT%"]}
         elif bckr_res95 != "ok":
-            return {"level": 1, "id": "snr_sudden_change", "message": f"SNR is out of 2-sigma range of all SNRs in the last 14 days ({bckr_res95}).", "attachments": ["%DIAGNOSTIC_PLOT%"]}
+            return {"level": 1, "id": "snr_sudden_change", "message": f"SNR is out of 2-sigma range of all SNRs in the last 90 samples ({bckr_res95}).", "attachments": ["%DIAGNOSTIC_PLOT%"]}
         
         # Check if SNR keeps increasing in the last 7 days
         if len(self.metric_snrs["vals"]) >= 8:
             snrs_7days = self.metric_snrs["vals"][-7:]
             if np.all(np.diff(snrs_7days) > 0):
-                return {"level": 1, "id": "snr_keeps_increasing", "message": "SNR keeps increasing in the last 7 days.", "attachments": ["%DIAGNOSTIC_PLOT%"]}
+                return {"level": 1, "id": "snr_keeps_increasing", "message": "SNR keeps increasing in the last 7 samples.", "attachments": ["%DIAGNOSTIC_PLOT%"]}
             elif np.all(np.diff(snrs_7days) < 0):
-                return {"level": 1, "id": "snr_keeps_decreasing", "message": "SNR keeps decreasing in the last 7 days.", "attachments": ["%DIAGNOSTIC_PLOT%"]}
+                return {"level": 1, "id": "snr_keeps_decreasing", "message": "SNR keeps decreasing in the last 7 samples.", "attachments": ["%DIAGNOSTIC_PLOT%"]}
 
         return {"level": 0, "id": "snr_ok", "message": "SNR is normal.", "attachments": []}
 
@@ -278,7 +315,7 @@ class Main:
             if ("FITTING_FAILED" in self.timing_info[-1]["notes"]["remark"]
             and "FITTING_FAILED" in self.timing_info[-2]["notes"]["remark"]
             and "FITTING_FAILED" in self.timing_info[-3]["notes"]["remark"]):
-                return {"level": 2, "id": "fitting_failed", "message": "All PINT fittings failed in last 3 days. ", "attachments": ["%DIAGNOSTIC_PLOT%"]}
+                return {"level": 2, "id": "fitting_failed", "message": "All PINT fittings failed in last 3 samples. ", "attachments": ["%DIAGNOSTIC_PLOT%"]}
         
         return {"level": 0, "id": "fitting_ok", "message": "Fitting status is normal.", "attachments": []}
 

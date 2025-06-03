@@ -260,7 +260,7 @@ class URLFormatter:
 
         return endpoint
 
-def run(psr_dir, port, host="127.0.0.1", root="/", password=False, debug=False, update_hdl=None, slack_token=None, notebook_path="./runnotes.db"):
+def run(psr_dir, port, host="127.0.0.1", root="/", password=False, query_simbad=True, debug=False, update_hdl=None, slack_token=None, notebook_path="./runnotes.db"):
     global app
 
     app.login = login_hdl.login(session, password)
@@ -278,7 +278,7 @@ def run(psr_dir, port, host="127.0.0.1", root="/", password=False, debug=False, 
     if app.update != None:
         app.update(dir=psr_dir)
 
-    with dir_loader.dir_loader(psr_dir, app) as app.sources:
+    with dir_loader.dir_loader(psr_dir, app, query_simbad=query_simbad) as app.sources:
         # Get the list of pulsars
         app.psr_ids = [s.psr_id for s in app.sources]
 

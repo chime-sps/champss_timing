@@ -13,8 +13,9 @@ from backend.utils.utils import utils
 
 
 class src_loader():
-    def __init__(self, source_dir):
+    def __init__(self, source_dir, query_simbad=True):
         self.source_dir = source_dir
+        self.query_simbad = query_simbad
         self.db = None
         self.db_md5 = None
         self.config = None
@@ -63,7 +64,7 @@ class src_loader():
             self.last_timing_info["fitted_params"]["DECJ"],
             # radius=0.0166667
             radius=self.source_coincidences_radius, 
-            simbad=True
+            simbad=self.query_simbad
         )
 
         # Get checker warnings

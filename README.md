@@ -12,6 +12,7 @@ There is no standardized way to install the pipeline, as it is specifically desi
 
 * [PSRCHIVE](https://psrchive.sourceforge.net/)
 * [DSPSR](https://dspsr.sourceforge.net/)
+* [LaTex](https://www.latex-project.org/get/) \ [TinyTex](https://github.com/rstudio/tinytex) (for generating monitoring reports)
 * Other Python packages listed in `requirements.txt` (install using `pip install -r requirements.txt`)
 
 ### Workspace Setup

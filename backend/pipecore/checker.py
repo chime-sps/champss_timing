@@ -125,6 +125,13 @@ class checker:
                     results[checker_name][key]["attachments"] = []
                 if type(results[checker_name][key]["attachments"] ) != list:
                     results[checker_name][key]["attachments"] = [results[checker_name][key]["attachments"]]
+                
+                # Replace shortcuts in attachment paths
+                for i, string in enumerate(results[checker_name][key]["attachments"]):
+                    if "%DIAGNOSTIC_PLOT%" in string:
+                        results[checker_name][key]["attachments"][i] = string.replace("%DIAGNOSTIC_PLOT%", self.diagnostic_plot)
+                    if "%PSR_DIR%" in string:
+                        results[checker_name][key]["attachments"][i] = string.replace("%PSR_DIR%", self.psr_dir)
 
         # Send text notification
         self.logger.debug(f"Sending text notification...")
@@ -136,13 +143,6 @@ class checker:
 
         # Eliminate duplicated attachments
         attachments = list(set(attachments))
-
-        # Replace shortcuts in attachment paths
-        for i, string in enumerate(attachments):
-            if "%DIAGNOSTIC_PLOT%" in string:
-                attachments[i] = string.replace("%DIAGNOSTIC_PLOT%", self.diagnostic_plot)
-            if "%PSR_DIR%" in string:
-                attachments[i] = string.replace("%PSR_DIR%", self.psr_dir)
 
         # Send attachments
         self.logger.debug(f"Sending attachments...")
