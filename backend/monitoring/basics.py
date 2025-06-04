@@ -93,6 +93,7 @@ class BasicDistributionChecker:
             plt.tight_layout()
             if self.verbose_savefig is not None:
                 plt.savefig(self.verbose_savefig)
+                plt.close()
             else:
                 plt.show()
         

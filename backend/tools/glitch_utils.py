@@ -334,6 +334,7 @@ class glitch_utils():
         plt.tight_layout()
         if savefig is not None:
             plt.savefig(savefig)
+            plt.close()
         else:
             plt.show()
         
