@@ -60,11 +60,11 @@ class checker:
                 checkers[name] = importlib.import_module(f"..monitoring.{name}", package=__package__).Main
             except ImportError as e:
                 self.logger.warning(f"Failed to load [{name}] checker: {e}")
-                self.send_notification({"level": 2, "message": f"Checker [{name}] failed to load. Please check the installation."})
+                self.noti_hdl.send_urgent_message({"level": 2, "message": f"Checker [{name}] failed to load. Please check the installation."})
                 continue
             except AttributeError as e:
                 self.logger.warning(f"Failed to load [{name}] checker: {e}. This may be due to a missing Main entry in the monitoring module.")
-                self.send_notification({"level": 2, "message": f"Checker [{name}] unable to find the Main entry. Please check the installation."})
+                self.noti_hdl.send_urgent_message({"level": 2, "message": f"Checker [{name}] unable to find the Main entry. Please check the installation."})
                 continue
 
         # Make sure has basics checker
@@ -169,12 +169,12 @@ class checker:
 
         # Check if notification is needed
         if check_result["level"] == 0:
-            self.logger.debug("Status is normal, no notification sent.", layer=1)
+            self.logger.debug(f"Status is normal ({check_result['id']}), no notification sent.", layer=1)
             return []
         
         # Experimental: There is no warning for level 1 as of the monitoring report being added.
         if check_result["level"] == 1:
-            self.logger.debug("Status is not urgent, skipping notification.", layer=1)
+            self.logger.debug(f"Status is not urgent, skipping notification.", layer=1)
             return []
         
         # Send text message

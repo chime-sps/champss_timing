@@ -144,6 +144,10 @@ class ProfileStacker:
         grouped_profiles = []
         grouped_mjds = []
 
+        # Sanity check
+        if len(self.profiles) == 0:
+            return []
+
         # Calculate bins
         bins = []
         this_profile = []
@@ -541,7 +545,7 @@ class ProfileAnalyzer(StackTemplate):
         #     ax[1, 4].axhline(i, color='r', linestyle='-', alpha=0.5, linewidth=0.5)
         ## Set limits
         for i in range(len(ax[1, :])):
-            ax[1, i].set_ylim(ax[1, 0].get_ylim()[0] + 0.5, ax[1, 0].get_ylim()[1] - 0.5)
+            ax[1, i].set_ylim(ax[1, 0].get_ylim()[0], ax[1, 0].get_ylim()[1])
             ax[0, i].set_xlim(ax[1, i].get_xlim())
         # ax[0, 1].set_ylim(ax[0, 0].get_ylim())
         ## Set y-ticks in time
@@ -557,6 +561,7 @@ class ProfileAnalyzer(StackTemplate):
         plt.tight_layout()
         if savefig is not None:
             plt.savefig(savefig)
+            plt.close()
         else:
             plt.show()
 
@@ -706,9 +711,9 @@ class ProfilePeaks:
         thresholds = self.get_outliers_thresholds(threshold=1.96)
 
         # Plot
-        self.plot(threshold=1.96, savefig=savefig)
+        outliers = self.plot(threshold=1.96, savefig=savefig)
 
-        return thresholds
+        return thresholds, outliers
 
     def get_outliers_thresholds_CL997(self, savefig=None):
         """
@@ -724,19 +729,25 @@ class ProfilePeaks:
         thresholds = self.get_outliers_thresholds(threshold=2.965)
 
         # Plot
-        self.plot(threshold=2.965, savefig=savefig)
+        outliers = self.plot(threshold=2.965, savefig=savefig)
 
-        return thresholds
+        return thresholds, outliers
     
     def plot(self, threshold=3, savefig=None):
         """
         Plot the peaks and their fluences on the aligned profiles.
+
         Parameters
         ----------
         threshold : float, optional
             The threshold for outliers, by default 3 (i.e., z-score)
         savefig : str, optional
             Path to save the figure, by default None (i.e., show the figure)
+
+        Returns
+        -------
+        outliers : list
+            List of outlier indices for each peak fluence.
         """
         
         # Get the peak fluences
@@ -837,5 +848,8 @@ class ProfilePeaks:
         # Savefig
         if savefig is not None:
             plt.savefig(savefig)
+            plt.close()
         else:
             plt.show()
+
+        return outliers

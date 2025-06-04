@@ -37,7 +37,7 @@ class MonitoringReport:
             return f"""
             \\begin{{framed}}
             \\centering
-            \\textbf{{Image not found: {image_path}}}
+            \\textbf{{Image not found: {self.latex_text(image_path)}}}
             \\end{{framed}}
             """
         
@@ -116,8 +116,8 @@ class MonitoringReport:
                 
                 # Start minipage
                 tex += "\\begin{minipage}[t]{0.49\\textwidth}\n"
-                tex += f"\\subsection*{{{self.latex_text(id.upper())}}}\n"
-                tex += f"\\addcontentsline{{toc}}{{subsection}}{{{self.latex_text(id.upper())}}}\n"
+                tex += f"\\subsubsection*{{{self.latex_text(ckr).upper()}.{self.latex_text(item).upper()}: {self.latex_text(id.upper())}}}\n"
+                tex += f"\\addcontentsline{{toc}}{{subsection}}{{{self.latex_text(ckr).upper()}.{self.latex_text(item).upper()}: {self.latex_text(id.upper())}}}\n"
 
                 # Get and remove duplicate attachments
                 attachments = list(set(result["attachments"] + result["attachments_report_only"]))

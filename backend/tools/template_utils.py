@@ -16,7 +16,7 @@ class StackTemplateState:
                 continue
 
             # normalize the profile
-            profiles[i] = (profile - np.median(profile)) / np.std(profile)
+            profiles[i] = (profile - np.quantile(profile, 0.25)) / np.std(profile)
 
         self.profiles = profiles
         self.template = np.median(np.array(profiles), axis=0)
@@ -54,15 +54,16 @@ class StackTemplateState:
         Calculate the signal-to-noise ratio (SNR) of the template.
         """
         # calculate the mean and standard deviation
-        template_max = np.max(self.template)
-        template_std = np.std(self.template)
+        template_signal = np.max(self.template)
+        # template_noise = np.std(self.template)
+        template_noise = np.quantile(self.template, 0.75) - np.quantile(self.template, 0.25)  # IQR as noise estimate
 
         # sanity check
-        if template_std == 0:
+        if template_noise == 0:
             return 0
 
         # calculate the SNR
-        template_snr = template_max / template_std
+        template_snr = template_signal / template_noise
 
         return template_snr
     

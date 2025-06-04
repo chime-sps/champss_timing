@@ -73,7 +73,7 @@ class BasicDistributionChecker:
         test_thresholds = stats_utils.mad_outlier_thresholds(samples, z_score=z_score_threshold, return_interval=True)
 
         if self.verbose:
-            print(f"Latest MJD: {latest_mjd}, Latest Value: {latest_val}, Receiver: {latest_rcvr}")
+            self.logger.debug(f"Latest MJD: {latest_mjd}, Latest Value: {latest_val}, Receiver: {latest_rcvr}")
             fig, ax = plt.subplots(2, 1, figsize=(10, 6))
             ax[0].plot(samples, 'x', label='Metric Values', c="k")
             ax[0].axhline(test_thresholds[0], color='red', linestyle='--', label='Lower Threshold')
@@ -236,7 +236,8 @@ class Main:
                 metric_rcvrs=None,
                 verbose=True,
                 verbose_title="Chi2 Reduced", 
-                verbose_savefig=verbose_savefig
+                verbose_savefig=verbose_savefig, 
+                logger=self.logger.copy()
             )
             bckr_res95, bckr_res997 = bckr.test_95_997(n_samples=30)
             if bckr_res997 == "too_high" and self.metric_chi2rs["vals"][-1] > 10:
@@ -256,7 +257,8 @@ class Main:
                 metric_rcvrs=None,
                 verbose=True,
                 verbose_title="Chi2 Reduced", 
-                verbose_savefig=verbose_savefig
+                verbose_savefig=verbose_savefig, 
+                logger=self.logger.copy()
             )
             _, bckr_res997 = bckr.test_95_997(n_samples=7) # only check for very sudden increase
             if bckr_res997 == "too_high":
@@ -281,7 +283,8 @@ class Main:
             metric_rcvrs=self.metric_toa_errs["rcvrs"],
             verbose=True,
             verbose_title="TOA Errors", 
-            verbose_savefig=verbose_savefig
+            verbose_savefig=verbose_savefig, 
+            logger=self.logger.copy()
         )
         bckr_res95, bckr_res997 = bckr.test_95_997(n_samples=90)
         if bckr_res997 != "ok":
@@ -296,7 +299,8 @@ class Main:
             metric_rcvrs=self.metric_residuals["rcvrs"],
             verbose=True,
             verbose_title="Residuals", 
-            verbose_savefig=verbose_savefig
+            verbose_savefig=verbose_savefig, 
+            logger=self.logger.copy()
         )
         bckr_res95, bckr_res997 = bckr.test_95_997(n_samples=90)
         if bckr_res997 != "ok" and self.metric_residuals["vals"][-1] > self.metric_toa_errs["vals"][-1]: # It's ok if residual is still within the TOA error range
@@ -317,7 +321,8 @@ class Main:
             metric_rcvrs=self.metric_snrs["rcvrs"],
             verbose=True,
             verbose_title="SNR", 
-            verbose_savefig=verbose_savefig
+            verbose_savefig=verbose_savefig, 
+            logger=self.logger.copy()
         )
         bckr_res95, bckr_res997 = bckr.test_95_997(n_samples=90, min_samples=30)
         if bckr_res997 != "ok":
