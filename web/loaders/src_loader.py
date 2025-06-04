@@ -73,7 +73,8 @@ class src_loader():
 
     def cleanup(self):
         # Close database
-        self.db.close()
+        if self.db is not None:
+            self.db.close()
 
     def get_db_md5(self):
         with open(self.source_dir + "/champss_timing.sqlite3.db", "rb") as f:

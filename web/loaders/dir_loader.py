@@ -154,8 +154,14 @@ class dir_loader():
         return self.tags
 
     def cleanup(self):
+        # Skip cleanup if not running
+        if not self.running:
+            return
+        
+        # Set running to False to stop any ongoing processes
         self.running = False
 
+        # Cleanup sources
         for source in self.sources:
             source.cleanup()
 
