@@ -104,6 +104,12 @@ class MonitoringReport:
                 message = result["message"]
                 id = result["id"]
 
+                # Sanity check
+                if "attachments" not in result:
+                    result["attachments"] = []
+                if "attachments_report_only" not in result:
+                    result["attachments_report_only"] = []
+
                 # Skip level 0 items
                 if level == 0:  
                     continue
@@ -175,6 +181,7 @@ class MonitoringReport:
         tex += f"Total Pulsars: {len(self.results)}\\hspace{{0.5cm}}\n"
         tex += f"Total Warnings: {self.n_warnings}\\hspace{{0.5cm}}\n"
         tex += f"Host: {os.uname().nodename}\\hspace{{0.5cm}}\n"
+        tex += f"Version: {utils.get_version_hash()}\\hspace{{0.5cm}}\n"
         tex += f"Date: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
 
         return tex
