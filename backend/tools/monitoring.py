@@ -376,20 +376,27 @@ class Monitoring:
                 # Create a random file name for the report
                 report_file = f"/tmp/monitoring_report__{utils.get_rand_string()}.pdf"
 
-                # Generate the monitoring report
+                # Initialize the monitoring report
                 report = MonitoringReport(
                     results=results,
                     logger=self.logger.copy(),
                     verbose=self.verbose
                 )
-                report.generate(outfile=report_file)
 
-                # Send report file
-                self.noti_hdl.send_file(report_file)
+                # Generate the report
+                if report.generate(outfile=report_file):
+                    self.logger.info(f"Monitoring report generated: {report_file}")
 
-                # Clean up
-                if not self.verbose:
-                    os.unlink(report_file)  # Remove the report file after sending
+                    # Send report file
+                    self.noti_hdl.send_file(report_file)
+
+                    # Clean up
+                    if not self.verbose:
+                        os.unlink(report_file)  # Remove the report file after sending
+                else:
+                    self.logger.error("Failed to generate the monitoring report.")
+                    self.noti_hdl.send_urgent_message("Failed to generate the monitoring report. Please check the logs for details.")
+
             except Exception as e:
                 self.logger.error(f"Error generating monitoring report: {str(e)}")
                 self.logger.error(traceback.format_exc())
