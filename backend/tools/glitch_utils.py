@@ -306,7 +306,7 @@ class glitch_utils():
                 pred_x, 
                 interval_lower * 1e-6 / P,
                 interval_upper * 1e-6 / P,
-                color="blue", alpha=0.1, label="Predicted Good Interval"
+                color="blue", alpha=0.1, label="Good Interval"
             )
             if dd_status:
                 ax[0, 1].text(0.5, 0.95, "Discontinuity Detected", ha="center", va="top", color="red", fontsize=12, fontweight="bold", transform=ax[0, 1].transAxes)

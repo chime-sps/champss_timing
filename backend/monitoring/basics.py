@@ -37,6 +37,25 @@ class BasicDistributionChecker:
         self.metric_vals = np.array(self.metric_vals)[sorted_indices]
         self.metric_rcvrs = np.array(self.metric_rcvrs)[sorted_indices]
 
+    def get_samples_from_same_rcvr(self):
+        """
+        Get samples from the same receiver as the latest value.
+
+        Returns
+        -------
+        np.ndarray
+            An array of samples from the same receiver as the latest value.
+        """
+        
+        if len(self.metric_vals) == 0:
+            return np.array([]), np.array([])
+
+        latest_rcvr = self.metric_rcvrs[-1]
+        mjds = self.metric_mjds[self.metric_rcvrs == latest_rcvr]
+        samples = self.metric_vals[self.metric_rcvrs == latest_rcvr]
+        
+        return mjds, samples
+
     def test(self, z_score_threshold=3, n_samples=365, min_samples=7):
         """
         Perform the basic checks on the latest metric values.
@@ -45,6 +64,10 @@ class BasicDistributionChecker:
         ----------
         z_score_threshold : float, optional
             The z-score threshold for outlier detection (default is 3).
+        n_samples : int, optional
+            The number of samples to consider for the test (default is 365).
+        min_samples : int, optional
+            The minimum number of samples required to perform the test (default is 7).
 
         Returns
         -------
@@ -217,7 +240,14 @@ class Main:
         """
 
         results = {"chi2r": {}, "residual": {}, "snr": {}, "fitting_failure": {}}
+        
+        # If no data, return no data message to skip the checks
+        if self.timing_info is None or len(self.timing_info) == 0:
+            for key in results:
+                results[key] = {"level": 0, "id": f"no_data", "message": "No timing data available.", "attachments": []}
+            return results
 
+        # Run checks
         for key in results:
             results[key] = getattr(self, f"check_{key}")()
         
@@ -227,6 +257,17 @@ class Main:
         self.logger.debug("Checking chi2r...")
         verbose_savefig = os.path.join(self.temp_dir, "chi2r_distribution.pdf")
 
+        # Initialize the BasicDistributionChecker for chi2r
+        bckr = BasicDistributionChecker(
+            metric_mjds=self.metric_chi2rs["mjds"], 
+            metric_vals=self.metric_chi2rs["vals"],
+            metric_rcvrs=None,
+            verbose=True,
+            verbose_title="Chi2 Reduced", 
+            verbose_savefig=verbose_savefig, 
+            logger=self.logger.copy()
+        )
+
         # Basic distribution check
         if len(self.timing_info) > 180: # Need a longer time span to wait for the chi2r to stabilize
             # Basic sanity check
@@ -235,15 +276,6 @@ class Main:
                     return {"level": 0, "id": "chi2r_ok", "message": "Chi2r is normal.", "attachments": []}
                 
             # Distribution check
-            bckr = BasicDistributionChecker(
-                metric_mjds=self.metric_chi2rs["mjds"], 
-                metric_vals=self.metric_chi2rs["vals"],
-                metric_rcvrs=None,
-                verbose=True,
-                verbose_title="Chi2 Reduced", 
-                verbose_savefig=verbose_savefig, 
-                logger=self.logger.copy()
-            )
             bckr_res95, bckr_res997 = bckr.test_95_997(n_samples=30)
             if bckr_res997 == "too_high" and self.metric_chi2rs["vals"][-1] > 10:
                 if self.metric_chi2rs["vals"][-1] > 100:
@@ -258,22 +290,14 @@ class Main:
                     return {"level": 0, "id": "chi2r_ok", "message": "Chi2r is normal.", "attachments": []}
                 
             # Distribution check
-            bckr = BasicDistributionChecker(
-                metric_mjds=self.metric_chi2rs["mjds"],
-                metric_vals=self.metric_chi2rs["vals"],
-                metric_rcvrs=None,
-                verbose=True,
-                verbose_title="Chi2 Reduced", 
-                verbose_savefig=verbose_savefig, 
-                logger=self.logger.copy()
-            )
             _, bckr_res997 = bckr.test_95_997(n_samples=7) # only check for very sudden increase
             if bckr_res997 == "too_high":
                 return {"level": 1, "id": "chi2r_very_sudden_increase", "message": f"Chi2r is out of 3-sigma range of all chi2rs in the last 7 samples ({bckr_res997}).", "attachments": ["%DIAGNOSTIC_PLOT%"], "attachments_report_only": [verbose_savefig]}
         
         # check if chi2r keeps increasing in the last 7 days
-        if len(self.metric_chi2rs["vals"]) >= 8:
-            chi2rs_7days = self.metric_chi2rs["vals"][-7:]
+        _, samp_vals = bckr.get_samples_from_same_rcvr() # get samples from the same receiver as the latest value
+        if len(samp_vals) >= 8:
+            chi2rs_7days = samp_vals[-7:]
             if np.all(np.diff(chi2rs_7days) > 0):
                 return {"level": 1, "id": "chi2r_keeps_increasing", "message": "Chi2r keeps increasing in the last 7 samples.", "attachments": ["%DIAGNOSTIC_PLOT%"]}
             
@@ -294,10 +318,13 @@ class Main:
             logger=self.logger.copy()
         )
         bckr_res95, bckr_res997 = bckr.test_95_997(n_samples=90)
-        if bckr_res997 != "ok":
+        if bckr_res997 == "too_high":
             return {"level": 2, "id": "toa_error_very_sudden_increase", "message": f"TOA error is out of 3-sigma range of all TOA errors in the last 90 samples ({bckr_res997}).", "attachments": ["%DIAGNOSTIC_PLOT%"], "attachments_report_only": [verbose_savefig]}
-        elif bckr_res95 != "ok":
+        elif bckr_res95 == "too_high":
             return {"level": 1, "id": "toa_error_sudden_increase", "message": f"TOA error is out of 2-sigma range of all TOA errors in the last 90 samples ({bckr_res95}).", "attachments": ["%DIAGNOSTIC_PLOT%"], "attachments_report_only": [verbose_savefig]}
+        else:
+            if bckr_res997 == "too_low":
+                return {"level": 1, "id": "toa_error_very_sudden_decrease", "message": f"TOA error is out of 3-sigma range of all TOA errors in the last 90 samples ({bckr_res997}).", "attachments": ["%DIAGNOSTIC_PLOT%"], "attachments_report_only": [verbose_savefig]}
 
         # Check residuals
         bckr = BasicDistributionChecker(
@@ -341,9 +368,10 @@ class Main:
             return {"level": 1, "id": "snr_sudden_change", "message": f"SNR is out of 2-sigma range of all SNRs in the last 90 samples ({bckr_res95}).", "attachments": ["%DIAGNOSTIC_PLOT%"], "attachments_report_only": [verbose_savefig]}
         
         # Check if SNR keeps increasing/decreasing in the last 7 days
-        if len(self.metric_snrs["vals"]) >= 8:
-            snrs_7days = self.metric_snrs["vals"][-7:]
-            snrs_5days = self.metric_snrs["vals"][-5:]
+        _, samp_vals = bckr.get_samples_from_same_rcvr() # get samples from the same receiver as the latest value
+        if len(samp_vals) >= 8:
+            snrs_7days = samp_vals[-7:]
+            snrs_5days = samp_vals[-5:]
 
             # 7 days
             if np.all(np.diff(snrs_7days) > 0):
