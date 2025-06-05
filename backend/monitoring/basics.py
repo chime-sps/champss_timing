@@ -322,9 +322,10 @@ class Main:
             return {"level": 2, "id": "toa_error_very_sudden_increase", "message": f"TOA error is out of 3-sigma range of all TOA errors in the last 90 samples ({bckr_res997}).", "attachments": ["%DIAGNOSTIC_PLOT%"], "attachments_report_only": [verbose_savefig]}
         elif bckr_res95 == "too_high":
             return {"level": 1, "id": "toa_error_sudden_increase", "message": f"TOA error is out of 2-sigma range of all TOA errors in the last 90 samples ({bckr_res95}).", "attachments": ["%DIAGNOSTIC_PLOT%"], "attachments_report_only": [verbose_savefig]}
-        else:
-            if bckr_res997 == "too_low":
-                return {"level": 1, "id": "toa_error_very_sudden_decrease", "message": f"TOA error is out of 3-sigma range of all TOA errors in the last 90 samples ({bckr_res997}).", "attachments": ["%DIAGNOSTIC_PLOT%"], "attachments_report_only": [verbose_savefig]}
+        # else:
+        #     if bckr_res997 == "too_low":
+        #         return {"level": 1, "id": "toa_error_very_sudden_decrease", "message": f"TOA error is out of 3-sigma range of all TOA errors in the last 90 samples ({bckr_res997}).", "attachments": ["%DIAGNOSTIC_PLOT%"], "attachments_report_only": [verbose_savefig]}
+        # DO WE ACTUALLY NEED THIS? It's not a problem if TOA error is very low. If this is due to sudden brightening of the pulsar, it will be caught by the SNR check I think. 
 
         # Check residuals
         bckr = BasicDistributionChecker(
