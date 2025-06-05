@@ -109,7 +109,7 @@ class glitch_utils():
 
         return transit_time
     
-    def estimate_glitch(self, savefig=None):
+    def estimate_glitch(self, discontinuity_detector_hdl=None, savefig=None):
         # Period
         P = 1 / self.timing_info_day0["fitted_params"]["F0"]
 
@@ -206,10 +206,11 @@ class glitch_utils():
             resid_day1 = {"mjd": mjd_day1, "val": resid_val_day1, "err": resid_err_day1}, 
             glitch_info = glitch_info, 
             next_transit_time = next_transit_time, 
+            dd = discontinuity_detector_hdl,
             savefig = savefig
         )
     
-    def plot_diagnostic(self, resid_day0, resid_day1, glitch_info, next_transit_time, savefig=None):
+    def plot_diagnostic(self, resid_day0, resid_day1, glitch_info, next_transit_time, dd=None, savefig=None):
         fig, ax = plt.subplots(3, 2, figsize=(20, 12), gridspec_kw={"width_ratios": [1, 2]})
         P = 1 / self.timing_info_day1["fitted_params"]["F0"]
 
@@ -230,6 +231,11 @@ class glitch_utils():
 
         # calculate thresholds
         thres_l, thres_h = self.alert_thresholds(np.array(self.timing_info_day1["residuals"]["val"] )* 1e-6 / P)
+
+        # make sure discontinuity detector is fitted
+        if dd is not None:
+            if not dd.fitted:
+                dd.fit()
 
         # Plot pulse profiles for day 0
         ax[0, 0].plot(day0_amps, color="blue", lw=0.5)
@@ -260,7 +266,7 @@ class glitch_utils():
             np.array(self.timing_info_day1["notes"]["fitted_mjds"])[-30:], 
             np.array(self.timing_info_day1["residuals"]["val"])[-30:] * 1e-6 / P, 
             yerr=np.array(self.timing_info_day1["residuals"]["err"])[-30:] * 1e-6 / P,  
-            fmt="x", 
+            fmt=".", 
             color="k"
         )
         ax[0, 1].errorbar(
@@ -269,20 +275,44 @@ class glitch_utils():
             yerr=resid_day0["err"] * 1e-6 / P,
             fmt="x", 
             color="blue", 
+            markersize=10,
+            capsize=5,
             label="Day 0 (MJD={:.5f}, residual={:.3f} +/- {:.3f})".format(resid_day0["mjd"], resid_day0["val"] * 1e-6 / P, resid_day0["err"] * 1e-6 / P)
         )
-        ax[0, 1].axvline(resid_day0["mjd"], color="blue", linestyle="-", alpha=0.5)
-        ax[0, 1].axhline(resid_day0["val"] * 1e-6 / P, color="blue", linestyle="-", alpha=0.5)
+        ax[0, 1].axvline(resid_day0["mjd"], color="blue", linestyle="-", alpha=0.25)
+        ax[0, 1].axhline(resid_day0["val"] * 1e-6 / P, color="blue", linestyle="-", alpha=0.25)
         ax[0, 1].errorbar(
             resid_day1["mjd"],
             resid_day1["val"] * 1e-6 / P,
             yerr=resid_day1["err"] * 1e-6 / P,
             fmt="x", 
             color="red", 
+            markersize=10,
+            capsize=5,
             label="Day 1 (MJD={:.5f}, residual={:.3f} +/- {:.3f})".format(resid_day1["mjd"], resid_day1["val"] * 1e-6 / P, resid_day1["err"] * 1e-6 / P)
         )
         ax[0, 1].axvline(resid_day1["mjd"], color="red", linestyle="-", alpha=0.5)
         ax[0, 1].axhline(resid_day1["val"] * 1e-6 / P, color="red", linestyle="-", alpha=0.5)
+
+        # Add discontinuity detection diagnostics
+        if dd is not None:
+            mjds_all = np.concatenate((dd.state.x, [resid_day1["mjd"]]))
+            pred_x = np.linspace(np.min(mjds_all), np.max(mjds_all), 100) # i.e., mjds
+            pred_y = dd.state.predict(pred_x) # i.e., residuals (in us)
+            dd_status, dd_predicted, dd_residual, dd_noise_level, dd_det_sigma = dd.is_discontinuous(mjd=resid_day1["mjd"], val=resid_day1["val"], get_details=True)
+            interval_lower, interval_upper = dd.get_good_interval(pred_y, dd_noise_level)
+            ax[0, 1].plot(pred_x, pred_y * 1e-6 / P, "b--", lw=0.5, label="Predicted Residuals")
+            ax[0, 1].fill_between(
+                pred_x, 
+                interval_lower * 1e-6 / P,
+                interval_upper * 1e-6 / P,
+                color="blue", alpha=0.1, label="Predicted Good Interval"
+            )
+            if dd_status:
+                ax[0, 1].text(0.5, 0.95, "Discontinuity Detected", ha="center", va="top", color="red", fontsize=12, fontweight="bold", transform=ax[0, 1].transAxes)
+            else:
+                ax[0, 1].text(0.5, 0.95, "No Discontinuity Detected", ha="center", va="top", color="green", fontsize=12, fontweight="bold", transform=ax[0, 1].transAxes)
+
         ax[0, 1].set_xlabel("MJD")
         ax[0, 1].set_ylabel("Residuals (phase)")
         ax[0, 1].legend(frameon=False)

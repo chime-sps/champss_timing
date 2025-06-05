@@ -53,10 +53,12 @@ class DiscontinuityDetectorState:
             plt.show()
 
 class DiscontinuityDetector:
-    def __init__(self, mjds, residuals, logger=logger(), verbose=False):
+    def __init__(self, mjds, residuals, threshold=3, logger=logger(), verbose=False):
         self.mjds = np.array(mjds)
         self.residuals = np.array(residuals)
+        self.threshold = threshold
         self.state = DiscontinuityDetectorState(self.mjds, self.residuals)
+        self.fitted = False  # Flag to indicate if the state has been fitted
         self.logger = logger
         self.verbose = verbose
     
@@ -103,15 +105,33 @@ class DiscontinuityDetector:
 
             max_iters -= 1
 
+        self.fitted = True
+        if self.verbose:
+            self.logger.info(f"Final fitted state order: {self.state.order}, coefficients: {self.state.coefficients}")
+            self.state.plot()
+
         return self.state
     
-    def is_discontinuous(self, mjd, val, threshold=3.0, get_details=False):
+    def get_good_interval(self, predicted, noise):
+        """
+        Get the good interval based on the fitted state.
+        Returns:
+        - good_interval: A tuple (lower residual, higher residual) representing the good interval.
+        """
+        if not self.fitted:
+            raise ValueError("State must be fitted before getting the good interval.")
+        
+        lower = predicted - self.threshold * noise
+        higher = predicted + self.threshold * noise
+        
+        return lower, higher
+    
+    def is_discontinuous(self, mjd, val, get_details=False):
         """
         Check if the given value at mjd is discontinuous based on the fitted state.
         Parameters:
         - mjd: The modified Julian date to check.
         - val: The value at the given mjd to check for discontinuity.
-        - threshold: The number of standard deviations to consider as a discontinuity.
         - get_details: If True, return additional details about the check.
         Returns:
         [get_details=False]:
@@ -142,19 +162,19 @@ class DiscontinuityDetector:
         # Ideally median is 0, but just in case of non-zero median, we add it to the noise
         noise = np.median(self.state.residual(self.mjds, self.residuals)) + stats_utils.mad_to_stdev(mad)
         
-        is_discontinuous = residual > threshold * noise
+        is_discontinuous = residual > self.threshold * noise
 
         if get_details:
             return is_discontinuous, predicted, residual, noise, residual / noise
 
         return is_discontinuous, residual / noise
 
-    def plot(self, mjd, val, threshold=3.0, ax=None, show=True):
+    def plot(self, mjd, val, ax=None, show=True):
         if ax is None:
             ax = plt.gca()
 
         # Get discontinuity status
-        is_discontinuous, predicted, residual, noise, sigma = self.is_discontinuous(mjd, val, threshold=threshold, get_details=True)
+        is_discontinuous, predicted, residual, noise, sigma = self.is_discontinuous(mjd, val, get_details=True)
 
         # Get predicted curve
         mjds_all = np.concatenate((self.mjds, [mjd]))
@@ -165,8 +185,14 @@ class DiscontinuityDetector:
         ax.plot(pred_x, pred_y, 'r--', label=f'Order {self.state.order} Fit')
         ax.plot(mjd, predicted, "rx", label='Predicted Value with Noise')
         ax.plot(mjd, val, "bx", label='Current Value', markersize=10)
-        ax.axhline(predicted + threshold * noise, color='gray', linestyle='--', label='Upper Threshold')
-        ax.axhline(predicted - threshold * noise, color='gray', linestyle='--', label='Lower Threshold')
+        # ax.axhline(self.get_good_interval(predicted, noise)[0], color='gray', linestyle='--', label='Lower Threshold')
+        # ax.axhline(self.get_good_interval(predicted, noise)[1], color='gray', linestyle='--', label='Upper Threshold')
+        ax.fill_between(
+            pred_x,
+            self.get_good_interval(pred_y, noise)[0],
+            self.get_good_interval(pred_y, noise)[1],
+            color='red', alpha=0.15, label='Good Interval'
+        )
         if is_discontinuous:
             ax.text(0.025, 0.95, f"Discontinuity Detected (σ={sigma:.2f})", 
                     transform=ax.transAxes, fontsize=9, color='red', bbox=dict(facecolor='white', alpha=0.8))
@@ -253,7 +279,7 @@ class Main:
             # Generate the diagnostic plot
             diagnostic_path = f"/tmp/glitch_diagnostic__{self.psr_id}__{utils.get_time_string()}.pdf"
             with glitch_utils(db_hdl=self.db_hdl, logger=self.logger.copy()) as gu:
-                gu.estimate_glitch(savefig=diagnostic_path)
+                gu.estimate_glitch(discontinuity_detector_hdl=dd, savefig=diagnostic_path)
 
             # Check if glitch diagnostic plot exists
             if os.path.exists(diagnostic_path):
