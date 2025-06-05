@@ -172,20 +172,24 @@ class checker:
             self.logger.debug(f"Status is normal ({check_result['id']}), no notification sent.", layer=1)
             return []
         
-        # Experimental: There is no warning for level 1 as of the monitoring report being added.
-        if check_result["level"] == 1:
+        # Experimental: do not send notification for non-urgent issues
+        if check_result["level"] < 3:
             self.logger.debug(f"Status is not urgent, skipping notification.", layer=1)
             return []
         
-        # Send text message
-        if check_result["level"] == 1:
-            msg = f"*Checker Warning for {self.psr_id}*: `" + check_result["message"] + "`"
-            self.noti_hdl.send_message(msg)
-            self.logger.success(msg, layer=1)
-        elif check_result["level"] == 2:
-            msg = f"*Checker Important Warning for {self.psr_id}*: `" + check_result["message"] + "`"
-            self.noti_hdl.send_urgent_message(msg)
-            self.logger.success(msg, layer=1)
+        # # Send text message
+        # if check_result["level"] == 1:
+        #     msg = f"*Checker Warning for {self.psr_id}*: `" + check_result["message"] + "`"
+        #     self.noti_hdl.send_message(msg)
+        #     self.logger.success(msg, layer=1)
+        # elif check_result["level"] == 2:
+        #     msg = f"*Checker Important Warning for {self.psr_id}*: `" + check_result["message"] + "`"
+        #     self.noti_hdl.send_urgent_message(msg)
+        #     self.logger.success(msg, layer=1)
+
+        msg = f"*Critical Event from {self.psr_id}*: `" + check_result["message"] + "`"
+        self.noti_hdl.send_urgent_message(msg)
+        self.logger.success(msg, layer=1)
         
         return check_result["attachments"]
 

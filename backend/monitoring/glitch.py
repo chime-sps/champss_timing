@@ -257,14 +257,14 @@ class Main:
 
             # Check if glitch diagnostic plot exists
             if os.path.exists(diagnostic_path):
-                results["glitch"]["level"] = 2
-                results["glitch"]["id"] = "glitch_detected"
+                results["glitch"]["level"] = 3
+                results["glitch"]["id"] = "discontinuity_detected"
                 results["glitch"]["message"] = f"Glitch-like event detected. Please check the posted glitch diagnostic plot (sigma={sigma}). "
                 results["glitch"]["attachments"] = [diagnostic_path]
                 self.logger.info(f"Glitch diagnostic plot generated successfully -> {diagnostic_path}")
             else:
-                results["glitch"]["level"] = 2
-                results["glitch"]["id"] = "glitch_detected"
+                results["glitch"]["level"] = 3
+                results["glitch"]["id"] = "discontinuity_detected"
                 results["glitch"]["message"] = f"Glitch-like event detected, but **failed** to generate the diagnostic plot. Please check the processing log for more details  (sigma={sigma})."
                 results["glitch"]["attachments"] = []
                 self.logger.warning(f"Failed to generate glitch diagnostic plot -> {diagnostic_path}")

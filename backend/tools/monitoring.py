@@ -116,8 +116,8 @@ class MonitoringReport:
                 
                 # Start minipage
                 tex += "\\begin{minipage}[t]{0.49\\textwidth}\n"
-                tex += f"\\subsubsection*{{{self.latex_text(ckr).upper()}.{self.latex_text(item).upper()}: {self.latex_text(id.upper())}}}\n"
-                tex += f"\\addcontentsline{{toc}}{{subsection}}{{{self.latex_text(ckr).upper()}.{self.latex_text(item).upper()}: {self.latex_text(id.upper())}}}\n"
+                tex += f"\\subsubsection*{{{self.latex_text(ckr.upper())}.{self.latex_text(item.upper())}: {self.latex_text(id.upper())}}}\n"
+                tex += f"\\addcontentsline{{toc}}{{subsection}}{{{self.latex_text(ckr.upper())}.{self.latex_text(item.upper())}: {self.latex_text(id.upper())}}}\n"
 
                 # Get and remove duplicate attachments
                 attachments = list(set(result["attachments"] + result["attachments_report_only"]))
@@ -128,8 +128,10 @@ class MonitoringReport:
 
                 # Add item text
                 if level  == 1:  # Only include warnings
+                    tex += "\\textcolor{black}{"
+                if level  == 2:  # Only include warnings
                     tex += "\\textcolor{orange}{"
-                elif level == 2:  # Include errors
+                elif level >= 3:  # Include errors
                     tex += "\\textcolor{red}{"
                 # tex += f"\\textbf{{[{self.latex_text(ckr)}.{self.latex_text(item)}]}} "
                 tex += "\\texttt{" + f"{self.latex_text(message)} (Level: {level})" + "}\n" 
@@ -219,7 +221,7 @@ class MonitoringReport:
 
         return tex
     
-    def generate(self, outfile, latex="pdflatex", temdir="/tmp"):
+    def generate(self, outfile, latex="pdflatex", temdir="/tmp", halt_on_error=False):
         """
         Generate the LaTeX document for the monitoring report.
         Args:
@@ -245,7 +247,10 @@ class MonitoringReport:
         # Compile the LaTeX document to PDF
         pdf_file = os.path.join(temdir, f"monitoring_report__{work_id}.pdf")
         for _ in range(2):  # Run pdflatex twice to resolve references
-            cmd = f"{latex} -interaction=nonstopmode -halt-on-error -output-directory={temdir} {tex_file}"
+            if halt_on_error:
+                cmd = f"{latex} -interaction=nonstopmode -halt-on-error -output-directory={temdir} {tex_file}"
+            else:
+                cmd = f"{latex} -interaction=nonstopmode -output-directory={temdir} {tex_file}"
             if not self.verbose:
                 os.system(cmd + " > /dev/null 2>&1")
             else:

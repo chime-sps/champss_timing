@@ -141,6 +141,11 @@ class Main:
         # Get timing info
         self.timing_info = self.db_hdl.get_all_timing_info()
 
+        # Get period
+        self.period = 0
+        if len(self.timing_info) > 0:
+            self.period = (1 / self.timing_info[-1]["fitted_params"]["F0"])
+
         # Get basic metric information
         self.metric_residuals = {"mjds": [], "vals": [], "rcvrs": []}
         self.metric_toa_errs = {"mjds": [], "vals": [], "rcvrs": []}
@@ -241,6 +246,8 @@ class Main:
             )
             bckr_res95, bckr_res997 = bckr.test_95_997(n_samples=30)
             if bckr_res997 == "too_high" and self.metric_chi2rs["vals"][-1] > 10:
+                if self.metric_chi2rs["vals"][-1] > 100:
+                    return {"level": 3, "id": "chi2r_extremely_high", "message": f"Chi2r is extremely high ({self.metric_chi2rs['vals'][-1]}).", "attachments": ["%DIAGNOSTIC_PLOT%", "verbose_savefig"]}
                 return {"level": 2, "id": "chi2r_very_sudden_increase", "message": f"Chi2r is out of 3-sigma range of all chi2rs in the last 30 samples ({bckr_res997}).", "attachments": ["%DIAGNOSTIC_PLOT%", "verbose_savefig"]}
             elif bckr_res95 == "too_high":
                 return {"level": 1, "id": "chi2r_sudden_increase", "message": f"Chi2r is out of 2-sigma range of all chi2rs in the last 30 samples ({bckr_res95}).", "attachments": ["%DIAGNOSTIC_PLOT%", "verbose_savefig"]}
@@ -262,7 +269,7 @@ class Main:
             )
             _, bckr_res997 = bckr.test_95_997(n_samples=7) # only check for very sudden increase
             if bckr_res997 == "too_high":
-                return {"level": 2, "id": "chi2r_very_sudden_increase", "message": f"Chi2r is out of 3-sigma range of all chi2rs in the last 7 samples ({bckr_res997}).", "attachments": ["%DIAGNOSTIC_PLOT%"], "attachments_report_only": [verbose_savefig]}
+                return {"level": 1, "id": "chi2r_very_sudden_increase", "message": f"Chi2r is out of 3-sigma range of all chi2rs in the last 7 samples ({bckr_res997}).", "attachments": ["%DIAGNOSTIC_PLOT%"], "attachments_report_only": [verbose_savefig]}
         
         # check if chi2r keeps increasing in the last 7 days
         if len(self.metric_chi2rs["vals"]) >= 8:
@@ -304,6 +311,9 @@ class Main:
         )
         bckr_res95, bckr_res997 = bckr.test_95_997(n_samples=90)
         if bckr_res997 != "ok" and self.metric_residuals["vals"][-1] > self.metric_toa_errs["vals"][-1]: # It's ok if residual is still within the TOA error range
+            # Check if residual is very high
+            if self.metric_residuals["vals"][-1] * 1e-6 / self.period > 0.5: # more than half of the phase
+                return {"level": 3, "id": "residual_extremely_high", "message": f"Residual is extremely high ({self.metric_residuals['vals'][-1] * 1e-3} ms).", "attachments": ["%DIAGNOSTIC_PLOT%"], "attachments_report_only": [verbose_savefig]}
             return {"level": 2, "id": "residual_very_sudden_increase", "message": f"Residual is out of 3-sigma range of all residuals in the last 90 samples ({bckr_res997}).", "attachments": ["%DIAGNOSTIC_PLOT%"], "attachments_report_only": [verbose_savefig]}
         elif bckr_res95 != "ok" and self.metric_residuals["vals"][-1] > self.metric_toa_errs["vals"][-1]:
             return {"level": 1, "id": "residual_sudden_increase", "message": f"Residual is out of 2-sigma range of all residuals in the last 90 samples ({bckr_res95}).", "attachments": ["%DIAGNOSTIC_PLOT%"], "attachments_report_only": [verbose_savefig]}
@@ -356,7 +366,7 @@ class Main:
             if ("FITTING_FAILED" in self.timing_info[-1]["notes"]["remark"]
             and "FITTING_FAILED" in self.timing_info[-2]["notes"]["remark"]
             and "FITTING_FAILED" in self.timing_info[-3]["notes"]["remark"]):
-                return {"level": 2, "id": "fitting_failed", "message": "All PINT fittings failed in last 3 samples. ", "attachments": ["%DIAGNOSTIC_PLOT%"]}
+                return {"level": 3, "id": "fitting_failed", "message": "All PINT fittings failed in last 3 samples. ", "attachments": ["%DIAGNOSTIC_PLOT%"]}
         
         return {"level": 0, "id": "fitting_ok", "message": "Fitting status is normal.", "attachments": []}
 

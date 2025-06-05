@@ -145,7 +145,7 @@ class Main:
         _, outliers_idxes = self.paz.get_threshold_and_outliers(statistic="chisquare")
 
         # Sanity check for outliers
-        if len(outliers_idxes) > 0.5 * len(self.paz.get_binned_profiles()):
+        if len(outliers_idxes) > 0.33 * len(self.paz.get_binned_profiles()):
             self.logger.warning(f"Too many outliers detected for {self.psr_id}. Skipping chi2 check.")
             results["level"] = 1
             results["id"] = "too_many_outliers"
@@ -159,6 +159,15 @@ class Main:
                     results["level"] = 2
                     results["id"] = "high_chi2"
                     results["message"] = "The latest profile has a high chi2 compared to previous profiles."
+                
+            # Check if the last 3 samples are all outliers
+            if len(outliers_idxes) >= 3:
+                latest_3idx = [len(self.paz.get_binned_profiles()) - 1, len(self.paz.get_binned_profiles()) - 2, len(self.paz.get_binned_profiles()) - 3]
+                if all(idx in outliers_idxes for idx in latest_3idx):
+                    # Update results
+                    results["level"] = 3
+                    results["id"] = "continuous_high_chi2"
+                    results["message"] = "The last 3 profiles have a high chi2 compared to previous profiles."
 
         # Create diagnostics
         if results["level"] > 0:
@@ -168,7 +177,8 @@ class Main:
         return results
     
     def check_peak_fluence(self):
-        savefig_path = os.path.join(self.temp_dir, "peak_fluence_diagnostics.pdf")
+        savefig_path95 = os.path.join(self.temp_dir, "peak_fluence_diagnostics_95.pdf")
+        savefig_path997 = os.path.join(self.temp_dir, "peak_fluence_diagnostics_997.pdf")
         results = {
             "level": 0,
             "id": "no_change",
@@ -180,18 +190,31 @@ class Main:
         # Initialize peak fluence analyzer
         pfp = ProfilePeaks(template=self.paz.get_template(), aligned_profiles=self.paz.get_binned_profiles(), verbose=False)
         
-        # Get 95% CL outliers
-        _, outliers95 = pfp.get_outliers_thresholds_CL95(savefig=savefig_path)
+        # Get 95% and 99.7% CL outliers
+        _, outliers95 = pfp.get_outliers_thresholds_CL95(savefig=savefig_path95)
+        _, outliers997 = pfp.get_outliers_thresholds_CL997(savefig=savefig_path997)
 
         # Sanity check for outliers
         for this_outliers95 in outliers95:
-            if len(this_outliers95) > 0.5 * len(self.paz.get_binned_profiles()):
+            if len(this_outliers95) > 0.33 * len(self.paz.get_binned_profiles()):
                 self.logger.warning(f"Too many outliers detected for {self.psr_id}. Skipping peak fluence check.")
                 results["level"] = 1
                 results["id"] = "too_many_outliers"
                 results["message"] = "Too many outliers detected in peak fluence. Skipping peak fluence check."
-                results["attachments"].append(savefig_path)
+                results["attachments"].append(savefig_path95)
                 return results
+            
+        # Check if the latest 3 profiles are 99.7% outliers
+        for this_outliers997 in outliers997:
+            if len(this_outliers997) >= 3:
+                latest_3idx = [len(self.paz.get_binned_profiles()) - 1, len(self.paz.get_binned_profiles()) - 2, len(self.paz.get_binned_profiles()) - 3]
+                if all(idx in this_outliers997 for idx in latest_3idx):
+                    # Update results
+                    results["level"] = 3
+                    results["id"] = "continuous_very_high_peak_fluence"
+                    results["message"] = "The last 3 profiles have a very high peak fluence compared to previous profiles."
+                    results["attachments"].append(savefig_path997)
+                    return results
             
         # Check if the latest 3 profiles are 95% outliers
         for this_outliers95 in outliers95:
@@ -202,12 +225,10 @@ class Main:
                     results["level"] = 2
                     results["id"] = "continuous_high_peak_fluence"
                     results["message"] = "The last 3 profiles have a high peak fluence compared to previous profiles."
-                    results["attachments"].append(savefig_path)
+                    results["attachments"].append(savefig_path95)
 
                     return results
             
-        # Get 99.7% CL outliers
-        _, outliers997 = pfp.get_outliers_thresholds_CL997(savefig=savefig_path)
 
         # Check if the latest profile is an 99.7% outlier
         for this_outliers997 in outliers997:
@@ -218,7 +239,7 @@ class Main:
                     results["level"] = 2
                     results["id"] = "sudden_very_high_peak_fluence"
                     results["message"] = "The latest profile has a high peak fluence compared to previous profiles."
-                    results["attachments"].append(savefig_path)
+                    results["attachments"].append(savefig_path997)
                     return results
             
         # Final check for 95% outliers
@@ -230,7 +251,7 @@ class Main:
                     results["level"] = 1
                     results["id"] = "high_peak_fluence"
                     results["message"] = "The latest profile has a high peak fluence compared to previous profiles."
-                    results["attachments"].append(savefig_path)
+                    results["attachments"].append(savefig_path95)
                     return results
             
         return results
