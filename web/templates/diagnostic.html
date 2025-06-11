@@ -2,7 +2,15 @@
 
 {% block title %}Diagnostic information for {{source_id}}{% endblock %}
 
-{% block content %}
+{% block content %} 
+
+    {% if not sources[source_id].on_diagnostic_request() %}
+        <div class="alert alert-danger" role="alert">
+            <h4 class="alert-heading">Diagnostic information not available</h4>
+            <p>Diagnostic information for source <b>{{ source_id }}</b> is not available. This may be due to the the source database corruption, or some internal error in the backend.</p>
+            <p class="mb-0">Please try again later or contact the system administrator if you believe this is an error.</p>
+        </div>
+    {% endif %}
 
     <div class="row">
         {% if sources[source_id].checker_warnings != [] %}

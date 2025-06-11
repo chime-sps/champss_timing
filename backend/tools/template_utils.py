@@ -5,7 +5,6 @@ from astropy.coordinates import SkyCoord
 
 from ..utils.correlation import discrete_shifts, fourier_shifts
 from ..utils.logger import logger
-from ..io.template_writer import TemplateWriter
 
 class StackTemplateState:
     def __init__(self, profiles, shift_meth):
@@ -165,6 +164,8 @@ class StackTemplate:
         """
         Write the template to a PSRCHIVE compatible format.
         """
+
+        from ..io.template_writer import TemplateWriter # Import the TemplateWriter here since TemplateWriter uses psrchive package but there's no reason for web server to install it. 
         
         with TemplateWriter(filename, overwrite=overwrite) as writer:
             # Write the data to the archive

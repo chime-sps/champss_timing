@@ -1,5 +1,5 @@
 import os
-import datetime
+import traceback
 import requests
 import json
 import base64
@@ -8,9 +8,11 @@ import hashlib
 from scipy.spatial import KDTree
 from backend.pipecore.checker import checker
 from backend.datastores.database import database
-
 from backend.utils.utils import utils
 
+# Prevent matplotlib fail on a server thread by using a non-interactive backend
+import matplotlib
+matplotlib.use('agg')
 
 class src_loader():
     def __init__(self, source_dir, query_simbad=True):
@@ -19,7 +21,7 @@ class src_loader():
         self.db = None
         self.db_md5 = None
         self.config = None
-        self.checker_warnings = {}
+        self.checker_warnings = None
         self.checker_warnings_length = 0
         self.pdf = source_dir + "/champss_diagnostic.pdf"
         self.logfile = source_dir + "/champss_timing.log"
@@ -30,7 +32,7 @@ class src_loader():
         self.last_timing_info = {}
         self.stats = {}
         self.parameter_info = {}
-        self.source_coincidences = []
+        self.source_coincidences = None
         self.source_coincidences_radius = 0.25 # deg
         self.source_coincidences_catalogs = []
         self.source_coincidences_map_default = "SIMBAD Query"
@@ -58,18 +60,41 @@ class src_loader():
         # Get parameter info
         self.parameter_info = self.get_parameter_info(ra_in_deg=True)
 
-        # Get source coincidences
-        self.source_coincidences, self.source_coincidences_map_default = self.source_coincidence_query(
-            self.last_timing_info["fitted_params"]["RAJ"] / 24 * 360,
-            self.last_timing_info["fitted_params"]["DECJ"],
-            # radius=0.0166667
-            radius=self.source_coincidences_radius, 
-            simbad=self.query_simbad
-        )
+        # # Get source coincidences
+        # self.source_coincidences = None
+        # self.source_coincidences_map_default = "SIMBAD Query"
 
-        # Get checker warnings
-        self.checker_warnings = self.get_checker_warnings()
-        self.checker_warnings_length = len(self.checker_warnings)
+        # # Get checker warnings
+        # self.checker_warnings = self.get_checker_warnings()
+        # self.checker_warnings_length = len(self.checker_warnings)
+
+    def on_diagnostic_request(self):
+        """
+        Called on each request to load diagnostic data. 
+        This allow some procedure to perform asynchronously as possible to save some time on initialization.
+        """
+
+        try:
+            # Get source coincidences
+            if self.source_coincidences is None:
+                self.source_coincidences, self.source_coincidences_map_default = self.source_coincidence_query(
+                    self.last_timing_info["fitted_params"]["RAJ"] / 24 * 360,
+                    self.last_timing_info["fitted_params"]["DECJ"],
+                    # radius=0.0166667
+                    radius=self.source_coincidences_radius, 
+                    simbad=self.query_simbad
+                )
+
+            # Get checker warnings
+            if self.checker_warnings is None:
+                self.checker_warnings = self.get_checker_warnings()
+                self.checker_warnings_length = len(self.checker_warnings)
+        except Exception as e:
+            print(f"Error while loading diagnostic data: {e}")
+            print(traceback.format_exc())
+            return False
+
+        return True
 
     def cleanup(self):
         # Close database

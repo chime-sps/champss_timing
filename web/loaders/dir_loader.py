@@ -51,6 +51,17 @@ class dir_loader():
         #     self.update_checker_thread = threading.Thread(target = self.update_checker)
         #     self.update_checker_thread.start()
 
+        # preload the on_diagnostic_request events
+        threading.Thread(target=self.__preload_on_diagnostic_request).start()
+        
+    def __preload_on_diagnostic_request(self):
+        """
+        Preload the on_diagnostic_request events for all sources.
+        This is to ensure that the event handlers are ready when the app starts.
+        """
+        for source in self.sources:
+            source.on_diagnostic_request()
+
     def get_heatmap(self, n_max=1050, reverse=False):
         heatmap = {}
 
