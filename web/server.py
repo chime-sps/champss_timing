@@ -126,12 +126,11 @@ def send_assets(path):
 def login():
     show_msg = False
     if request.method == 'POST':
-        if 'password' not in request.form:
-            show_msg = "No password provided."
-        elif app.login.checker(request.form['password']):
+        if app.login.checker(**request.form):
             return redirect(app._url_for('index'))
         else:
             show_msg = "Wrong password."
+            time.sleep(1)  # Prevent brute-force attacks by adding a delay
     return render_template(
         'login.html',
         app=app,
@@ -260,10 +259,10 @@ class URLFormatter:
 
         return endpoint
 
-def run(psr_dir, port, host="127.0.0.1", root="/", password=False, query_simbad=True, debug=False, update_hdl=None, slack_token=None, notebook_path="./runnotes.db"):
+def run(psr_dir, port, host="127.0.0.1", root="/", authenticator="default", query_simbad=True, debug=False, update_hdl=None, slack_token=None, notebook_path="./runnotes.db"):
     global app
 
-    app.login = login_hdl.login(session, password)
+    app.login = login_hdl.login(session, authenticator=authenticator)
     app.api_public = api_hdl.PublicAPI(app)
     app.api_private = api_hdl.PrivateAPI(app)
     app.update = update_hdl

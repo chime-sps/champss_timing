@@ -6,11 +6,24 @@
 
 <div class="card" style="width: 30rem; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); ">
     <div class="card-body">
+        <h3 class="card-title">
+            <small>Login with</small><br>
+            <b>{{ app.login.get_auth_name() }}</b>
+        </h3>
         <form method="post" action="{{ url_for("login") }}">
-            <div class="mb-3">
-                <label for="password" class="form-label">Password</label>
-                <input type="password" class="form-control" id="password" name="password" required>
+            {% for field in app.login.get_fields(): %}
+            <div class="form-floating mb-3">
+                <input 
+                {% if field["type"] == "hidden" %}
+                type="password" 
+                {% else %}
+                type="text" 
+                {% endif %}
+                class="form-control" id="input-{{ field["id"] }}" name="{{ field["id"] }}" placeholder="{{ field["name"] }}" required>
+                <label for="input-{{ field["id"] }}">{{ field["name"] }}</label>
             </div>
+            {% endfor %}
+            <hr>
             <button type="submit" class="btn btn-primary">Continue</button>
         </form>
     </div>

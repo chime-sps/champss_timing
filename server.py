@@ -23,7 +23,7 @@ parser.add_argument("-p", "--port", type=int, default=1508, help="Port number fo
 parser.add_argument("-r", "--repo", type=str, default=None, help="Repository URL for the timing sources", required=False)
 parser.add_argument("-k", "--ssh-key", type=str, help="SSH key for the repository", default="")
 parser.add_argument("--slack", type=str, help="Slack token for the run notes service", default=None)
-parser.add_argument("--password", type=str, help="Password for the repository", default="")
+parser.add_argument("--authenticator", type=str, default="default", help="Authenticator to use for the web server (default: default)")
 parser.add_argument("--host", type=str, default="127.0.0.1", help="Host address for the web server (default: 127.0.0.1)")
 parser.add_argument("--root", type=str, default="/", help="Root path for the web server (default: /)")
 parser.add_argument("--no-simbad", action="store_false", dest="query_simbad", help="Disable querying Simbad for pulsar information (i.e., faster debug)", default=True)
@@ -34,7 +34,6 @@ args = parser.parse_args()
 repo_url = args.repo
 ssh_key = args.ssh_key
 psr_dir = os.path.abspath(f"./timing_sources")
-password = args.password if args.password else False
 
 # Start the web server
 def update_repo(dir):
@@ -90,6 +89,6 @@ server.run(
     port=args.port, 
     query_simbad=args.query_simbad, 
     debug=args.debug,
-    password=password, 
+    authenticator=args.authenticator,
     slack_token=slack_token
 )
