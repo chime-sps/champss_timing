@@ -41,7 +41,6 @@ cli_config = CLIConfig()
 TIMING_SOURCES = "./champss_timing_sources"
 SUMMARY_TEXT = "./champss_timing_sources/timing_summary.txt"
 MONITOR_URL = cli_config.config["user_defined"]["monitor_url"]
-MONITOR_PASSWORD = cli_config.config["user_defined"]["monitor_password"]
 UPTIME_URL = cli_config.config["user_defined"]["uptime_url"]
 HEARTBEAT_URL = cli_config.config["user_defined"]["heartbeat_url_narval_github"]
 SLACK_TOKEN = cli_config.config["slack_token"]["chime"]
@@ -133,7 +132,7 @@ else:
     noti.send_message("No summary text file found.")
 
 # End text
-noti.send_message(f"For timing results, please refer to <{MONITOR_URL}|CHAMPSS Timing Monitor> (password: `{MONITOR_PASSWORD}`) or processing log on Narval. For pipeline status, please refer to <{UPTIME_URL}|CHAMPSS Timing Status Page>")
+noti.send_message(f"For timing results, please refer to <{MONITOR_URL}|CHAMPSS Timing Monitor> or processing log on Narval. For pipeline status, please refer to <{UPTIME_URL}|CHAMPSS Timing Status Page>")
 
 # Send heartbeat
 requests.get(HEARTBEAT_URL + str(int(time.time())))
