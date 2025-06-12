@@ -210,3 +210,16 @@ class CLIMasterDBHandler:
             self.logger.success("Cleanup completed.")
             self.logger.success(f"Freed {tot_size/1e9:.2f} GB of space.")
             self.logger.success(f"Removed {tot_n_files} files, {len(psrs_unused)} pulsars.")
+
+    def set_corrupted(self, psr_id, ar_id):
+        with tmg_master(self.db_path, fast_mode=True, mem_gb=self.fast_mode_mem_gb) as tm_hdl:
+            try:
+                tm_hdl.update_raw_data(
+                    psr_id=psr_id, 
+                    ar_id=ar_id, 
+                    status="corrupted"
+                )
+                self.logger.success(f"Set {psr_id} -> {ar_id} as corrupted.")
+            except Exception as e:
+                self.logger.error(f"Failed to set {psr_id} -> {ar_id} as corrupted: {e}")
+                self.logger.error(traceback.format_exc())

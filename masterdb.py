@@ -22,6 +22,9 @@ backends = cli_config.config["backends"]
 
 # Initialize parser
 parser = argparse.ArgumentParser(description="TMGMaster database utilities. ")
+parser.add_argument("-p", "--psr", type=str, default=None, help="Set a pulsar id to be processed. ")
+parser.add_argument("-id", "--arid", type=str, default=None, help="Set an archive id to be processed. ")
+parser.add_argument("--set-corrupted", action="store_true", default=False, help="Set a file as corrupted. (specified by the pulsar id and archive id)")
 parser.add_argument("--auto-insert-raw-data", action="store_true", help="Auto insert all data into database. ")
 parser.add_argument("--placeholder-if-corrupted", action="store_true", default=False, help="Insert placeholder if a file is corrupted. ")
 parser.add_argument("--cleanup-raw-data", action="store_true", help="Cleanup unused raw data on the disk. ")
@@ -59,6 +62,12 @@ elif args.cleanup_raw_data:
     
     # Run action
     cli_masterdb_hdl.cleanup_raw_data()
+elif args.set_corrupted:
+    logger.debug("Set a file as corrupted. ")
+    if args.psr is None or args.arid is None:
+        logger.error("Please specify both pulsar id and archive id to set a file as corrupted. ")
+    else:
+        cli_masterdb_hdl.set_corrupted(psr_id=args.psr, ar_id=args.arid)
 else:
     logger.error("No operation specified. ")
     parser.print_help()
