@@ -265,8 +265,8 @@ class Main:
         mjds = mjds[sorted_indices]
         resids = resids[sorted_indices]
 
-        # Run discontinuity detection
-        dd = DiscontinuityDetector(mjds[-15:-1], resids[-15:-1], verbose=False)
+        # Run discontinuity detection by 3 sigma
+        dd = DiscontinuityDetector(mjds[-15:-1], resids[-15:-1], threshold=3, verbose=False)
         dd.fit()
         is_discontinuous, sigma = dd.is_discontinuous(mjds[-1], resids[-1])
 
@@ -283,17 +283,26 @@ class Main:
 
             # Check if glitch diagnostic plot exists
             if os.path.exists(diagnostic_path):
-                results["glitch"]["level"] = 3
                 results["glitch"]["id"] = "discontinuity_detected"
-                results["glitch"]["message"] = f"Glitch-like event detected. Please check the posted glitch diagnostic plot (sigma={sigma}). "
+                results["glitch"]["message"] = f"A glitch-like discontinuity in residuals was detected with sigma = {sigma}. Please check the posted glitch diagnostic plot. "
                 results["glitch"]["attachments"] = [diagnostic_path]
                 self.logger.info(f"Glitch diagnostic plot generated successfully -> {diagnostic_path}")
             else:
-                results["glitch"]["level"] = 3
                 results["glitch"]["id"] = "discontinuity_detected"
-                results["glitch"]["message"] = f"Glitch-like event detected, but **failed** to generate the diagnostic plot. Please check the processing log for more details  (sigma={sigma})."
+                results["glitch"]["message"] = f"A glitch-like discontinuity in residuals was detected with sigma = {sigma}, but the checker **failed** to generate the diagnostic plot. Please check the processing log for more details."
                 results["glitch"]["attachments"] = []
                 self.logger.warning(f"Failed to generate glitch diagnostic plot -> {diagnostic_path}")
+
+            # Higer the level of the glitch alert if the sigma is very high
+            if sigma > 7:
+                results["glitch"]["id"] += "_7_SIGMA"
+                results["glitch"]["level"] = 3
+            elif sigma > 5:
+                results["glitch"]["id"] += "_5_SIGMA"
+                results["glitch"]["level"] = 2
+            else:
+                results["glitch"]["id"] += "_3_SIGMA"
+                results["glitch"]["level"] = 1
         
         return results
     
