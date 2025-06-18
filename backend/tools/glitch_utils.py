@@ -3,6 +3,7 @@ import astropy.units as u
 import matplotlib.pyplot as plt
 import time
 import datetime
+from scipy.stats import normaltest
 from astropy.coordinates import EarthLocation, AltAz, SkyCoord
 from astropy.time import Time
 from astropy.coordinates import AltAz
@@ -44,6 +45,9 @@ class glitch_utils():
             all_profiles_filename_idxed[archive_info['filename']] = archive_info
         self.profile_day0 = all_profiles_filename_idxed[self.timing_info_day0['files'][-1]]
         self.profile_day1 = all_profiles_filename_idxed[self.timing_info_day1['files'][-1]]
+
+        # data quality check
+        self.data_quality_ok = self.data_quality_check()
     
     def calc_glitch(self, P, mjd_day0, mjd_day_1, resid_day0, resid_day1, additional_phase_wrap=0, anti_glitch=False, sideral_day=86164.1, resid_in_phase=False):
         """
@@ -181,6 +185,11 @@ class glitch_utils():
                     anti_glitch = True,
                     resid_in_phase = False
                 ),
+            }, 
+            "metainfo": {
+                "data_quality": {
+                    "ok": self.data_quality_ok
+                }
             }
         }
 
@@ -209,6 +218,8 @@ class glitch_utils():
             dd = discontinuity_detector_hdl,
             savefig = savefig
         )
+
+        return glitch_info
     
     def plot_diagnostic(self, resid_day0, resid_day1, glitch_info, next_transit_time, dd=None, savefig=None):
         fig, ax = plt.subplots(3, 2, figsize=(20, 12), gridspec_kw={"width_ratios": [1, 2]})
@@ -360,6 +371,12 @@ class glitch_utils():
         elif "PSRJ" in self.timing_info_day0["fitted_params"]:
             psr_id = self.timing_info_day0["fitted_params"]["PSRJ"]
         fig.text(0.001, 0, f"CHAMPSS Timing Pipeline ({utils.get_version_hash()}) glitch_utils | PSR {psr_id} | {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", fontsize=9, ha="left", va="bottom", family="monospace")
+
+        # plot data quality info
+        if self.data_quality_ok:
+            fig.text(0.999, 0, "Data Quality Check: PASSED", fontsize=9, ha="right", va="bottom", family="monospace", color="green")
+        else:
+            fig.text(0.999, 0, "Data Quality Check: FAILED", fontsize=9, ha="right", va="bottom", family="monospace", color="red", weight="bold")
         
         plt.tight_layout()
         if savefig is not None:
@@ -383,6 +400,16 @@ class glitch_utils():
     def cleanup(self):
         if self.db_path is not None:
             self.db_hdl.close()
+
+    def data_quality_check(self, p_threshold=0.10):
+        """
+        Simple data quality check for profiles by normality test.
+        """
+        
+        if normaltest(self.profile_day0["psr_amps"])[1] < p_threshold and normaltest(self.profile_day1["psr_amps"])[1] < p_threshold:
+            return True
+        
+        return False
 
     def __enter__(self):
         self.initialize()

@@ -251,6 +251,13 @@ class Main:
 
         if len(self.timing_info) < 1:
             return results # No timing info available
+        
+        # Get pulsar period
+        p0 = 1
+        if "F0" in self.timing_info[-1]["fitted_params"]:
+            p0 = 1/self.timing_info[-1]["fitted_params"]["F0"]
+        else:
+            self.logger.warning(f"F0 not found in the last timing info for {self.psr_id}. Using default period of 1 second.")
 
         # Get residuals and times
         mjds = np.array(self.timing_info[-1]["notes"]["fitted_mjds"])
@@ -279,7 +286,7 @@ class Main:
             # Generate the diagnostic plot
             diagnostic_path = f"/tmp/glitch_diagnostic__{self.psr_id}__{utils.get_time_string()}.pdf"
             with glitch_utils(db_hdl=self.db_hdl, logger=self.logger.copy()) as gu:
-                gu.estimate_glitch(discontinuity_detector_hdl=dd, savefig=diagnostic_path)
+                glitch_info = gu.estimate_glitch(discontinuity_detector_hdl=dd, savefig=diagnostic_path)
 
             # Check if glitch diagnostic plot exists
             if os.path.exists(diagnostic_path):
@@ -294,15 +301,22 @@ class Main:
                 self.logger.warning(f"Failed to generate glitch diagnostic plot -> {diagnostic_path}")
 
             # Higer the level of the glitch alert if the sigma is very high
-            if sigma > 7:
-                results["glitch"]["id"] += "_7_SIGMA"
-                results["glitch"]["level"] = 3
-            elif sigma > 5:
-                results["glitch"]["id"] += "_5_SIGMA"
-                results["glitch"]["level"] = 2
+            if sigma > 15 and np.abs(resids[-1] - resids[-2]) * 1e-6 / p0 > 0.1:
+                if glitch_info["metainfo"]["data_quality"]["ok"]:
+                    results["glitch"]["id"] = "extreme_" + results["glitch"]["id"] + "_hc"
+                    results["glitch"]["level"] = 3
+                else:
+                    results["glitch"]["id"] = "extreme_" + results["glitch"]["id"]
+                    results["glitch"]["level"] = 2
+            elif sigma > 7 and np.abs(resids[-1] - resids[-2]) * 1e-6 / p0 > 0.05:
+                if glitch_info["metainfo"]["data_quality"]["ok"]:
+                    results["glitch"]["id"] = "large_" + results["glitch"]["id"] + "_hc"
+                    results["glitch"]["level"] = 2
+                else:
+                    results["glitch"]["id"] = "large_" + results["glitch"]["id"]
+                    results["glitch"]["level"] = 1
             else:
-                results["glitch"]["id"] += "_3_SIGMA"
+                # Still send out the alert just in case, but with a lower level
                 results["glitch"]["level"] = 1
         
         return results
-    
