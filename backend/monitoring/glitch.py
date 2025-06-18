@@ -301,14 +301,14 @@ class Main:
                 self.logger.warning(f"Failed to generate glitch diagnostic plot -> {diagnostic_path}")
 
             # Higer the level of the glitch alert if the sigma is very high
-            if sigma > 15 and np.abs(resids[-1] - resids[-2]) * 1e-6 / p0 > 0.1:
+            if sigma > 15 and np.abs(resids[-1] - resids[-2]) * 1e-6 / p0 > 0.05:
                 if glitch_info["metainfo"]["data_quality"]["ok"]:
                     results["glitch"]["id"] = "extreme_" + results["glitch"]["id"] + "_hc"
                     results["glitch"]["level"] = 3
                 else:
                     results["glitch"]["id"] = "extreme_" + results["glitch"]["id"]
                     results["glitch"]["level"] = 2
-            elif sigma > 7 and np.abs(resids[-1] - resids[-2]) * 1e-6 / p0 > 0.05:
+            elif sigma > 7 and np.abs(resids[-1] - resids[-2]) * 1e-6 / p0 > 0.03:
                 if glitch_info["metainfo"]["data_quality"]["ok"]:
                     results["glitch"]["id"] = "large_" + results["glitch"]["id"] + "_hc"
                     results["glitch"]["level"] = 2

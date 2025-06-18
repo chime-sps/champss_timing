@@ -401,7 +401,7 @@ class glitch_utils():
         if self.db_path is not None:
             self.db_hdl.close()
 
-    def data_quality_check(self, p_threshold=0.10):
+    def data_quality_check(self, p_threshold=0.05):
         """
         Simple data quality check for profiles by normality test.
         """
