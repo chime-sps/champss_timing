@@ -2,10 +2,12 @@ import json
 import os
 
 from ..utils.logger import logger
+from ..utils.utils import utils
 from ..datastores.database import database
+from ..io.archive import ArchiveReader
 
 class config():
-    def __init__(self, path=False, logger=logger(), db_path=None, db_hdl=None):
+    def __init__(self, path=False, template=False, logger=logger(), db_path=None, db_hdl=None):
         self.db_hdl = db_hdl
         self.db_path = db_path
         self.logger = logger
@@ -28,7 +30,7 @@ class config():
         # load config file
         if path is not False:
             if os.path.exists(path):
-                self.load(path)
+                self.load(path, template=template)
             else:
                 self.logger.warning(f"Config file '{path}' does not exist. Using default config.")
 
@@ -44,11 +46,22 @@ class config():
         # Sync to database and make sure the config matches the first time the timing was started
         self.sync_to_db()
 
-    def load(self, path):
+    def load(self, path, template=False):
+        # If template is not provided, assuming under the same directory as this file
+        if template is False:
+            template = os.path.join(os.path.dirname(__file__), "paas.std")
+
+        # Make sure the template file exists
+        if not os.path.exists(template):
+            self.logger.error(f"Template file '{template}' does not exist. Please provide a valid template file.")
+            raise FileNotFoundError(f"Template file '{template}' does not exist.")
+
+        # Load config file
         with open(path, "r") as file:
             self.data_loaded = json.load(file)
             self.logger.info("Config file loaded.")
             
+        # Load user-defined config
         for key in self.data_loaded:
             if key not in self.data:
                 raise ValueError(f"Unknown key '{key}' in config file.")
@@ -60,12 +73,25 @@ class config():
 
                 self.data[key][sub_key] = self.data_loaded[key][sub_key]
                 self.logger.info(f"Set '{key}.{sub_key}' to '{self.data[key][sub_key]}'.")
+
+        # Load standard profile template
+        profile_template = ArchiveReader(template, dedisperse=False) # assuming the template is a 1D timing archive data
+        self.data["__template"] = {
+            "amps": profile_template.get_amps(tolist=True), 
+            "md5": utils.get_md5sum(template)
+        }
+        self.logger.info(f"Loaded profile template from '{template}'")
                 
     def to_dict(self):
         return self.data
 
     def compare_config(self, config1, config2):
+        # Compare user-defined configs
         for key in config1:
+            if key.startswith("__"):
+                # Skip internal keys that start with "__"
+                continue
+
             if key not in config2:
                 return False
 
@@ -75,6 +101,16 @@ class config():
 
                 if config1[key][sub_key] != config2[key][sub_key]:
                     return False
+
+        # Compare md5 sums of the template profile
+        if "__template" in config1 and "__template" in config2:
+            if "md5" in config1["__template"] and "md5" in config2["__template"]:
+                if config1["__template"]["md5"] != config2["__template"]["md5"]:
+                    return False
+            else:
+                self.logger.warning("Template md5 sum not found in one of the configs. Assuming they match.")
+        else:
+            self.logger.warning("Template not found in one of the configs. Assuming they match.")
 
         return True
 

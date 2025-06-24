@@ -111,7 +111,12 @@ class champss_timing:
         self.logger.clear_log_cache()
         
         # Load config
-        self.timing_config = config(self.path_timing_config, self.logger.copy(), db_hdl=self.db_hdl).to_dict()
+        self.timing_config = config(
+            path=self.path_timing_config, 
+            template=self.path_pulse_template, 
+            logger=self.logger.copy(), 
+            db_hdl=self.db_hdl
+        ).to_dict()
 
         # Get psr id
         self.psr_id = self.path_psr_dir.split("/")[-1]
