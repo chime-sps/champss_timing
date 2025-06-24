@@ -3,8 +3,8 @@ from .correlation import fourier_shifts, discrete_shifts, subsample_shifts
 
 class MatchedFilterSNR:
     def __init__(self, profile, template, shift_meth="discrete"):
-        self.profile = profile
-        self.template = template
+        self.profile = np.array(profile)
+        self.template = np.array(template)
 
         # Get shift method
         if shift_meth == "discrete":
@@ -15,6 +15,18 @@ class MatchedFilterSNR:
             self.shift_method = fourier_shifts
         else:
             raise ValueError("Invalid shift method. Choose from 'discrete', 'subsample', or 'fourier'.")
+        
+        # Normalize the profile and template
+        self.profile = self.normalize(self.profile)
+        self.template = self.normalize(self.template)
+
+        # Scale the template to match the profile
+        if len(self.profile) != len(self.template):
+            self.template = np.interp(
+                np.linspace(0, len(self.template) - 1, len(self.profile)),
+                np.arange(len(self.template)),
+                self.template
+            )
 
         # Cross-correlate template to the profile
         self.template = self.shift_method.roll(
@@ -24,7 +36,7 @@ class MatchedFilterSNR:
 
         # Match the amplitudes
         self.template = self.template * (
-            np.mean(self.profile) / np.mean(self.template)
+            np.quantile(self.profile, 0.99) / np.quantile(self.template, 0.99)
         )
 
     def compute(self):
@@ -32,14 +44,23 @@ class MatchedFilterSNR:
         Compute the matched filter SNR.
         """
         
-        # Calculate signal and noise levels
-        chisq_signal = np.sum((self.profile)**2)
-        chisq_noise = np.sum((self.profile - self.template)**2)
+        # # Calculate signal and noise levels
+        # chisq_signal = np.sum((self.profile)**2)
+        # chisq_noise = np.sum((self.profile - self.template)**2)
 
+        # # Calculate SNR
+        # if chisq_signal - chisq_noise < 0:
+        #     return 0.0
+        # snr = np.sqrt(chisq_signal - chisq_noise)
+
+        # return snr
+        
         # Calculate SNR
-        if chisq_signal - chisq_noise < 0:
+        snr = np.sum(self.profile * self.template) / np.sqrt(np.sum(self.template**2)) # Equation from Wikipedia. I think this can handle faint signals better. 
+        
+        # Sanity checks
+        if np.isnan(snr) or np.isinf(snr) or snr < 0:
             return 0.0
-        snr = np.sqrt(chisq_signal - chisq_noise)
 
         return snr
     
@@ -54,9 +75,22 @@ class MatchedFilterSNR:
 
         ax.plot(self.profile, label='Profile', color='blue')
         ax.plot(self.template, label='Template', color='orange')
+        ax.plot(self.profile - self.template, label='Residual', color='green', linestyle='--')
         ax.set_title('Profile and Template (SNR: {:.2f})'.format(self.compute()))
         ax.set_xlabel('Sample Index')
         ax.set_ylabel('Amplitude')
         ax.legend()
         
         return ax
+    
+    def normalize(self, data):
+        """
+        Normalize the data to have zero mean and unit variance.
+        """
+        data = np.array(data)
+        data = data - np.mean(data)
+
+        if np.std(data) == 0:
+            return data
+        
+        return data / np.std(data)

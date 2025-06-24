@@ -2,6 +2,7 @@ import os
 import shutil
 import hashlib
 import tqdm
+import json
 import numpy as np
 from multiprocessing import Pool
 
@@ -17,7 +18,10 @@ def _archive_cache__db_update_psr_amps_many__get_amp_and_snr(filename, prof_temp
     amps = ArchiveReader(filename).get_amps()
 
     # Calculate matched filter SNR
-    snr = MatchedFilterSNR(amps, prof_templ).compute()
+    if prof_templ is None:
+        snr = 0
+    else:
+        snr = MatchedFilterSNR(amps, prof_templ).compute()
 
     return amps, snr
 
@@ -55,6 +59,8 @@ class archive_cache:
 
         # get profile template from database
         self.prof_templ = self.db_hdl.get_config("__template:amps")
+        if self.prof_templ is not None: 
+            self.prof_templ = json.loads(self.prof_templ)
 
         # check archive cache integrity
         archive_info = self.db_hdl.get_all_archive_info()
