@@ -8,12 +8,18 @@ from multiprocessing import Pool
 from .database import database
 from ..utils.exec import exec
 from ..utils.utils import utils
+from ..utils.data_quality import MatchedFilterSNR
 from ..io.archive import ArchiveReader
 
 # Putting function outside of the class since db_hdl cannot be pickled and passed to Pool
-def _archive_cache__db_update_psr_amps_many__get_amp_and_snr(filename):
-    archive_hdl = ArchiveReader(filename)
-    return archive_hdl.get_amps(), archive_hdl.get_snr()
+def _archive_cache__db_update_psr_amps_many__get_amp_and_snr(filename, prof_templ):
+    # Get profile amps
+    amps = ArchiveReader(filename).get_amps()
+
+    # Calculate matched filter SNR
+    snr = MatchedFilterSNR(amps, prof_templ).compute()
+
+    return amps, snr
 
 def _archive_cache__update_model__get_md5(filename):
     md5 = hashlib.md5()
@@ -29,6 +35,7 @@ class archive_cache:
         self.db_hdl = db_hdl
         self.db_path = db_path
         self.psr_dir = psr_dir
+        self.prof_templ = None
         self.cache_dir = f"{psr_dir}/__champss_archive_cache__"
         self.utils = utils
 
@@ -45,6 +52,9 @@ class archive_cache:
         # create cache directory
         if not os.path.exists(self.cache_dir):
             os.makedirs(self.cache_dir, exist_ok=True)
+
+        # get profile template from database
+        self.prof_templ = self.db_hdl.get_config("__template:amps")
 
         # check archive cache integrity
         archive_info = self.db_hdl.get_all_archive_info()
@@ -276,7 +286,16 @@ class archive_cache:
 
     def db_update_psr_amps_many(self, filenames, n_pools=4, commit=True):
         with Pool(processes=n_pools) as pool:
-            results = list(tqdm.tqdm(pool.imap(_archive_cache__db_update_psr_amps_many__get_amp_and_snr, filenames), total=len(filenames)))
+            # results = list(tqdm.tqdm(pool.imap(_archive_cache__db_update_psr_amps_many__get_amp_and_snr, filenames), total=len(filenames)))
+            results = list(
+                pool.starmap(
+                    _archive_cache__db_update_psr_amps_many__get_amp_and_snr, 
+                    tqdm.tqdm(
+                        [(f, self.prof_templ) for f in filenames], 
+                        total=len(filenames)
+                    )
+                )
+            )
         
         ar_ids = []
         amps = []
