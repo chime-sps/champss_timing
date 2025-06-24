@@ -32,7 +32,7 @@ app.logger = logger()
 def before_request():
     if request.endpoint != 'login' and request.endpoint != 'api_public':
         if not app.login.has_logged_in():
-            return redirect(app._url_for('login'))
+            return redirect(app._url_for('login', callback=request.url))
 
     x_forwarded_proto = request.headers.get('X-Forwarded-Proto')
     if  x_forwarded_proto == 'https':
@@ -127,7 +127,7 @@ def login():
     show_msg = False
     if request.method == 'POST':
         if app.login.checker(**request.form):
-            return redirect(app._url_for('index'))
+            return redirect(request.args.get('callback', app._url_for('index')))
         else:
             show_msg = "Wrong password."
             time.sleep(1)  # Prevent brute-force attacks by adding a delay

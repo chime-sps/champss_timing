@@ -10,7 +10,12 @@
             <small>Login with</small><br>
             <b>{{ app.login.get_auth_name() }}</b>
         </h3>
+        {% if "callback" in request.args %}
+        <form method="post" action="{{ url_for("login", callback=request.args.get("callback")) }}">
+        {% elif "next" in request.args %}
+        {% else %}
         <form method="post" action="{{ url_for("login") }}">
+        {% endif %}
             {% for field in app.login.get_fields(): %}
             <div class="form-floating mb-3">
                 <input 
