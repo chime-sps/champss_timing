@@ -37,6 +37,8 @@ class src_loader():
         self.source_coincidences_catalogs = []
         self.source_coincidences_map_default = "SIMBAD Query"
 
+        self.plot_colors = ["black", "red", "blue", "green", "orange", "purple", "brown", "pink", "gray"]
+
     def connect_db(self):
         self.db = database(self.source_dir + "/champss_timing.sqlite3.db", readonly=True)
         self.db.initialize()
@@ -105,17 +107,59 @@ class src_loader():
         with open(self.source_dir + "/champss_timing.sqlite3.db", "rb") as f:
             return hashlib.md5(f.read()).hexdigest()
 
-    def get_resids(self):
+    def get_resids(self, outliers=False):
         timing_info = self.last_timing_info
 
-        mjds = timing_info["notes"]["fitted_mjds"]
-        resids = timing_info["residuals"]
+        if outliers:
+            mjds = timing_info["notes"]["bad_toa_mjds"]
+            resids = timing_info["notes"]["bad_toa_residuals"]
+        else:
+            mjds = timing_info["notes"]["fitted_mjds"]
+            resids = timing_info["residuals"]
+
+        if len(mjds) == 0:
+            return {"mjd": [], "val": [], "err": [], "updated": utils.mjd_to_datetime(np.max(timing_info["obs_mjds"]), utc=False).strftime("%Y-%m-%d")}
 
         period = 1 / timing_info["fitted_params"]["F0"]
         resids_val =[float(t) for t in list(np.array(resids["val"]) / period * 1e-6)]
         resids_err = [float(t) for t in list(np.array(resids["err"]) / period * 1e-6)]
 
         return {"mjd": mjds, "val": resids_val, "err": resids_err, "updated": utils.mjd_to_datetime(np.max(mjds), utc=False).strftime("%Y-%m-%d")}
+    
+    def get_snrs(self):
+        # Get archive id indexed snrs
+        snrs = self.db.get_archive_snrs()
+
+        # Get mjds for each archive id
+        toas = self.db.get_all_toas()
+        
+        # Prepare snrs data for plotting
+        snrs_plot_data = {}
+        for toa in toas:
+            this_rcvr = toa["notes"]["rcvr"]
+            this_toa = toa["toa"]
+            this_arid = toa["filename"]
+
+            # Sanity check
+            if this_toa == 0: # PSRCHIVE bad TOA has 0 MJD (i.e., corrupted data)
+                continue
+
+            # assign color to receiver
+            if this_rcvr not in snrs_plot_data:
+                snrs_plot_data[this_rcvr] = {"mjd": [], "snr": []}
+                if len(snrs_plot_data) < len(self.plot_colors):
+                    snrs_plot_data[this_rcvr]["color"] = self.plot_colors[len(snrs_plot_data) - 1]
+                else:
+                    snrs_plot_data[this_rcvr]["color"] = "black"
+
+            # Append data
+            if this_arid in snrs:
+                snrs_plot_data[this_rcvr]["mjd"].append(this_toa)
+                snrs_plot_data[this_rcvr]["snr"].append(snrs[this_arid])
+            else:
+                self.db.logger.warning(f"Archive ID {this_arid} not found in snrs data.")
+
+        return snrs_plot_data
 
     def get_parameter_info(self, ra_in_deg=False):
         all_timing_info = self.db.get_all_timing_info()

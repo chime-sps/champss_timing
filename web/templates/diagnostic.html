@@ -226,15 +226,15 @@
 
         <div class="col-md-12 diagplots_divs">
             <div class="card" style="margin-bottom: 15px; ">
-                <div class="card-body" style="padding: 3px; ">
-                    <div style="width: 100%; height: 300px; ">
-                        <div id="residuals" style="width: 100%; height: 100%; "></div>
-                    </div>
+                <!-- Residuals -->
+        
+                <div style="width: 100%; height: 300px; ">
+                    <div id="residuals" style="width: 100%; height: 100%; "></div>
                 </div>
 
                 <script>
                     var resids = {{ sources[source_id].get_resids() | safe }};
-                    var trace = {
+                    var trace_resids = {
                         x: resids["mjd"],
                         y: resids["val"],
                         error_y: {
@@ -246,10 +246,27 @@
                         type: 'scatter',
                         marker: {
                             color: 'black'
-                        }
+                        }, 
+                        name: 'Fitted TOAs'
+                    };
+                    var resids_bad = {{ sources[source_id].get_resids(outliers=True) | safe }};
+                    var trace_resids_bad = {
+                        x: resids_bad["mjd"],
+                        y: resids_bad["val"],
+                        error_y: {
+                            type: 'data',
+                            array: resids_bad["err"],
+                            visible: true
+                        },
+                        mode: 'markers',
+                        type: 'scatter',
+                        marker: {
+                            color: 'red'
+                        }, 
+                        name: 'Outliers'
                     };
                     var layout = {
-                        title: 'Timing Residuals',
+                        // title: 'Timing Residuals',
                         xaxis: {
                             title: 'MJD',
                             showline: true,
@@ -264,17 +281,145 @@
                             zeroline: true, 
                             exponentformat: 'power'
                         },
-                        showlegend: false,
+                        showlegend: true,
+                        legend: {
+                            orientation: 'h',
+                            yanchor: 'bottom',
+                            y: 1.02,
+                            xanchor: 'right',
+                            x: 1
+                        },
                         margin: {'t':50,'l':110,'b':60,'r':40}
                     };
                     var config = {
                         responsive: true
                     };
-                    Plotly.newPlot('residuals', [trace], layout, config);
+                    Plotly.newPlot('residuals', [trace_resids, trace_resids_bad], layout, config);
                 </script>
+
+                <!-- SNRs -->
+                <div style="width: 100%; height: 300px; ">
+                    <div id="snrs" style="width: 100%; height: 100%; "></div>
+                </div>
+
+                <script>
+                    var traces = [];
+
+                    {% for rcvr in sources[source_id].get_snrs() %}
+                    var snr_data = {{ sources[source_id].get_snrs()[rcvr] | safe }};
+                    var trace = {
+                        x: snr_data["mjd"],
+                        y: snr_data["snr"],
+                        mode: 'markers',
+                        type: 'scatter',
+                        marker: {
+                            color: snr_data["color"] || 'black',
+                        }, 
+                        name: "{{ rcvr }}"
+                    };
+                    traces.push(trace);
+                    {% endfor %}
+                    
+                    var layout = {
+                        // title: 'SNRs',
+                        xaxis: {
+                            title: 'MJD',
+                            showline: true,
+                            showgrid: true,
+                            zeroline: true, 
+                            exponentformat: 'none'
+                        },
+                        yaxis: {
+                            title: 'SNR',
+                            showline: true,
+                            showgrid: true,
+                            zeroline: true, 
+                            exponentformat: 'power'
+                        },
+                        showlegend: true,
+                        legend: {
+                            orientation: 'h',
+                            yanchor: 'bottom',
+                            y: 1.02,
+                            xanchor: 'right',
+                            x: 1
+                        },
+                        margin: {'t':50,'l':110,'b':60,'r':40}
+                    };
+                    var config = {
+                        responsive: true
+                    };
+                    Plotly.newPlot('snrs', traces, layout, config);
+                </script>
+
+                <!-- Fitted Parameters -->
+                {% for param in sources[source_id].parameter_info: %}
+                    <div style="width: 100%; height: 300px; padding-bottom: 15px; ">
+                        <div id="param_{{ param }}" style="width: 100%; height: 100%; "></div>
+                    </div>
+                    <script>
+                        var display_name = "{{ param }}";
+                        var label_name = "{{ param }}";
+                        if(display_name == "RAJ") {
+                            display_name = "Right Ascension";
+                            label_name = "RA [deg]";
+                        } else if(display_name == "DECJ") {
+                            display_name = "Declination";
+                            label_name = "Dec [deg]";
+                        } else if(display_name == "F0") {
+                            display_name = "Spin Frequency";
+                            label_name = "F0 [Hz]";
+                        } else if(display_name == "F1") {
+                            display_name = "Spin Frequency Derivative";
+                            label_name = "F1 [Hz/s]";
+                        } else if(display_name == "F2") {
+                            display_name = "Spin Frequency 2nd Derivative";
+                            label_name = "F2 [Hz/s²]";
+                        } else if(display_name == "F3") {
+                            display_name = "Spin Frequency 3rd Derivative";
+                            label_name = "F3 [Hz/s³]";
+                        } else if(display_name == "DM") {
+                            display_name = "Dispersion Measure";
+                            label_name = "DM [pc/cm³]";
+                        } 
+
+                        var trace = {
+                            x: {{ sources[source_id].parameter_info[param]["mjd"] | safe}},
+                            y: {{ sources[source_id].parameter_info[param]["val"] | safe}},
+                            mode: 'markers',
+                            type: 'scatter',
+                            marker: {
+                                color: 'black'
+                            }
+                        };
+                        var layout = {
+                            // title: display_name, 
+                            xaxis: {
+                                title: 'MJD',
+                                showline: true,
+                                showgrid: true,
+                                zeroline: true, 
+                                exponentformat: 'none'
+                            },
+                            yaxis: {
+                                title: label_name,
+                                showline: true,
+                                showgrid: true,
+                                zeroline: true, 
+                                exponentformat: 'power'
+                            },
+                            showlegend: false,
+                            margin: {'t':50,'l':110,'b':60,'r':40}
+                        };
+                        var config = {
+                            responsive: true
+                        };
+                        Plotly.newPlot('param_{{ param }}', [trace], layout, config);
+                    </script>
+                {% endfor %}
             </div>
         </div>
-        <div class="col-md-6 diagplots_divs">
+        <!-- <div class="col-md-6 diagplots_divs">
             {% for param in sources[source_id].get_statistics(): %}
                 <div class="card" style="margin-bottom: 15px; ">
                     <div class="card-body" style="padding: 3px; ">
@@ -401,7 +546,7 @@
                 </script>
             {% endfor %}
         </div>
-    </div>
+    </div> -->
 
     <div class="modal modal-xl" id="processing_log_modal" tabindex="-1" aria-labelledby="processing_log_modal" aria-hidden="true" style="backdrop-filter: blur(15px); cursor: pointer; ">
         <div class="modal-dialog" style="height: 95%;  max-width: 95%; ">

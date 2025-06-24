@@ -379,6 +379,20 @@ class database:
         self.cur.execute("SELECT * FROM archive_info WHERE filename = ?", (filename,))
         return self.format_archive_info(self.cur.fetchone())
     
+    def get_archive_snrs(self):
+        """
+        Get all SNRs from archive_info table
+        Returns a dictionary with filename as key and SNR as value
+        """
+        self.cur.execute("SELECT filename, psr_snr FROM archive_info")
+        archive_info_raw = self.cur.fetchall()
+
+        archive_snrs = {}
+        for info in archive_info_raw:
+            archive_snrs[info[0]] = info[1]
+
+        return archive_snrs
+    
     def format_archive_info(self, archive_info):
         if archive_info is None:
             archive_info = [0, "", "[]", 0, "{}"]
