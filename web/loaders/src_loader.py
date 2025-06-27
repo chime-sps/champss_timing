@@ -329,7 +329,7 @@ class src_loader():
                 "psr_amps": []
             }
 
-        # Center stacked profile if needed
+        # Center profile if needed
         if centered and len(last_archive_info["psr_amps"]) > 0:
             i_max = np.argmax(last_archive_info["psr_amps"])
             last_archive_info["psr_amps"] = np.roll(last_archive_info["psr_amps"], int(len(last_archive_info["psr_amps"])/4)-i_max).tolist()
@@ -375,6 +375,11 @@ class src_loader():
                 # Resize if needed
                 if len(this_amps) != length:
                     this_amps = utils.resize_1d_array(this_amps, length)
+
+                # Normalize
+                this_amps = np.array(this_amps)
+                this_amps -= np.mean(this_amps)
+                this_amps /= np.std(this_amps) if np.std(this_amps) != 0 else 1
 
                 stacked_profile.append(this_amps)
 

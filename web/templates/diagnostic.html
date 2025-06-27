@@ -17,9 +17,9 @@
             <div class="col-md-12">
                 {% if len(sources[source_id].checker_warnings) > 2 %}
                     <!-- Show the most prioritized warning -->
-                    {% for warning in sources[source_id].checker_warnings[:1] %}
+                    {% with warning = sources[source_id].checker_warnings[0] %}
                         {% include 'components/checker_warnings.html' %}
-                    {% endfor %}
+                    {% endwith %}
                     
                     <!-- Collapse remaining warnings -->
                     <div class="collapse" id="collapsed_warnings">
@@ -50,7 +50,7 @@
                     </script>
                     {% endif %}
                 {% else %}
-                    {% for warning in sources[source_id].checker_warnings[1:] %}
+                    {% for warning in sources[source_id].checker_warnings %}
                         {% include 'components/checker_warnings.html' %}
                     {% endfor %}
                 {% endif %}
