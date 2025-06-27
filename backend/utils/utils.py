@@ -3,7 +3,6 @@ import random
 import datetime
 import traceback
 import subprocess
-import numpy as np
 from hashlib import md5
 import os
 
@@ -203,11 +202,3 @@ class utils:
                     return True
         
         return False
-    
-    @staticmethod
-    def resize_1d_array(array, new_size):
-        return np.interp(
-            np.linspace(0, len(array) - 1, new_size),
-            np.arange(len(array)),
-            array
-        )

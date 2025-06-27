@@ -374,7 +374,7 @@ class src_loader():
                 
                 # Resize if needed
                 if len(this_amps) != length:
-                    this_amps = utils.resize_1d_array(this_amps, length)
+                    this_amps = self.resize_1d_array(this_amps, length)
 
                 # Normalize
                 this_amps = np.array(this_amps)
@@ -549,3 +549,10 @@ class src_loader():
             nearest_source_catalog = sources[0]["catalog"]
 
         return sources, nearest_source_catalog
+
+    def resize_1d_array(self, array, new_size):
+        return np.interp(
+            np.linspace(0, len(array) - 1, new_size),
+            np.arange(len(array)),
+            array
+        )
