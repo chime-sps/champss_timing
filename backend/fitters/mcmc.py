@@ -109,7 +109,6 @@ class MCMCFitter(MCMCFitter):
             
         return lnsum
 
-
     def lnlikelihood_chi2(self, ftr, theta):
         ftr.set_parameters(theta)
         return -Residuals(toas=ftr.toas, model=ftr.model).chi2

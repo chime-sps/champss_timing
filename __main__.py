@@ -35,6 +35,7 @@ if __name__ == "__main__":
         "server": "Run the pipeline web server.",
         "dealias": "Resolve dealiasing in pulsar period solution.",
         "template": "Generate a template for the pulsar.",
+        "mcmc": "Run MCMC fitting for the pulsar.",
         "truncate": "Truncate source database.",
         "masterdb": "Run master database utilities.",
         "config": "Show or edit the configuration file.", 

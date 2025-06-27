@@ -602,7 +602,7 @@ class database:
 
         # Sanity check for mjd_range
         if mjd_range is not None:
-            if not isinstance(mjd_range, list):
+            if not isinstance(mjd_range, list) and not isinstance(mjd_range, tuple):
                 raise ValueError("mjd_range must be a list")
             if len(mjd_range) != 2:
                 raise ValueError("mjd_range must be a list of two elements")
