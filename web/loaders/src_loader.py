@@ -32,6 +32,7 @@ class src_loader():
         self.last_timing_info = {}
         self.stats = {}
         self.parameter_info = {}
+        self.stacked_profile = []
         self.source_coincidences = None
         self.source_coincidences_radius = 0.25 # deg
         self.source_coincidences_catalogs = []
@@ -260,6 +261,9 @@ class src_loader():
             for key in warnings[checker_module].keys():
                 if warnings[checker_module][key]["level"] > 0:
                     warnings_formatted.append(warnings[checker_module][key])
+
+        # Sort warnings by level (higher level first)
+        warnings_formatted = sorted(warnings_formatted, key=lambda x: x["level"], reverse=True)
                 
         return warnings_formatted
     
@@ -314,6 +318,85 @@ class src_loader():
     
     def get_profile_data(self, filename):
         return self.db.get_archive_info_by_filename(filename)
+    
+    def get_latest_profile(self, xy=False, centered=True):
+        # Last archive info
+        last_archive_info = self.db.get_last_archive_info()
+
+        # Sanity check
+        if last_archive_info is None or "psr_amps" not in last_archive_info:
+            last_archive_info = {
+                "psr_amps": []
+            }
+
+        # Center stacked profile if needed
+        if centered and len(last_archive_info["psr_amps"]) > 0:
+            i_max = np.argmax(last_archive_info["psr_amps"])
+            last_archive_info["psr_amps"] = np.roll(last_archive_info["psr_amps"], int(len(last_archive_info["psr_amps"])/4)-i_max).tolist()
+
+        if xy:
+            x = np.linspace(0, 1, len(last_archive_info["psr_amps"]))
+            return {"x": x.tolist(), "y": last_archive_info["psr_amps"]}
+        
+        return last_archive_info["psr_amps"]
+    
+    def get_profile_template(self, xy=False, centered=True):
+        # Get template from config
+        template = self.db.get_config("__template:amps")
+
+        # Sanity check
+        if template is None or len(template) == 0:
+            template = []
+        else:
+            template = json.loads(template)
+
+        # Center template if needed
+        if centered and len(template) > 0:
+            i_max = np.argmax(template)
+            template = np.roll(template, int(len(template)/4)-i_max).tolist()
+        
+        if xy:
+            x = np.linspace(0, 1, len(template))
+            return {"x": x.tolist(), "y": template}
+        
+        return template
+    
+    def get_stacked_profile(self, length=1024, xy=False, centered=True):
+        # Get stacked profile if not already loaded
+        if self.stacked_profile == [] or self.stacked_profile is None:
+            # Get profiles from database
+            archive_info = self.db.get_all_archive_info()
+
+            # Resize profiles
+            stacked_profile = []
+            for archive in archive_info:
+                this_amps = archive["psr_amps"]
+                
+                # Resize if needed
+                if len(this_amps) != length:
+                    this_amps = utils.resize_1d_array(this_amps, length)
+
+                stacked_profile.append(this_amps)
+
+            # Stack profiles
+            if len(stacked_profile) > 0:
+                stacked_profile = np.mean(np.array(stacked_profile), axis=0).tolist()
+            else:
+                stacked_profile = [0] * length
+
+            # Cache stacked profile
+            self.stacked_profile = stacked_profile
+
+        # Center stacked profile if needed
+        if centered and len(self.stacked_profile) > 0:
+            i_max = np.argmax(self.stacked_profile)
+            self.stacked_profile = np.roll(self.stacked_profile, int(len(self.stacked_profile)/4)-i_max).tolist()
+
+        if xy:
+            x = np.linspace(0, 1, len(self.stacked_profile))
+            return {"x": x.tolist(), "y": self.stacked_profile}
+
+        return self.stacked_profile
 
     def update_checker(self):
         this_db_md5 = self.get_db_md5()

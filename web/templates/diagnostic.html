@@ -12,24 +12,48 @@
         </div>
     {% endif %}
 
-    <div class="row">
-        {% if sources[source_id].checker_warnings != [] %}
+    <div class="row" data-bs-spy="scroll" data-bs-target="#scroll_navbar">
+        {% if len(sources[source_id].checker_warnings) > 0 %}
             <div class="col-md-12">
-                {% for warning in sources[source_id].checker_warnings %}
-                    {% if warning["level"] == 0 %}
-                        <div class="alert alert-success" role="alert">
-                            <b>Info:</b> {{ warning["message"] }}
+                {% if len(sources[source_id].checker_warnings) > 2 %}
+                    <!-- Show the most prioritized warning -->
+                    {% for warning in sources[source_id].checker_warnings[:1] %}
+                        {% include 'components/checker_warnings.html' %}
+                    {% endfor %}
+                    
+                    <!-- Collapse remaining warnings -->
+                    <div class="collapse" id="collapsed_warnings">
+                        {% for warning in sources[source_id].checker_warnings[1:] %}
+                            {% include 'components/checker_warnings.html' %}
+                        {% endfor %}
+                        <div style="text-align: center; margin-top: 10px; transform-origin: top; ">
+                            <button class="btn btn-light btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#collapsed_warnings" aria-expanded="false" aria-controls="collapsed_warnings" id="collapsed_warnings_hide_btn" >
+                                <i class="bi bi-arrow-bar-up"></i> Hide {{ len(sources[source_id].checker_warnings[1:]) }} warning(s)
+                            </button>
                         </div>
-                    {% elif warning["level"] == 1 %}
-                        <div class="alert alert-warning" role="alert">
-                            <b>Warning:</b> {{ warning["message"] }}
-                        </div>
-                    {% elif warning["level"] == 2 %}
-                        <div class="alert alert-danger" role="alert">
-                            <b>Critical:</b> {{ warning["message"] }}
-                        </div>
+                    </div>
+
+                    <!-- Show uncollapse button -->
+                    {% if len(sources[source_id].checker_warnings[1:]) > 0 %}
+                    <div style="text-align: center; margin-top: 10px; transform: scale(0.8, 0.8) translateY(-3.5px); transform-origin: top; ">
+                        <button class="btn btn-light btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#collapsed_warnings" aria-expanded="false" aria-controls="collapsed_warnings" id="collapsed_warnings_show_btn" style="color: #888; border-radius: 1.5em; ">
+                            <i class="bi bi-arrow-bar-down"></i> Show {{ len(sources[source_id].checker_warnings[1:]) }} more warning(s)
+                        </button>
+                    </div>
+                    <script>
+                        $('#collapsed_warnings_show_btn').on('click', function() {
+                            $('#collapsed_warnings_show_btn').hide();
+                        });
+                        $('#collapsed_warnings_hide_btn').on('click', function() {
+                            $('#collapsed_warnings_show_btn').show();
+                        });
+                    </script>
                     {% endif %}
-                {% endfor %}
+                {% else %}
+                    {% for warning in sources[source_id].checker_warnings[1:] %}
+                        {% include 'components/checker_warnings.html' %}
+                    {% endfor %}
+                {% endif %}
             </div>
             <!-- <script>
                 $(document).ready(function() {
@@ -81,7 +105,7 @@
             <h3>{{ source_id }} <small style="font-size: 0.5em;"><span class="badge text-bg-dark rounded-pill" style="position: absolute; font-size: 0.45em; transform: translateY(0.75em);">#{{sources[source_id].config["metadata"]["tag"]}}</span> Last updated on {{ sources[source_id].get_last_updated() }} </small></h3>
         </div>
         <hr>
-        <h5>Summary</h5>
+        <h4 id="sec_summary">Summary</h4>
         <div class="col-md-4">
             <pre style="font-size: 0.70em;" id="pre_parfile">{{ sources[source_id].get_parfile() }}</pre>
             <div id="dp_left" style="display: none; ">
@@ -111,7 +135,7 @@
             </div>
         </div>
         <hr style="margin-top: 30px; ">
-        <h5>
+        <h4 id="sec_source_coincidences">
             Source Coincidences
             <div style="float: right; font-size: 0.5em; transform: scale(0.75, 0.75); transform-origin: right; ">
                 <div class="btn-group" role="group">
@@ -120,7 +144,7 @@
                     <button type="button" id="show_fermi" class="btn btn-light btn-sm">Fermi/𝛾-ray</button>
                 </div>
             </div>
-        </h5>
+        </h4>
         <div class="row" style="margin-bottom: 15px; padding-right: 0;">
             <div class="col-md-4" style="border-radius: 0.5rem; " id="atlas_view">
                 <div class="card" style="height: 400px; ">
@@ -200,16 +224,162 @@
             </div>
         </div>
         <hr style="margin-top: 30px; ">
-        <h5>
-            Diagnostics
+        <h4 id="sec_pulse_profiles">
+            Pulse Profiles
             <div style="float: right; font-size: 0.5em; transform: scale(0.75, 0.75); transform-origin: right; ">
+                <div class="btn-group" role="group">
+                    <button type="button" class="btn btn-light btn-sm" id="show_pulse_profiles_inline">Pulse Profiles Browser</button>
+                </div>
+            </div>
+        </h4>
+        <div class="row" style="margin: 0; padding: 0; ">
+            <div class="col-md-4">
+                <div style="width: 100%; height: 300px; ">
+                    <div class="card" style="margin-bottom: 15px; ">
+                        <div class="card-body">
+                            <h6><b>TEMPLATE</b></h6>
+                            <div id="profile_template" style="width: 100%; height: 250px; "></div>
+                            <script>
+                                var profile_template = {{ sources[source_id].get_profile_template(xy=True) | safe }};
+                                var trace = {
+                                    x: profile_template["x"],
+                                    y: profile_template["y"],
+                                    mode: 'lines',
+                                    type: 'scatter',
+                                    line: {
+                                        color: 'black', 
+                                        width: 1
+                                    },
+                                    name: 'Template Profile'
+                                };
+                                var layout = {
+                                    xaxis: {
+                                        showline: false,
+                                        showgrid: false,
+                                        zeroline: false, 
+                                        showticklabels: false,
+                                        exponentformat: 'none', 
+                                        mirror: true
+                                    },
+                                    yaxis: {
+                                        showline: false,
+                                        showgrid: false,
+                                        zeroline: false, 
+                                        showticklabels: false,
+                                        exponentformat: 'none',
+                                    },
+                                    showlegend: false,
+                                    margin: {'t':0,'l':0,'b':0,'r':0}
+                                };
+                                var config = {
+                                    responsive: true
+                                };
+                                Plotly.newPlot('profile_template', [trace], layout, config);
+                            </script>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card" style="margin-bottom: 15px; ">
+                    <div class="card-body">
+                        <h6><b>STACKED</b></h6>
+                        <div id="profile_stacked" style="width: 100%; height: 250px; "></div>
+                        <script>
+                            var profile_stacked = {{ sources[source_id].get_stacked_profile(xy=True) | safe }};
+                            var trace = {
+                                x: profile_stacked["x"],
+                                y: profile_stacked["y"],
+                                mode: 'lines',
+                                type: 'scatter',
+                                line: {
+                                    color: 'black', 
+                                    width: 1
+                                },
+                                name: 'Stacked Profile'
+                            };
+                            var layout = {
+                                xaxis: {
+                                    showline: false,
+                                    showgrid: false,
+                                    zeroline: false, 
+                                    showticklabels: false,
+                                    exponentformat: 'none'
+                                },
+                                yaxis: {
+                                    showline: false,
+                                    showgrid: false,
+                                    zeroline: false, 
+                                    showticklabels: false,
+                                    exponentformat: 'none'
+                                },
+                                showlegend: false,
+                                margin: {'t':0,'l':0,'b':0,'r':0}
+                            };
+                            var config = {
+                                responsive: true
+                            };
+                            Plotly.newPlot('profile_stacked', [trace], layout, config);
+                        </script>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card" style="margin-bottom: 15px; ">
+                    <div class="card-body">
+                        <h6><b>LATEST</b> <small style="font-size: 0.6em;">(SINGLE-DAY)</small></h6>
+                        <div id="profile_latest" style="width: 100%; height: 250px; "></div>
+                        <script>
+                            var profile_latest = {{ sources[source_id].get_latest_profile(xy=True) | safe }};
+                            var trace = {
+                                x: profile_latest["x"],
+                                y: profile_latest["y"],
+                                mode: 'lines',
+                                type: 'scatter',
+                                line: {
+                                    color: 'black', 
+                                    width: 1
+                                },
+                                name: 'Latest Profile'
+                            };
+                            var layout = {
+                                xaxis: {
+                                    showline: false,
+                                    showgrid: false,
+                                    zeroline: false, 
+                                    showticklabels: false,
+                                    exponentformat: 'none'
+                                },
+                                yaxis: {
+                                    showline: false,
+                                    showgrid: false,
+                                    zeroline: false, 
+                                    showticklabels: false,
+                                    exponentformat: 'none'
+                                },
+                                showlegend: false,
+                                margin: {'t':0,'l':0,'b':0,'r':0}
+                            };
+                            var config = {
+                                responsive: true
+                            };
+                            Plotly.newPlot('profile_latest', [trace], layout, config);
+                        </script>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <hr style="margin-top: 30px; ">
+        <h4 id="sec_diagnostics">
+            Diagnostics
+            <!-- <div style="float: right; font-size: 0.5em; transform: scale(0.75, 0.75); transform-origin: right; ">
                 <div class="btn-group" role="group">
                     <button type="button" id="show_diag_data" class="btn btn-dark btn-sm">Diagnostic Plots</button>
                     <button type="button" id="show_diag_notes" class="btn btn-light btn-sm">Run Notes</button>
                 </div>
-            </div>
-        </h5>
-        <div id="runnotes_div" style="display: none; ">
+            </div> -->
+        </h4>
+        <!-- <div id="runnotes_div" style="display: none; ">
             <div class="col-md-12" style="min-height: 30em; ">
                 <div id="runnotes_div_placeholder">
                     <span class="placeholder col-7"></span><br>
@@ -222,9 +392,8 @@
                     <pre id="runnotes_body_pre" style="text-wrap: auto;"></pre>
                 </div>
             </div>
-        </div>
-
-        <div class="col-md-12 diagplots_divs">
+        </div> -->
+        <div class="col-md-12">
             <div class="card" style="margin-bottom: 15px; ">
                 <!-- Residuals -->
         
@@ -245,7 +414,8 @@
                         mode: 'markers',
                         type: 'scatter',
                         marker: {
-                            color: 'black'
+                            color: 'black', 
+                            symbol: 'x'
                         }, 
                         name: 'Fitted TOAs'
                     };
@@ -314,6 +484,7 @@
                         type: 'scatter',
                         marker: {
                             color: snr_data["color"] || 'black',
+                            symbol: 'x'
                         }, 
                         name: "{{ rcvr }}"
                     };
@@ -344,7 +515,7 @@
                             xanchor: 'right',
                             x: 1
                         },
-                        margin: {'t':50,'l':110,'b':60,'r':40}
+                        margin: {'t':5,'l':110,'b':60,'r':40}
                     };
                     var config = {
                         responsive: true
@@ -389,7 +560,8 @@
                             mode: 'markers',
                             type: 'scatter',
                             marker: {
-                                color: 'black'
+                                color: 'black',
+                                symbol: 'x'
                             }
                         };
                         var layout = {
@@ -409,7 +581,7 @@
                                 exponentformat: 'power'
                             },
                             showlegend: false,
-                            margin: {'t':50,'l':110,'b':60,'r':40}
+                            margin: {'t':5,'l':110,'b':60,'r':40}
                         };
                         var config = {
                             responsive: true
@@ -548,6 +720,97 @@
         </div>
     </div> -->
 
+
+    <hr style="margin-top: 30px; ">
+    <h4 id="sec_run_notes">
+        Run Notes
+    </h4>
+
+    <div class="col-md-12" style="width: 100%; ">
+        <div class="card" style="margin-bottom: 15px; ">
+            <div class="card-body" style="text-align: center; ">
+                {% with notes=app.notes.fetch(tag=sources[source_id].psr_id) %}
+                    {% include 'components/runnotes.html' %}
+                    {% if len(notes) == 0 %}
+                        <i style="color: #888; width: 100%; font-size: 0.9em; position: relative; ">
+                            No notes available
+                        </i>
+                    {% endif %}
+                {% endwith %}
+            </div>
+        </div>
+    </div>
+
+    <div style="margin: 1em; text-align: center; "></div>
+
+    <style>
+        .navbar-side {
+            position: fixed; 
+            bottom: 1em; 
+            right: 1em; 
+            width: unset; 
+            z-index: 999;
+            padding-left: 12px;
+            padding-right: 12px; 
+            backdrop-filter: blur(20px); 
+            box-shadow: 0 5px 15px rgba(0,0,0,0.15); 
+            background-color: rgba(250, 250, 250, 0.3) !important; 
+            border-radius: 10rem; 
+            border: 1px solid rgba(0, 0, 0, 0.1); 
+            transform-origin: bottom right;
+            transition: all 0.2s ease-in-out;
+            transform: scale(0.7);
+            display: none;
+            opacity: 0;
+        }
+        .navbar-side:hover {
+            background-color: rgba(250, 250, 250, 0.5) !important; 
+            box-shadow: 0 15px 25px rgba(0,0,0,0.25); 
+            transform: scale(0.75);
+        }
+    </style>
+    <nav id="scroll_navbar" class="navbar navbar-side">
+        <ul class="navbar-nav">
+            <li class="nav-item">
+                <a class="nav-link" href="#sec_summary" style="border-radius: 10rem; ">
+                    <i class="bi bi-file-post"></i>
+                </a>
+            </li>
+                <li class="nav-item">
+            <a class="nav-link" href="#sec_source_coincidences" style="border-radius: 10rem; ">
+                <i class="bi bi-crosshair"></i>
+            </a>
+                </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#sec_pulse_profiles" style="border-radius: 10rem; ">
+                    <i class="bi bi-activity"></i>
+                </a>
+            </li>
+                <li class="nav-item">
+            <a class="nav-link" href="#sec_diagnostics" style="border-radius: 10rem; ">
+                <i class="bi bi-graph-up"></i>
+            </a>
+                </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#sec_run_notes">
+                    <i class="bi bi-journal-text"></i>
+                </a>
+            </li>
+        </ul>
+    </nav>
+    <script>
+        // show on scroll
+        $(window).on('scroll', function() {
+            if ($(this).scrollTop() > 50) {
+                $('#scroll_navbar').fadeIn()
+                $('#scroll_navbar').css('opacity', '1');
+            } else {
+                $('#scroll_navbar').css('opacity', '0');
+                $('#scroll_navbar').fadeOut()
+            }
+        });
+    </script>
+
     <div class="modal modal-xl" id="processing_log_modal" tabindex="-1" aria-labelledby="processing_log_modal" aria-hidden="true" style="backdrop-filter: blur(15px); cursor: pointer; ">
         <div class="modal-dialog" style="height: 95%;  max-width: 95%; ">
             <div class="modal-content" style="height: 100%; cursor: default; ">
@@ -632,7 +895,7 @@
     </div>
 
     <script>
-        $("#show_pulse_profiles").on("click", function() {
+        $("#show_pulse_profiles, #show_pulse_profiles_inline").on("click", function() {
             // default window size
             var win_width = 1920;
             var win_height = 1080;
@@ -1056,7 +1319,7 @@
         }, 500);
     </script>
 
-    <script>
+    <!-- <script>
         function load_runnotes() {
             // in case the notes is loaded
             if ($("#runnotes_body_pre").html() != "") {
@@ -1122,5 +1385,5 @@
                 $("#show_diag_notes").addClass("btn-light");
             });
         });
-    </script>
+    </script> -->
 {% endblock %}

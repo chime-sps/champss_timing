@@ -156,6 +156,7 @@ def diagnostic(source_id):
         request=request, 
         show_sidebar=show_sidebar, 
         round=round, 
+        len=len, 
         deg2dms=utils.deg2dms,
     )
 
