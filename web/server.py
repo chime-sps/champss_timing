@@ -32,7 +32,13 @@ app.logger = logger()
 def before_request():
     if request.endpoint != 'login' and request.endpoint != 'api_public':
         if not app.login.has_logged_in():
-            return redirect(app._url_for('login', callback=request.url))
+            callback_url = request.full_path
+            if callback_url is None:
+                callback_url = app._url_for('index')
+            else:
+                if app.config['APPLICATION_ROOT'] != '/':
+                    callback_url = app.config['APPLICATION_ROOT'] + callback_url
+            return redirect(app._url_for('login', callback=callback_url))
 
     x_forwarded_proto = request.headers.get('X-Forwarded-Proto')
     if  x_forwarded_proto == 'https':
