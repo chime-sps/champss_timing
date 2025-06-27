@@ -727,18 +727,23 @@
     </h4>
 
     <div class="col-md-12" style="width: 100%; ">
-        <div class="card" style="margin-bottom: 15px; ">
-            <div class="card-body" style="text-align: center; ">
-                {% with notes=app.notes.fetch(tag=sources[source_id].psr_id) %}
-                    {% include 'components/runnotes.html' %}
-                    {% if len(notes) == 0 %}
+        {% with notes=app.notes.fetch(tag=sources[source_id].psr_id) %}
+            {% if len(notes) == 0 %}
+                <div class="card" style="margin-bottom: 15px; ">
+                    <div class="card-body" style="text-align: center;">
                         <i style="color: #888; width: 100%; font-size: 0.9em; position: relative; ">
                             No notes available
                         </i>
-                    {% endif %}
-                {% endwith %}
+                    </div>
+                </div>
+            {% else %}
+            <div class="card" style="margin-bottom: 15px; ">
+                <div class="card-body">
+                        {% include 'components/runnotes.html' %}
+                </div>
             </div>
-        </div>
+            {% endif %}
+        {% endwith %}
     </div>
 
     <div style="margin: 1em; text-align: center; "></div>
