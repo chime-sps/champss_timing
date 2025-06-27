@@ -59,7 +59,7 @@ class champss_timing:
         self.path_timing_model_initial = f"{self.path_timing_model_bakdir}/initial_parfile.bak"
         self.path_timing_config = f"{self.path_psr_dir}/champss_timing.config"
         self.path_diagnostic_plot = f"{self.path_psr_dir}/champss_diagnostic.pdf"
-        self.path_mcmc_report = f"{self.path_psr_dir}/mcmc_report.pdf"
+        # self.path_mcmc_report = f"{self.path_psr_dir}/mcmc_report.pdf"
         self.info_ars_mjds = []
         self.info_ars_paths = []
         self.info_first_mjd = 0
@@ -299,19 +299,19 @@ class champss_timing:
         else:
             raise ValueError("Invalid timing mode. ")
 
-        # Check if mcmc report is needed
-        mcmc_report = None # None = not generate the report
-        if os.path.isfile(self.path_mcmc_report):
-            # Get last mcmc report modified date
-            mcmc_report_mtime = os.path.getmtime(self.path_mcmc_report)
+        # # Check if mcmc report is needed
+        # mcmc_report = None # None = not generate the report
+        # if os.path.isfile(self.path_mcmc_report):
+        #     # Get last mcmc report modified date
+        #     mcmc_report_mtime = os.path.getmtime(self.path_mcmc_report)
 
-            # Re-generate the report every 30 days after the first report been generated
-            if time.time() - mcmc_report_mtime > 30 * 24 * 60 * 60:
-                mcmc_report = self.path_mcmc_report
-        else:
-            # Generate the first report once there are more than 3 fit params
-            if len(fit_params) >= 3:
-                mcmc_report = self.path_mcmc_report
+        #     # Re-generate the report every 30 days after the first report been generated
+        #     if time.time() - mcmc_report_mtime > 30 * 24 * 60 * 60:
+        #         mcmc_report = self.path_mcmc_report
+        # else:
+        #     # Generate the first report once there are more than 3 fit params
+        #     if len(fit_params) >= 3:
+        #         mcmc_report = self.path_mcmc_report
                 
 
         # Run timing
@@ -391,7 +391,8 @@ class champss_timing:
 
                 # Run timing from PINT
                 self.logger.debug(f" > Timing TOAs")
-                tim.time(fit_params=fit_params, potential_params=potential_fit_params, mcmc_report=mcmc_report)
+                # tim.time(fit_params=fit_params, potential_params=potential_fit_params, mcmc_report=mcmc_report)
+                tim.time(fit_params=fit_params, potential_params=potential_fit_params)
                 # tim.time(fit_params=fit_params)
                 
                 # Insert timing info
