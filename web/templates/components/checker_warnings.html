@@ -1,0 +1,16 @@
+{% if warning["level"] == 1 %}
+    <div class="alert alert-light" role="alert">
+        {{ warning["message"] }}
+        <i class="bi bi-info-square" style="float: right; "></i>
+    </div>
+{% elif warning["level"] == 2 %}
+    <div class="alert alert-warning" role="alert">
+        {{ warning["message"] }}
+        <i class="bi bi-question-octagon" style="float: right; "></i>
+    </div>
+{% elif warning["level"] >= 3 %}
+    <div class="alert alert-danger" role="alert">
+        {{ warning["message"] }}
+        <i class="bi bi-exclamation-triangle" style="float: right; "></i>
+    </div>
+{% endif %}
