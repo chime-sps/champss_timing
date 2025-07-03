@@ -98,7 +98,7 @@ class MCMCFitter(MCMCFitter):
         if not (aliasing_p0_lower < current_p0 < aliasing_p0_upper):
             print(
                 "P0 prior: %.3f, current P0: %.3f"
-                % (initial_p0, current_p0)
+                % (initial_p0.value, current_p0.value)
             )
             return -np.inf
 
