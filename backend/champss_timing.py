@@ -284,7 +284,7 @@ class champss_timing:
             fit_params, potential_fit_params = self.get_fit_parameters(last_timing_info, n_days_to_fit=max(mjds) - min(mjds))
 
             if len(fit_params) == 0:
-                self.logger.error(f"No parameter to fit at n_days={n_days_to_fit}")
+                self.logger.error(f"No enough data to fit. ")
                 return {"status": "error"} 
 
         # Check timing mode
