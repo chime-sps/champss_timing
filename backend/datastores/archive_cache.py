@@ -110,11 +110,12 @@ class archive_cache:
             os.makedirs(tempdir, exist_ok=True)
 
         # get all timed files
-        timed_files = []
-        timing_info = self.db_hdl.get_all_timing_info()
-        for this_info in timing_info:
-            timed_files += this_info["files"]
-        timed_files = list(set(timed_files))
+        # timed_files = []
+        # timing_info = self.db_hdl.get_all_timing_info()
+        # for this_info in timing_info:
+        #     timed_files += this_info["files"]
+        # timed_files = list(set(timed_files))
+        timed_files = self.db_hdl.get_last_timing_info()["files"] # only get latest timing info files
 
         # get all archives
         archives = []
