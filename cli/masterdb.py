@@ -223,3 +223,17 @@ class CLIMasterDBHandler:
             except Exception as e:
                 self.logger.error(f"Failed to set {psr_id} -> {ar_id} as corrupted: {e}")
                 self.logger.error(traceback.format_exc())
+
+    def show_details(self, psr_id, ar_id):
+        with tmg_master(self.db_path, fast_mode=True, mem_gb=self.fast_mode_mem_gb) as tm_hdl:
+            try:
+                record = tm_hdl.get_raw_data(psr_id=psr_id, ar_id=ar_id)
+                if record:
+                    self.logger.info(f"Details for {psr_id} -> {ar_id}:")
+                    for key, value in record[0].items():
+                        self.logger.info(f"{key}: {value}")
+                else:
+                    self.logger.warning(f"No record found for {psr_id} -> {ar_id}.")
+            except Exception as e:
+                self.logger.error(f"Failed to show details for {psr_id} -> {ar_id}: {e}")
+                self.logger.error(traceback.format_exc())
