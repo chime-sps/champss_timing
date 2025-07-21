@@ -174,13 +174,19 @@ class tmg_master:
     def insert_raw_data_from_file(self, psr_id, location, backend, format="auto", skip_if_exists=False, placeholder_if_corrupted=False):
         if self.readonly:
             raise Exception("Cannot insert data into readonly database.")
+        
+        # Get file format by try to read the file
+        try:
+            readout_format = utils.get_raw_data_format(location)
+        except Exception as e:
+            readout_format = "unrecognized"
 
         # Check if file is corrupted
-        if os.path.getsize(location) == 0:
+        if os.path.getsize(location) == 0 or readout_format == "unrecognized":
             if not placeholder_if_corrupted:
-                raise Exception(f"File {location} is empty. This may be due to corruption.")
+                raise Exception(f"File {location} is unrecognized. This may be due to corruption.")
             else:
-                self.logger("File is corrupted. Inserting placeholder.", location)
+                self.logger.info(f"File {location} is unrecognized. Inserting placeholder for corrupted file.")
 
                 # guess the format from the extension
                 if format == "auto":
@@ -207,8 +213,9 @@ class tmg_master:
                     skip_if_exists=skip_if_exists
                 )
 
+        # Automatically determine the format if not provided
         if format == "auto":
-            format = utils.get_raw_data_format(location)
+            format = readout_format
 
         if format == "archive":
             au = ArchiveReader(location)

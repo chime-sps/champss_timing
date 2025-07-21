@@ -39,7 +39,7 @@ if args.list:
 
 # If no script is specified, show help
 if args.script is None:
-    print("No script specified. Use -ls to list all available scripts and -s to run a specific script.")
+    print("No script specified. Use -ls to list all available scripts and -r to run a specific script.")
     exit()
 
 # Check if the script exists
