@@ -517,21 +517,21 @@ class pint_handler():
                 self.logger.warning("Fitting failed or chi2r > 10. Try clustering fitter. ")
 
                 # Initialize clustering fitter
-                cf_m, cf_f, cf_passed = self.clustering_fitter(self.m, self.t, debug=True)
+                cf_m, cf_f, cf_passed = self.clustering_fitter(copy.deepcopy(self.m), copy.deepcopy(self.t), debug=True)
 
                 # Check if clustering fitter passed
                 if cf_passed:
                     # If regular fitter was failed, the accept clustering fitter
-                    if not self.f_status:
-                        self.m = cf_m # update model
-                    else: # else, check if clustering fitter is better (smaller chi2r)
-                        if cf_f.get_params_dict("all", "quantity")["CHI2R"].value < self.f.get_params_dict("all", "quantity")["CHI2R"].value:
-                            self.m = cf_m
-                            self.f = cf_f
-                            self.f_status = True
-                            self.logger.success("Clustering fitter resolved the issue. ")
-                        else:
-                            self.logger.error("Clustering fitter is not better. ")
+                    # if not self.f_status:
+                    #     self.m = cf_m # update model
+                    # else: # else, check if clustering fitter is better (smaller chi2r)
+                    if cf_f.get_params_dict("all", "quantity")["CHI2R"].value < self.f.get_params_dict("all", "quantity")["CHI2R"].value:
+                        # self.m = cf_m
+                        self.f = cf_f
+                        self.f_status = True
+                        self.logger.success("Clustering fitter resolved the issue. ")
+                    else:
+                        self.logger.error("Clustering fitter is not better. ")
 
     def get_typical_observation_interval(self, mjds):
         mjds = sorted(mjds)

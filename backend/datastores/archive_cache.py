@@ -11,6 +11,7 @@ from ..utils.exec import exec
 from ..utils.utils import utils
 from ..utils.data_quality import MatchedFilterSNR
 from ..io.archive import ArchiveReader
+from ..processing.archive_shutils import archive_shutils
 
 # Putting function outside of the class since db_hdl cannot be pickled and passed to Pool
 def _archive_cache__db_update_psr_amps_many__get_amp_and_snr(filename, prof_templ):
@@ -25,14 +26,8 @@ def _archive_cache__db_update_psr_amps_many__get_amp_and_snr(filename, prof_temp
 
     return amps, snr
 
-def _archive_cache__update_model__get_md5(filename):
-    md5 = hashlib.md5()
-
-    with open(filename, "rb") as f:
-        for chunk in iter(lambda: f.read(4096), b""):
-            md5.update(chunk)
-
-    return md5.hexdigest()
+def _archive_cache__shutils_update_model(archive, parfile, jump):
+        return archive_shutils(archive).install_parfile(parfile, jump)
 
 class archive_cache:
     def __init__(self, psr_dir, db_hdl=None, db_path=None):
@@ -99,29 +94,25 @@ class archive_cache:
         shutil.copyfile(f"{self.cache_dir}/{self.utils.get_archive_id(filename)}", dest)
 
     def update_model(self, jumps, parfile="auto", n_pools="auto", tempdir="auto", cleanup=True):
-        # TODO: we might want replace this method with the one in processing.archive_shutils sometime in the future.
+        # Initialze variables
         if parfile == "auto":
             parfile = f"{self.psr_dir}/pulsar.par"
 
         if tempdir == "auto":
             tempdir = f"{self.cache_dir}/temp"
+        else:
+            tempdir = f"{tempdir}/" + self.utils.get_rand_string()
 
         if not os.path.exists(tempdir):
             os.makedirs(tempdir, exist_ok=True)
 
         # get all timed files
-        # timed_files = []
-        # timing_info = self.db_hdl.get_all_timing_info()
-        # for this_info in timing_info:
-        #     timed_files += this_info["files"]
-        # timed_files = list(set(timed_files))
         timed_files = self.db_hdl.get_last_timing_info()["files"] # only get latest timing info files
 
         # get all archives
         archives = []
-        archives_tmp = []
-        archives_rcvr = []
-        for ar in self.db_hdl.get_all_archive_info():
+        archive_shutils_objects = []
+        for ar in tqdm.tqdm(self.db_hdl.get_all_archive_info(), desc="Preparing archives"):
             if ar["filename"] not in timed_files:
                 self.utils.print_warning(f"Archive {ar['filename']} not in timing_info. Skipping.")
                 continue
@@ -131,130 +122,50 @@ class archive_cache:
             if os.path.exists(f"{this_path}"):
                 # copy archive to temp directory
                 shutil.copyfile(this_path, this_temp_path)
+
+                # get jump value
+                if ar["notes"]["rcvr"] in jumps:
+                    jump = jumps[ar["notes"]["rcvr"]][0]
+                else:
+                    raise Exception(f"Receiver {ar['notes']['rcvr']} not found in jumps. Please add it to jumps in configurations.")
+
                 # append to archives
-                archives.append(this_path)
-                archives_tmp.append(this_temp_path)
-                archives_rcvr.append(ar["notes"]["rcvr"])
+                archives.append({
+                    "filename": this_path,
+                    "temp_filename": this_temp_path,
+                    "rcvr": ar["notes"]["rcvr"],
+                    "jump": jump
+                })
             else:
                 self.utils.print_warning(f"Archive {ar['filename']} not found in cache. Skipping.")
 
-        # Remove TZRSITE to fix a problem with psrchive for CHIME observations
-        open(f"{tempdir}/pulsar.par.tmp", "w").write(
-            open(parfile).read().replace("TZRSITE", "# TZRSITE")
-        )
-
-        # update model for each archive
-        self.exec_update_model(archives_tmp, f"{tempdir}/pulsar.par.tmp", n_pools=n_pools)
-        utils.print_success(f"  [update_model] timing model updated for {len(archives_tmp)} observations. ")
-
-        # get md5 of archives
+        # update model and apply jump
         with Pool(processes=n_pools) as pool:
-            archives_md5s = list(pool.imap(_archive_cache__update_model__get_md5, archives))
-            archives_tmp_md5s = list(pool.imap(_archive_cache__update_model__get_md5, archives_tmp))
-
-        # check whether the files were updated
-        for i in range(len(archives_tmp)):
-            # if self.get_md5(archives_tmp[i]) == self.get_md5(archives[i]):
-            if archives_tmp_md5s[i] == archives_md5s[i]:
-                this_toa_notes = self.db_hdl.get_toa_by_filename(self.utils.get_archive_id(archives_tmp[i]))["notes"]
-                if "remark" in this_toa_notes:
-                    if this_toa_notes["remark"] == "INVALID_TOA":
-                        self.utils.print_warning(f"Failed to update model for {archives_tmp[i]} due to INVALID_TOA.")
-                        continue
-                raise Exception(f"Failed to update model for {archives_tmp[i]}")
-            
-        # apply jump for each archive
-        for rcvr in jumps:
-            if jumps[rcvr][0] == 0:
-                continue
-            
-            jump_ars = []
-            jump_ars_md5s = []
-            for i, ar in enumerate(archives_tmp):
-                if archives_rcvr[i] == rcvr:
-                    jump_ars.append(ar)
-                    jump_ars_md5s.append(self.get_md5(ar))
-            
-            if len(jump_ars) == 0:
-                continue
-
-            print(f"  [update_model] applying jump for {len(jump_ars)} archives (RCVR={rcvr}, JUMP={jumps[rcvr]})... ")
-            self.exec_apply_jump(jump_ars, jumps[rcvr][0], f"{tempdir}/pulsar.par.tmp", n_pools=n_pools)
-
-            # check whether the files were updated
-            for i in range(len(jump_ars)):
-                if self.get_md5(jump_ars[i]) == jump_ars_md5s[i]:
-                    this_toa_notes = self.db_hdl.get_toa_by_filename(self.utils.get_archive_id(jump_ars[i]))["notes"]
-                    if "remark" in this_toa_notes:
-                        if this_toa_notes["remark"] == "INVALID_TOA":
-                            self.utils.print_warning(f"Failed to apply jump for {jump_ars[i]} due to INVALID_TOA.")
-                            continue
-                    
-                    # check if the archive is actually blank (so that the file before and after jump are the same)
-                    this_archive_info = self.db_hdl.get_archive_info_by_filename(self.utils.get_archive_id(jump_ars[i]))
-                    if this_archive_info["timestamp"] != 0:
-                        if np.std(this_archive_info["psr_amps"]) == 0:
-                            self.utils.print_warning(f"Failed to apply jump for {jump_ars[i]} due to blank archive (std=0).")
-                            continue
-
-                    raise Exception(f"Failed to apply jump for {jump_ars[i]} ({i + 1}/{len(jump_ars)})")
+            print(f"  [update_model] Using {n_pools} processes... ")
+            tqdm.tqdm(
+                pool.starmap(
+                    _archive_cache__shutils_update_model, 
+                    [
+                        (this_ar["temp_filename"], parfile, this_ar["jump"]) for this_ar in archives
+                    ]
+                ), 
+                total=len(archives), 
+                desc="Updating model in archives"
+            )
 
         # update psr_amps in database
-        # for i, ar in enumerate(archives_tmp):
-        #     print(f"  [update_model] updating archive information in database for {i + 1}/{len(archives_tmp)}... ")
-        #     self.db_update_psr_amps(ar, commit=False)
-        # print(f"  [update_model] committing changes to database... ")
-        # self.db_commit()
         print(f"  [update_model] updating archive information in database... ")
-        self.db_update_psr_amps_many(archives_tmp, n_pools=n_pools, commit=True)
-        utils.print_success(f"  [update_model] archive information in database updated for {len(archives_tmp)} observations. ")
+        self.db_update_psr_amps_many(
+            [this_ar["temp_filename"] for this_ar in archives],
+            n_pools=n_pools, 
+            commit=True
+        )
+        utils.print_success(f"  [update_model] archive information in database updated for {len(archives)} observations. ")
 
         # cleanup
         if cleanup:
             shutil.rmtree(tempdir)
 
-        return True
-    
-    def exec_update_model(self, fs, parfile, n_pools=4):
-        # pam -e .pam -E pulsar.par xxx.ar.clfd.FTp
-        exec_hlr = exec(n_pools=n_pools)
-        for f in fs:
-            exec_hlr.append(f"pam -m -E {parfile} {f}") # -m: modify the original file
-        exec_hlr.run()
-        
-        if(not exec_hlr.check()):
-            raise Exception("Failed to update model")
-
-        return True
-    
-    def exec_apply_jump(self, fs, jump, parfile, n_pools=4):
-        # pam -m -r -0.1730288421 xxx.ar
-        
-        # read f0 from parfile
-        f0 = None
-        with open(parfile, "r") as f:
-            for l in f:
-                if l.strip().startswith("F0"):
-                    f0 = float(l.strip().split()[1])
-                    break
-        
-        if f0 is None:
-            raise Exception("Failed to read F0 from parfile")
-        
-        # calculate phase offset
-        if jump < 0:
-            jump = (1/f0) + jump
-        phase_offset = - ((jump / (1/f0)) % 1)
-
-        # apply phase offset
-        exec_hlr = exec(n_pools=n_pools)
-        for f in fs:
-            exec_hlr.append(f"pam -m -r {phase_offset} {f}")
-        exec_hlr.run()
-
-        if(not exec_hlr.check()):
-            raise Exception("Failed to apply jump cpt")
-        
         return True
 
     def db_insert_archive_info(self, filename, rcvr):

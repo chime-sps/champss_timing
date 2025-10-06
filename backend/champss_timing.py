@@ -76,11 +76,18 @@ class champss_timing:
         # If slurm is used, set workspace to $SLURM_TMPDIR
         if "SLURM_TMPDIR" in os.environ:
             if os.environ["SLURM_TMPDIR"] != "" and os.path.isdir(os.environ["SLURM_TMPDIR"]):
-                self.workspace = os.environ["SLURM_TMPDIR"]
-                self.tempfolder = f"{self.workspace}/temp"
-                self.workspace_cleanup = False
 
+                # Set workspace and tempfolder
+                self.workspace = os.environ["SLURM_TMPDIR"] + "/champss_timing_workspace"
+                self.tempfolder = os.environ["SLURM_TMPDIR"] + "/champss_timing_tempfiles"
+                self.workspace_cleanup = False
                 logger.info(f"SLURM detected. Setting workspace to {self.workspace} and tempfolder to {self.tempfolder}")
+
+                # Create the directory if not exists
+                if not os.path.isdir(self.workspace):
+                    os.makedirs(self.workspace, exist_ok=True)
+                if not os.path.isdir(self.tempfolder):
+                    os.makedirs(self.tempfolder, exist_ok=True)
 
         # Format psr_dir
         if self.path_psr_dir.endswith("/"):
