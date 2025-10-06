@@ -12,7 +12,7 @@ cli_config = CLIConfig(load_error=False)
 logger = logger()
 
 # Initialize parser
-parser = argparse.ArgumentParser(description="CHAMPSS Timing Template Generator")
+parser = argparse.ArgumentParser(description="Create a pulse template from stacked profiles.")
 parser.add_argument("-p", "--psr", type=str, help="Pulsar name", required=True)
 parser.add_argument("-o", "--output", type=str, help="Output template file name", default="paas.std")
 parser.add_argument("-r", "--rcvr", type=str, help="Receiver name. Use all observations if not specified.", default=None)

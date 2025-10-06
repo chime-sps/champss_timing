@@ -39,6 +39,7 @@ if __name__ == "__main__":
         "truncate": "Truncate source database.",
         "masterdb": "Run master database utilities.",
         "config": "Show or edit the configuration file.", 
+        "info": "Show information about timing sources.",
         "misc": "Run user-defined miscellaneous scripts."
     }
     main(module_avail)

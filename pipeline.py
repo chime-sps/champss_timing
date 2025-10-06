@@ -24,6 +24,7 @@ parser.add_argument("--ncpus", type=int, help="Number of CPUs to use.")
 parser.add_argument("--psr", type=str, help="Pulsar name (run timing for all pulsars if not specified).")
 parser.add_argument("--slack-token", type=str, help="Slack token.")
 parser.add_argument("--no-beep", action="store_true", help="Disable beep sound at the end of the script.")
+parser.add_argument("--no-cleanup", action="store_true", help="Disable cleaning up temporary files after pipeline run.")
 parser.add_argument("--skip-checkers", action="store_true", help="Skip running checkers after timing.")
 args = parser.parse_args()
 
@@ -37,6 +38,7 @@ print(f"Number of CPUs: {args.ncpus}")
 print(f"Pulsar: {args.psr}")
 print(f"Slack token: {args.slack_token}")
 print(f"Run checkers: {run_checkers}")
+print(f"Clean up temporary files: {not args.no_cleanup}")
 print(f"Start timing... (press Ctrl+C to cancel)")
 time.sleep(3)
 
@@ -147,6 +149,7 @@ for d in pulsar_data:
                 run_checkers=run_checkers,
                 logger=logger.copy(),
                 slack_token=SLACK_TOKEN,
+                workspace_cleanup=not args.no_cleanup,
                 n_pools=N_POOL
         ) as ctim:
             timing_results[-1]["n_timed"] = ctim.run()["n_timed"]

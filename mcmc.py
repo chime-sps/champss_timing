@@ -4,7 +4,7 @@ from cli.mcmc import CLIMCMCFitter
 from backend.utils.logger import logger
 
 # Initialize parser
-parser = argparse.ArgumentParser(description="CHAMPSS Timing Pipeline Configuration")
+parser = argparse.ArgumentParser(description="Run MCMC fitting for a pulsar.")
 parser.add_argument(
     "--psr",
     dest="psr",
