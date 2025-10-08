@@ -31,6 +31,15 @@ class ArchiveReader:
 
         return self.prof.get_amps()
 
+    def get_epoch(self):
+        return self.subint.get_epoch().in_days()
+
+    def get_freq(self):
+        return self.subint.get_centre_frequency()
+
+    def get_telescope(self):
+        return self.subint.get_telescope()
+
     def get_obs_duration_in_days(self):
         return (self.archive.end_time() - self.archive.start_time()).in_days()
 

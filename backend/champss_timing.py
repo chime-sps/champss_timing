@@ -193,7 +193,8 @@ class champss_timing:
         if not os.path.isfile(self.path_diagnostic_plot):
             # Update model for cached archives
             self.logger.debug(f"Updating model for all cached archives")
-            self.archive_cache.update_model(jumps=self.toa_jumps, n_pools=self.n_pools, tempdir=self.tempfolder)
+            # self.archive_cache.update_model(jumps=self.toa_jumps, n_pools=self.n_pools, tempdir=self.tempfolder)
+            self.archive_cache.update_model_internal(jumps=self.toa_jumps, n_pools=self.n_pools)
 
             # Create diagnostic plot
             self.logger.info(f"Creating diagnostic plot")

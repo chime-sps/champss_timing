@@ -351,12 +351,17 @@ class database:
         if commit:
             self.conn.commit()
 
-    def update_archive_amps_info_many(self, filenames, amps, snrs, commit=True):
-        args = []
-        for i, filename in enumerate(filenames):
-            args.append((json.dumps(amps[i]), snrs[i], time.time(), filename))
-
-        self.cur.executemany("UPDATE archive_info SET psr_amps = ?, psr_snr = ?, timestamp = ? WHERE filename = ?", args)
+    def update_archive_amps_info_many(self, filenames, amps, snrs=None, commit=True):
+        if snrs is not None:
+            args = []   
+            for i, filename in enumerate(filenames):
+                args.append((json.dumps(amps[i]), snrs[i], time.time(), filename))
+            self.cur.executemany("UPDATE archive_info SET psr_amps = ?, psr_snr = ?, timestamp = ? WHERE filename = ?", args)
+        else:
+            args = []   
+            for i, filename in enumerate(filenames):
+                args.append((json.dumps(amps[i]), time.time(), filename))
+            self.cur.executemany("UPDATE archive_info SET psr_amps = ?, timestamp = ? WHERE filename = ?", args)
 
         if commit:
             self.conn.commit()

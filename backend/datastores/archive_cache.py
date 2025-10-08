@@ -12,6 +12,7 @@ from ..utils.utils import utils
 from ..utils.data_quality import MatchedFilterSNR
 from ..io.archive import ArchiveReader
 from ..processing.archive_shutils import archive_shutils
+from ..tools.ephm_install import EphmInstall
 
 # Putting function outside of the class since db_hdl cannot be pickled and passed to Pool
 def _archive_cache__db_update_psr_amps_many__get_amp_and_snr(filename, prof_templ):
@@ -93,6 +94,78 @@ class archive_cache:
         
         shutil.copyfile(f"{self.cache_dir}/{self.utils.get_archive_id(filename)}", dest)
 
+    def update_model_internal(self, jumps, parfile="auto", n_pools="auto"):
+        # Initialze variables
+        if parfile == "auto":
+            parfile = f"{self.psr_dir}/pulsar.par"
+
+        # Query all timed files
+        timed_files = self.db_hdl.get_last_timing_info()["files"] # only get latest timing info files
+
+        # Query all archives
+        cached_archives = self.db_hdl.get_all_archive_info()
+
+        # Make sure all timed files are in cache
+        cached_archive_ids = [ar["filename"] for ar in cached_archives]
+        for f in timed_files:
+            if f not in cached_archive_ids:
+                raise Exception(f"Timed file {f} not found in cache. Please add it to cache first.")
+
+        # Make sure all cached archives contain freq, site, init_epoch, init_amps info
+        # (both information are introduced later as of Oct. 2025)
+        for ar in cached_archives:
+            if "freq" not in ar["notes"] or "site" not in ar["notes"] or "init_epoch" not in ar["notes"] or "init_amps" not in ar["notes"]:
+                # add freq and epoch info
+                archive_hdl = ArchiveReader(f"{self.cache_dir}/{ar['filename']}")
+                ar["notes"]["freq"] = archive_hdl.get_freq()
+                ar["notes"]["site"] = archive_hdl.get_telescope()
+                ar["notes"]["init_epoch"] = archive_hdl.get_epoch()
+                ar["notes"]["init_amps"] = archive_hdl.get_amps()
+                self.db_hdl.update_archive_info(
+                    filename = ar["filename"],
+                    notes = ar["notes"],
+                    commit = True
+                )
+                utils.print_success(f"  [update_model_internal] Added freq and epoch info to archive {ar['filename']} in database.")
+
+        # Update model in all timed files
+        filenames = []
+        post_install_amps = []
+        for ar in tqdm.tqdm(cached_archives, desc="Installing new ephmeris"):
+            # if ar["filename"] not in timed_files:
+            #     continue
+            # NOW WE ARE ABLE TO UPDATE ALL ARCHIVES SINCE INTERNAL METHOD RUNS MUCH FASTER!! :)
+
+            # Initialize EphmInstall object
+            ei = EphmInstall(
+                amps=ar["notes"]["init_amps"], 
+                freq=ar["notes"]["freq"], 
+                epoch=ar["notes"]["init_epoch"], 
+                site=ar["notes"]["site"]
+            )
+
+            # Install parfile
+            ei.install_parfile(parfile=parfile)
+
+            # Apply jump
+            if ar["notes"]["rcvr"] in jumps:
+                ei.jump_by_time_given_parfile(parfile, jumps[ar["notes"]["rcvr"]][0])
+
+            # Append data
+            filenames.append(ar['filename'])
+            post_install_amps.append(ei.get_model_installed_amps().tolist())
+
+        # Commit changes to database
+        print(f"  [update_model_internal] updating archive information in database... ")
+        self.db_hdl.update_archive_amps_info_many(
+            filenames = filenames,
+            amps = post_install_amps, 
+            commit = True
+        )
+
+        utils.print_success(f"  [update_model_internal] archive information in database updated for {len(filenames)} observations. ")
+        return True
+
     def update_model(self, jumps, parfile="auto", n_pools="auto", tempdir="auto", cleanup=True):
         # Initialze variables
         if parfile == "auto":
@@ -171,13 +244,26 @@ class archive_cache:
     def db_insert_archive_info(self, filename, rcvr):
         archive_hdl = ArchiveReader(filename)
 
+        # Calculate matched filter SNR
+        amps = archive_hdl.get_amps()
+        prof_templ = self.db_hdl.get_config("__template:amps")
+        if prof_templ is None:
+            snr = 0
+        else:
+            snr = MatchedFilterSNR(amps, json.loads(prof_templ)).compute()
+
         self.db_hdl.insert_archive_info(
             filename = self.utils.get_archive_id(filename), 
             psr_amps = archive_hdl.get_amps(), 
-            psr_snr = archive_hdl.get_snr(), 
+            # psr_snr = archive_hdl.get_snr(), 
+            psr_snr = snr, 
             notes = {
                 "md5": self.get_md5(filename), 
-                "rcvr": rcvr
+                "rcvr": rcvr, 
+                "freq": archive_hdl.get_freq(), 
+                "site": archive_hdl.get_telescope(), 
+                "init_epoch": archive_hdl.get_epoch(), 
+                "init_amps": archive_hdl.get_amps()
             }
         )
     
