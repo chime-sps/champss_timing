@@ -9,6 +9,7 @@ from multiprocessing import Pool
 from .database import database
 from ..utils.exec import exec
 from ..utils.utils import utils
+from ..utils.logger import logger
 from ..utils.data_quality import MatchedFilterSNR
 from ..io.archive import ArchiveReader
 from ..processing.archive_shutils import archive_shutils
@@ -31,12 +32,13 @@ def _archive_cache__shutils_update_model(archive, parfile, jump):
         return archive_shutils(archive).install_parfile(parfile, jump)
 
 class archive_cache:
-    def __init__(self, psr_dir, db_hdl=None, db_path=None):
+    def __init__(self, psr_dir, db_hdl=None, db_path=None, logger=logger()):
         self.db_hdl = db_hdl
         self.db_path = db_path
         self.psr_dir = psr_dir
         self.cache_dir = f"{psr_dir}/__champss_archive_cache__"
         self.utils = utils
+        self.logger = logger
 
     def initialize(self):
         # check database connection
@@ -56,18 +58,19 @@ class archive_cache:
         archive_info = self.db_hdl.get_all_archive_info()
         for ar in archive_info:
             if not os.path.exists(f"{self.cache_dir}/{ar['filename']}"):
-                self.utils.print_warning(f"Archive {ar['filename']} not found in cache. Please resolve this issue manually. Maybe the cache was deleted and needs to be created manually.")
+                self.logger.warning(f"Archive {ar['filename']} not found in cache. Please resolve this issue manually. Maybe the cache was deleted and needs to be created manually.")
         
     def add_archive(self, filename, rcvr="unknown"):
         if not os.path.exists(filename):
             raise Exception(f"Archive {filename} does not exist.")
+        self.logger.debug(f"Adding archive {filename} to cache...")
 
         # copy archive to cache
-        print(f"  [Archive] {filename} -> archive cache")
+        self.logger.debug(f"{filename} -> archive cache", layer=1)
         shutil.copyfile(filename, f"{self.cache_dir}/{self.utils.get_archive_id(filename)}")
 
         # insert archive info to database
-        print(f"  [Archive] {filename} -> database")
+        self.logger.debug(f"{filename} -> database", layer=1)
         self.db_insert_archive_info(filename, rcvr)
 
     def get_md5(self, filename):
@@ -95,6 +98,8 @@ class archive_cache:
         shutil.copyfile(f"{self.cache_dir}/{self.utils.get_archive_id(filename)}", dest)
 
     def update_model_internal(self, jumps, parfile="auto", n_pools="auto"):
+        self.logger.debug(f"Updating model in all cached archives using internal PINT method... ", layer=1)
+        
         # Initialze variables
         if parfile == "auto":
             parfile = f"{self.psr_dir}/pulsar.par"
@@ -126,7 +131,17 @@ class archive_cache:
                     notes = ar["notes"],
                     commit = True
                 )
-                utils.print_success(f"  [update_model_internal] Added freq and epoch info to archive {ar['filename']} in database.")
+                self.logger.success(f"[update_model_internal] Added freq and epoch info to archive {ar['filename']} in database.", layer=1)
+
+            # recalculate snr
+            # uncomment the following lines if you want to recalculate SNR for all archives for any reason
+            # snr = MatchedFilterSNR(ar["notes"]["init_amps"], json.loads(self.db_hdl.get_config("__template:amps"))).compute()
+            # self.logger.info(f"[update_model_internal] Recalculated SNR for archive {ar['filename']}: {snr}", layer=1)
+            # self.db_hdl.update_archive_info(
+            #     filename = ar["filename"],
+            #     psr_snr = snr,
+            #     commit = True
+            # )
 
         # Update model in all timed files
         filenames = []
@@ -156,17 +171,19 @@ class archive_cache:
             post_install_amps.append(ei.get_model_installed_amps().tolist())
 
         # Commit changes to database
-        print(f"  [update_model_internal] updating archive information in database... ")
+        self.logger.debug(f"Committing changes to database... ", layer=1)
         self.db_hdl.update_archive_amps_info_many(
             filenames = filenames,
             amps = post_install_amps, 
             commit = True
         )
 
-        utils.print_success(f"  [update_model_internal] archive information in database updated for {len(filenames)} observations. ")
+        self.logger.success(f"Archive information in database updated for {len(filenames)} observations. ", layer=1)
         return True
 
     def update_model(self, jumps, parfile="auto", n_pools="auto", tempdir="auto", cleanup=True):
+        self.logger.debug(f"[update_model] Updating model in all cached archives using PSRCHIVE... ", layer=1)
+
         # Initialze variables
         if parfile == "auto":
             parfile = f"{self.psr_dir}/pulsar.par"
@@ -187,7 +204,7 @@ class archive_cache:
         archive_shutils_objects = []
         for ar in tqdm.tqdm(self.db_hdl.get_all_archive_info(), desc="Preparing archives"):
             if ar["filename"] not in timed_files:
-                self.utils.print_warning(f"Archive {ar['filename']} not in timing_info. Skipping.")
+                self.logger.warning(f"Archive {ar['filename']} not in timing_info. Skipping.", layer=1)
                 continue
 
             this_path = f"{self.cache_dir}/{ar['filename']}"
@@ -210,11 +227,11 @@ class archive_cache:
                     "jump": jump
                 })
             else:
-                self.utils.print_warning(f"Archive {ar['filename']} not found in cache. Skipping.")
+                self.logger.warning(f"Archive {ar['filename']} not found in cache. Skipping.", layer=1)
 
         # update model and apply jump
         with Pool(processes=n_pools) as pool:
-            print(f"  [update_model] Using {n_pools} processes... ")
+            self.logger.info(f"[update_model] Using {n_pools} processes... ", layer=1)
             tqdm.tqdm(
                 pool.starmap(
                     _archive_cache__shutils_update_model, 
@@ -227,13 +244,13 @@ class archive_cache:
             )
 
         # update psr_amps in database
-        print(f"  [update_model] updating archive information in database... ")
+        self.logger.debug(f"[update_model] updating archive information in database... ", layer=1)
         self.db_update_psr_amps_many(
             [this_ar["temp_filename"] for this_ar in archives],
             n_pools=n_pools, 
             commit=True
         )
-        utils.print_success(f"  [update_model] archive information in database updated for {len(archives)} observations. ")
+        self.logger.success(f"[update_model] archive information in database updated for {len(archives)} observations. ", layer=1)
 
         # cleanup
         if cleanup:
@@ -287,6 +304,8 @@ class archive_cache:
         prof_templ = self.db_hdl.get_config("__template:amps")
         if prof_templ is not None: 
             prof_templ = json.loads(prof_templ)
+        else:
+            self.logger.warning("No profile template found in database. SNR will be set to 0.", layer=1)
 
         with Pool(processes=n_pools) as pool:
             # results = list(tqdm.tqdm(pool.imap(_archive_cache__db_update_psr_amps_many__get_amp_and_snr, filenames), total=len(filenames)))

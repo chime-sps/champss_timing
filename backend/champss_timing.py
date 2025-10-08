@@ -95,7 +95,7 @@ class champss_timing:
 
         # Objects
         self.db_hdl = database(self.path_db, logger=self.logger)
-        self.archive_cache = archive_cache(self.path_psr_dir, db_hdl=self.db_hdl)
+        self.archive_cache = archive_cache(self.path_psr_dir, db_hdl=self.db_hdl, logger=self.logger.copy())
         self.noti_hdl = notification(slack_token)
 
         # Timing config
@@ -111,7 +111,7 @@ class champss_timing:
         # Initialize archive_cache
         self.archive_cache.initialize()
 
-        # Initialize archive_cache
+        # Initialize database
         self.db_hdl.initialize()
 
         # Clear logger cache
