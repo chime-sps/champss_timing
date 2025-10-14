@@ -74,6 +74,7 @@
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li><h6 class="dropdown-header">Diagnostic</h6></li>
+                            <li><a class="dropdown-item" href="#" id="show_pint_editor">PINT Model Editor</a></li>
                             <li><a class="dropdown-item" href="#" id="show_pulse_profiles">Pulse Profiles Browser</a></li>
                             <li><a class="dropdown-item" href="#" id="show_dealias_info" data-bs-toggle="modal" data-bs-target="#dealias_diagnostics_modal">Dealias Solution Diagnostics </a></li>
                             <li><hr class="dropdown-divider"></li>
@@ -372,6 +373,11 @@
         <hr style="margin-top: 30px; ">
         <h4 id="sec_diagnostics">
             Diagnostics
+            <div style="float: right; font-size: 0.5em; transform: scale(0.75, 0.75); transform-origin: right; ">
+                <div class="btn-group" role="group">
+                    <button type="button" class="btn btn-light btn-sm" id="show_pint_editor_inline">PINT Model Editor</button>
+                </div>
+            </div>
             <!-- <div style="float: right; font-size: 0.5em; transform: scale(0.75, 0.75); transform-origin: right; ">
                 <div class="btn-group" role="group">
                     <button type="button" id="show_diag_data" class="btn btn-dark btn-sm">Diagnostic Plots</button>
@@ -898,6 +904,25 @@
             </div>
         </div>
     </div>
+
+    <script>
+        $("#show_pint_editor, #show_pint_editor_inline").on("click", function() {
+            // default window size
+            var win_width = 1920;
+            var win_height = 1080;
+
+            // if the screen is smaller than 1920x1080, then resize the window
+            if (screen.width < 1920) {
+                win_width = screen.width;
+            }
+            if (screen.height < 1080) {
+                win_height = screen.height;
+            }
+
+            // open the PINT model editor
+            let newWin = window.open("{{ url_for("pint") }}?source_id=" + encodeURIComponent("{{ sources[source_id].psr_id }}"), "pint_editor_{{ sources[source_id].psr_id_esc }}", 'width=1920,height=1080');
+        });
+    </script>
 
     <script>
         $("#show_pulse_profiles, #show_pulse_profiles_inline").on("click", function() {

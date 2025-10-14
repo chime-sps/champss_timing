@@ -14,6 +14,7 @@ from .loaders import dir_loader
 from .loaders import notes_loader
 from .services import login as login_hdl
 from .services import api as api_hdl
+from .services import pint as pint_hdl
 from backend.utils.utils import utils
 from backend.utils.logger import logger
 
@@ -236,6 +237,42 @@ def dealias_diagnostics(source_id):
 @app.route('/diagnostic/<source_id>/dealias/diagnostics/')
 def dealias_diagnostics_(source_id):
     return dealias_diagnostics(source_id)
+
+@app.route('/pint')
+def pint():
+    source_id = request.args.get('source_id', '')
+    
+    return render_template(
+        'pint.html',
+        app=app,
+        source_id=source_id,
+        url_for=app._url_for,
+        sources=app.sources,
+        request=request, 
+        show_sidebar=False
+    )
+
+@app.route('/pint/fit', methods=['GET', 'POST'])
+def pint_fit():
+    # check if no_fit is set
+    no_fit = False
+    if 'no_fit' in request.args:
+        no_fit = True
+
+    try:
+        # get parfile and timfile from the form
+        parfile = request.form.get('parfile', '')
+        timfile = request.form.get('timfile', '')
+        if parfile == '' or timfile == '':
+            raise ValueError("Parfile and timfile are required.")
+        
+        # perform fit or just get residuals
+        if no_fit:
+            return pint_hdl.PintAPI(parfile, timfile).get_resids()
+        else:
+            return pint_hdl.PintAPI(parfile, timfile).fit()
+    except Exception as e:
+        return {"error": str(e), "traceback": traceback.format_exc()}
 
 @app.route('/public/api/<api>', methods=['GET', 'POST'])
 def api_public(api):
