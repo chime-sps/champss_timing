@@ -1,0 +1,372 @@
+{% extends 'base.html' %}
+
+{% block title %}PINT Model Editor - {{source_id}}{% endblock %}
+
+{% block content %}
+
+
+
+<div class="row" style="padding: 10px; ">
+    <div class="col-md-6" style="height: 93vh; ">
+        <label for="resid_plot" class="form-label">Residuals</label>
+        <div class="card" style="height: 100%; padding: 4px; ">
+            <div id="resid_plot" style="width: 100%; height: 100%; "></div>
+        </div>
+    </div>
+    <div class="col-md-6" style="height: 93vh; ">
+        <div class="mb-3" style="height: 100%; ">
+            <label for="model_editor" class="form-label">Model Editor</label>
+            <button class="btn btn-light btn-sm" style="float: right; --bs-btn-padding-y: .05rem; --bs-btn-padding-x: 0.5rem; --bs-btn-font-size: .75rem; width: 14em; margin-left: 4px; " onclick="add_glitch();">Add Glitch Components</button>
+            <textarea class="form-control" id="model_editor" rows="3" style="height: 100%; font-family: monospace; font-size: 0.75em;">Loading parfile...</textarea>
+        </div>
+    </div>
+    <div class="col-md-12" style="position: fixed; width: 100%; bottom:0.5vh; ">
+        <code style="font-size: 0.6em; color: #000; transform: translateY(0.3vh); position: absolute; " id="status"></code>
+        <button class="btn btn-primary btn-sm" style="float: right; --bs-btn-padding-y: .05rem; --bs-btn-padding-x: 0.5rem; --bs-btn-font-size: .75rem; width: 7em; margin-left: 4px; " onclick="fit(false);">Fit</button>
+        <button class="btn btn-light btn-sm" style="float: right; --bs-btn-padding-y: .05rem; --bs-btn-padding-x: 0.5rem; --bs-btn-font-size: .75rem; width: 7em; margin-left: 4px; " onclick="delete_selected_toas(false);">Delete</button>
+        <button class="btn btn-light btn-sm" style="float: right; --bs-btn-padding-y: .05rem; --bs-btn-padding-x: 0.5rem; --bs-btn-font-size: .75rem; width: 7em; margin-left: 4px; " onclick="revert(false);">Revert</button>
+    </div>
+</div>
+
+<div style="position: fixed; left: 0; top: 0; height: 100vh; width: 100vw; background-color: rgba(255, 255, 255, 0.8); backdrop-filter: blur(5px); z-index: 9999; " id="loading_overlay">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; ">
+        <div class="spinner-border" role="status" style="width: 3rem; height: 3rem; ">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <div style="margin-top: 1rem; font-size: 1.2rem; color: #000; " id="loading_status">Initializing</div>
+    </div>
+
+<script>
+    var toas = {}; 
+    var fitting_history = []; 
+
+    function updateStatus(message, isError=false) {
+        // Update status message
+        var statusElem = document.getElementById('status');
+        statusElem.textContent = message;
+        statusElem.style.color = isError ? 'red' : 'black';
+
+        // Update loading overlay
+        var loadingOverlay = document.getElementById('loading_overlay');
+        var loadingStatus = document.getElementById('loading_status');
+        if (message.includes("...")) {
+            $('#loading_overlay').fadeIn(200);
+            loadingStatus.textContent = message;
+        } else {
+            $('#loading_overlay').fadeOut(200);
+            loadingStatus.textContent = '';
+        }
+    }
+
+    function fit(no_fit=false, selected_only=true, save_history=true) {
+        if (no_fit) {
+            updateStatus("Calculating residuals...");
+        } else {
+            updateStatus("Fitting...");
+        }
+        
+        var parfile = $('#model_editor').val();
+        var timfile = create_timfile(selected_only);
+
+        // if no_fit
+        var url = "/pint/fit"; 
+        if (no_fit) {
+            url += "?no_fit=true"; 
+        }
+
+        $.ajax({
+            url: url,
+            type: 'POST',
+            data: { parfile: parfile, timfile: timfile },
+            success: function(response) {
+                if (response.error) {
+                    updateStatus("Error: " + response.error, true);
+                    console.error(response.traceback);
+                } else {
+                    updateStatus("Fit complete.");
+                    console.log("Fit results:", response);
+
+                    // save fitting history
+                    if (save_history) {
+                        add_checkpoint();
+                    }
+
+                    // update model editor
+                    $('#model_editor').val(response.model);
+                    
+                    if (selected_only) {
+                        fit(true, false, false);
+                    } else{
+                        // reset toa residuals into 0
+                        for (var key in toas) {
+                            if (toas.hasOwnProperty(key)) {
+                                toas[key].resid = 0.0;
+                            }
+                        }
+
+                        // update toa residuals
+                        for (var i = 0; i < response.ids.length; i++) {
+                            var id = response.ids[i];
+                            if (toas.hasOwnProperty(id)) {
+                                toas[id].resid = response.resid_val[i];
+                            } else {
+                                console.warn("TOA ID not found:", id);
+                            }
+                        }
+
+                        // re-plot residuals
+                        plot_residuals();
+                    }
+                }
+            },
+            error: function(xhr) {
+                updateStatus("Error during fit: " + xhr.responseText, true);
+            }
+        });
+    }
+
+    function revert() {
+        if (fitting_history.length > 0) {
+            // pop the last fitting history
+            var last_fit = fitting_history.pop();
+
+            // restore model
+            $('#model_editor').val(last_fit.model);
+
+            // restore toas
+            toas = last_fit.toas;
+
+            // re-plot residuals
+            plot_residuals();
+        } else {
+            updateStatus("No more history to revert.", true);
+        }
+    }
+
+    function load_timfile(timfile) {
+        // read each line of timfile
+        var lines = timfile.split('\n');
+        var loaded_toas = [];
+        for (var i = 0; i < lines.length; i++) {
+            var line = lines[i].trim();
+
+            // Skip invalid lines
+            if (line === '' || line.startsWith('#') || line.replace("FORMAT") != line) {
+                continue;
+            }
+
+            // parse line
+            var parts = line.split(/\s+/);
+            if (parts.length < 2) {
+                continue;
+            }
+            loaded_toas[parts[0]] = {
+                id: parts[0],
+                freq: parseFloat(parts[1]), 
+                toa: parseFloat(parts[2]),
+                toa_err: parseFloat(parts[3]), 
+                timfile: line, 
+                "resid": 0.0, 
+                "selected": false
+            };
+        }
+        toas = loaded_toas;
+    }
+
+    function create_timfile(selected_only=true) {
+        // if selected_only=true, but all points are unselected, return all points
+        if (selected_only) {
+            var any_selected = false;
+            for (var key in toas) {
+                if (toas.hasOwnProperty(key) && toas[key].selected) {
+                    any_selected = true;
+                    break;
+                }
+            }
+            if (!any_selected) {
+                selected_only = false;
+            }
+        }
+
+        // create timfile from toas
+        var timfile = "";
+        for (var key in toas) {
+            if (toas.hasOwnProperty(key)) {
+                if (selected_only && !toas[key].selected) {
+                    continue;
+                }
+                timfile += toas[key].timfile + "\n";
+            }
+        }
+        return timfile;
+    }
+
+    function add_checkpoint() {
+        fitting_history.push({
+            "toas": structuredClone(toas),
+            "model": $('#model_editor').val()
+        });
+    }
+
+    function delete_selected_toas() {
+        // save fitting history
+        add_checkpoint();
+
+        // delete selected toas
+        var new_toas = {};
+        for (var key in toas) {
+            if (toas.hasOwnProperty(key)) {
+                if (!toas[key].selected) {
+                    new_toas[key] = toas[key];
+                }
+            }
+        }
+        toas = new_toas;
+
+        // re-plot residuals
+        plot_residuals();
+    }
+
+    function plot_residuals() {
+        updateStatus("Plotting residuals...");
+        
+        // Prepare data for Plotly
+        var x = [];
+        var y = [];
+        var error_y = [];
+        var text = [];
+        for (var key in toas) {
+            if (toas.hasOwnProperty(key)) {
+                x.push(toas[key].toa);
+                y.push(toas[key].resid);
+                error_y.push(toas[key].toa_err);
+                text.push(toas[key].id);
+            }
+        }
+
+        var data = [{
+            x: x,
+            y: y,
+            error_y: {
+                type: 'data',
+                array: error_y,
+                visible: true
+            },
+            text: text,
+            mode: 'markers',
+            type: 'scatter',
+            marker: { size: 8 }
+        }];
+
+        var layout = {
+            title: 'Timing Residuals',
+            xaxis: { title: 'MJD', exponentformat: 'none' },
+            yaxis: { title: 'Residual (us)', exponentformat: 'none' },
+            hovermode: 'closest'
+        };
+
+        var config = {responsive: true};
+
+        Plotly.newPlot('resid_plot', data, layout, config);
+
+        // Initialize plotly selection event
+        document.getElementById('resid_plot').on('plotly_selected', function(eventData) {
+            if (eventData) {
+                var selectedPoints = eventData.points;
+                // reset all toas selected to false
+                for (var key in toas) {
+                    if (toas.hasOwnProperty(key)) {
+                        toas[key].selected = false;
+                    }
+                }
+                // set selected toas selected to true
+                for (var i = 0; i < selectedPoints.length; i++) {
+                    var id = selectedPoints[i].text;
+                    if (toas.hasOwnProperty(id)) {
+                        toas[id].selected = true;
+                    }
+                }
+                console.log("Selected TOAs:", toas);
+            }
+        });
+
+        updateStatus("Residuals plotted.");
+    }
+
+    function add_glitch() {
+        var glitch_text = "GLEP_1                                0.0 0 0.0\nGLPH_1                                0.0 0 0.0\nGLF0_1                                0.0 0 0.0\nGLF1_1                                0.0 0 0.0\nGLF2_1                                0.0 0 0.0\nGLF0D_1                               0.0 0 0.0\nGLTD_1                                0.0 0 0.0\n";
+        
+        // get current text
+        var current_text = $('#model_editor').val();
+
+        // check if ends with newline
+        if (current_text.length > 0 && !current_text.endsWith("\n")) {
+            glitch_text = "\n" + glitch_text;
+        }
+
+        // append glitch_text to model_editor
+        $('#model_editor').val(current_text + glitch_text);
+
+        updateStatus("Glitch components added.");
+    }
+
+    $(document).ready(function() {
+        // Initialize
+        var resource_loaded = { parfile: false, timfile: false };
+        var source_id = "{{ source_id }}";
+        console.log("Source ID:", source_id);
+
+        // Load parfile and timefile from server
+        if (source_id) {
+            updateStatus("Loading parfile...");
+            console.log('/diagnostic/' + source_id + '/parfile');
+            $.ajax({
+                url: '/diagnostic/' + source_id + '/parfile',
+                type: 'GET',
+                data: { source_id: source_id },
+                success: function(response) {
+                    $('#model_editor').val(response);
+                    console.log("Parfile loaded:", response);
+                    updateStatus("Parfile loaded. ");
+                    resource_loaded.parfile = true;
+                },
+                error: function(xhr) {
+                    alert('Error loading parfile: ' + xhr.responseText);
+                }
+            });
+
+            updateStatus("Loading timfile...");
+            console.log('/diagnostic/' + source_id + '/timfile');
+            $.ajax({
+                url: '/diagnostic/' + source_id + '/timfile',
+                type: 'GET',
+                data: { source_id: source_id },
+                success: function(response) {
+                    load_timfile(response);
+                    console.log("Timfile loaded:", response);
+                    updateStatus("Timfile loaded. ");
+                    resource_loaded.timfile = true;
+                },
+                error: function(xhr) {
+                    alert('Error loading timfile: ' + xhr.responseText);
+                }
+            });
+        }
+
+        // Get prefit residuals
+        // wait until both parfile and timfile are loaded
+        var checkLoaded = setInterval(function() {
+            if (resource_loaded.parfile && resource_loaded.timfile) {
+                clearInterval(checkLoaded);
+                fit(true, false, false); // no_fit=true, selected_only=false, save_history=false
+            } else {
+                console.log("Waiting for resources to load...", resource_loaded);
+            }
+        }, 100);
+    
+    });
+
+    
+</script>
+
+{% endblock %}
