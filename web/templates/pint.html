@@ -69,7 +69,7 @@
         var timfile = create_timfile(selected_only);
 
         // if no_fit
-        var url = "/pint/fit"; 
+        var url = "{{ url_for("pint_fit") }}"; 
         if (no_fit) {
             url += "?no_fit=true"; 
         }
@@ -321,7 +321,8 @@
             updateStatus("Loading parfile...");
             console.log('/diagnostic/' + source_id + '/parfile');
             $.ajax({
-                url: '/diagnostic/' + source_id + '/parfile',
+                // url: '/diagnostic/' + source_id + '/parfile',
+                url: "{{ url_for("parfile", source_id=source_id) }}",
                 type: 'GET',
                 data: { source_id: source_id },
                 success: function(response) {
@@ -338,7 +339,8 @@
             updateStatus("Loading timfile...");
             console.log('/diagnostic/' + source_id + '/timfile');
             $.ajax({
-                url: '/diagnostic/' + source_id + '/timfile',
+                // url: '/diagnostic/' + source_id + '/timfile',
+                url: "{{ url_for("timfile", source_id=source_id) }}",
                 type: 'GET',
                 data: { source_id: source_id },
                 success: function(response) {
