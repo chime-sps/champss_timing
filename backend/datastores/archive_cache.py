@@ -31,6 +31,24 @@ def _archive_cache__db_update_psr_amps_many__get_amp_and_snr(filename, prof_temp
 def _archive_cache__shutils_update_model(archive, parfile, jump):
         return archive_shutils(archive).install_parfile(parfile, jump)
 
+def _archive_cache__pint_update_model(ar, parfile, jumps):
+    # Initialize EphmInstall object
+    ei = EphmInstall(
+        amps=ar["notes"]["init_amps"], 
+        freq=ar["notes"]["freq"], 
+        epoch=ar["notes"]["init_epoch"], 
+        site=ar["notes"]["site"]
+    )
+
+    # Install parfile
+    ei.install_parfile(parfile=parfile)
+
+    # Apply jump
+    if ar["notes"]["rcvr"] in jumps:
+        ei.jump_by_time_given_parfile(parfile, jumps[ar["notes"]["rcvr"]][0])
+
+    return ar['filename'], ei.get_model_installed_amps().tolist()
+
 class archive_cache:
     def __init__(self, psr_dir, db_hdl=None, db_path=None, logger=logger()):
         self.db_hdl = db_hdl
@@ -104,6 +122,10 @@ class archive_cache:
         if parfile == "auto":
             parfile = f"{self.psr_dir}/pulsar.par"
 
+        # Determine number of pools
+        if n_pools == "auto":
+            n_pools = os.cpu_count()
+
         # Query all timed files
         timed_files = self.db_hdl.get_last_timing_info()["files"] # only get latest timing info files
 
@@ -143,32 +165,52 @@ class archive_cache:
             #     commit = True
             # )
 
-        # Update model in all timed files
+        # # Update model in all timed files
+        # filenames = []
+        # post_install_amps = []
+        # for ar in tqdm.tqdm(cached_archives, desc="Installing new ephmeris"):
+        #     # if ar["filename"] not in timed_files:
+        #     #     continue
+        #     # NOW WE ARE ABLE TO UPDATE ALL ARCHIVES SINCE INTERNAL METHOD RUNS MUCH FASTER!! :)
+
+        #     # Initialize EphmInstall object
+        #     ei = EphmInstall(
+        #         amps=ar["notes"]["init_amps"], 
+        #         freq=ar["notes"]["freq"], 
+        #         epoch=ar["notes"]["init_epoch"], 
+        #         site=ar["notes"]["site"]
+        #     )
+
+        #     # Install parfile
+        #     ei.install_parfile(parfile=parfile)
+
+        #     # Apply jump
+        #     if ar["notes"]["rcvr"] in jumps:
+        #         ei.jump_by_time_given_parfile(parfile, jumps[ar["notes"]["rcvr"]][0])
+
+        #     # Append data
+        #     filenames.append(ar['filename'])
+        #     post_install_amps.append(ei.get_model_installed_amps().tolist())
+
+        # Update model in all timed files using multiprocessing
         filenames = []
         post_install_amps = []
-        for ar in tqdm.tqdm(cached_archives, desc="Installing new ephmeris"):
-            # if ar["filename"] not in timed_files:
-            #     continue
-            # NOW WE ARE ABLE TO UPDATE ALL ARCHIVES SINCE INTERNAL METHOD RUNS MUCH FASTER!! :)
-
-            # Initialize EphmInstall object
-            ei = EphmInstall(
-                amps=ar["notes"]["init_amps"], 
-                freq=ar["notes"]["freq"], 
-                epoch=ar["notes"]["init_epoch"], 
-                site=ar["notes"]["site"]
-            )
-
-            # Install parfile
-            ei.install_parfile(parfile=parfile)
-
-            # Apply jump
-            if ar["notes"]["rcvr"] in jumps:
-                ei.jump_by_time_given_parfile(parfile, jumps[ar["notes"]["rcvr"]][0])
-
-            # Append data
-            filenames.append(ar['filename'])
-            post_install_amps.append(ei.get_model_installed_amps().tolist())
+        with Pool(processes=n_pools) as pool:
+            self.logger.info(f"Using {n_pools} processes... ", layer=1)
+            for res in list(
+                tqdm.tqdm(
+                    pool.starmap(
+                        _archive_cache__pint_update_model, 
+                        [
+                            (ar, parfile, jumps) for ar in cached_archives
+                        ]
+                    ), 
+                    total=len(cached_archives),
+                    desc="Installing new ephmeris"
+                )
+            ): 
+                filenames.append(res[0])
+                post_install_amps.append(res[1])
 
         # Commit changes to database
         self.logger.debug(f"Committing changes to database... ", layer=1)
