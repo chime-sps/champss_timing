@@ -34,6 +34,7 @@ parser.add_argument("-p", "--psr", type=str, help="Pulsar name.", default=None, 
 parser.add_argument("-n", "--ncpus", type=int, help="Number of pools.", default=1)
 parser.add_argument("-o", "--pickle-output", type=str, help="Output directory of pickle for debug purpose.", default=None, required=False)
 parser.add_argument("-N", "--n-files", type=int, help="Maximum number of archives to use.", default=None, required=False)
+parser.add_argument("--parfile", type=str, help="Specify the path to timing model (default: ./timing_sources/<psr_id>/pulsar.par).", default=None, required=False)
 parser.add_argument("--subints", type=str, help="Subint range to use for alias factor calculation (e.g., 20:128). Subint converted to data point index by [int(np.floor(subint_range[0] / bin_size)), int(np.ceil(subint_range[1] / bin_size))]", default=None, required=False)
 parser.add_argument("--n-subints", type=int, help="Binsize for alias factor calculation.", default=16, required=False)
 parser.add_argument("--smoothing", type=int, help="Smoothing factor for alias factor calculation.", default=1, required=False)
@@ -222,7 +223,10 @@ for i, psr in enumerate(psrs):
                 raise ValueError(f"Output directory not found: {args.pickle_output}")
 
         # Get parfile
-        parfile = f"./{TIMING_SOURCES_PATH}/{psr}/pulsar.par"
+        if args.parfile is not None:
+            parfile = args.parfile
+        else:
+            parfile = f"./{TIMING_SOURCES_PATH}/{psr}/pulsar.par"
 
         #  determine range of mjds
         if mjd_range == [] or len(psrs) > 1:

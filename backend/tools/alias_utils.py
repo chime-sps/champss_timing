@@ -28,11 +28,11 @@ from ..datastores.archive_cache import archive_cache
 
 
 class dealias_utils():
-    def __init__(self, psrdir, workspace, outdir, logger=logger()):
+    def __init__(self, psrdir, parfile, workspace, outdir, logger=logger()):
         self.logger = logger
         self.psrdir = psrdir
         self.psrdir_dealias = psrdir + "/dealias"
-        self.parfile = psrdir + "/pulsar.par"
+        self.parfile = parfile
         self.workspace = workspace
         self.outdir = outdir
 
@@ -491,6 +491,7 @@ class alias_utils():
         self.logger.debug(f"Initializing dealias_utils...")
         du = dealias_utils(
             psrdir=self.psrdir,
+            parfile=self.parfile,
             workspace=self.workspace,
             outdir=self.outdir,
             logger=self.logger.copy()
