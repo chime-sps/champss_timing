@@ -630,6 +630,16 @@ class champss_timing:
         fit_params = last_timing_info["unfreeze_params"]
         potential_fit_params = []
 
+        # Sanity check
+        if "F0" not in self.timing_config["settings"]["fit_params"]:
+            raise Exception("F0 must be in the fit_params list in the config file. ")
+        if "F1" not in self.timing_config["settings"]["fit_params"]:
+            self.logger.warning("F1 is not in the fit_params list in the config file. It is recommended to include F1 in the fit_params list. ")
+        if "RAJ" not in self.timing_config["settings"]["fit_params"]:
+            self.logger.warning("RAJ is not in the fit_params list in the config file. It is recommended to include RAJ in the fit_params list. ")
+        if "DECJ" not in self.timing_config["settings"]["fit_params"]:
+            self.logger.warning("DECJ is not in the fit_params list in the config file. It is recommended to include DECJ in the fit_params list. ")
+
         if "F0" in self.timing_config["settings"]["fit_params"]:
             if "F0" not in fit_params:
                 fit_params.append("F0")
@@ -656,13 +666,23 @@ class champss_timing:
 
         if "F2" in self.timing_config["settings"]["fit_params"]:
             if "F2" not in fit_params and "F1" in fit_params:
-                if n_days_to_fit >= 500:
+                if n_days_to_fit >= 90:
                     potential_fit_params.append("F2")
 
         if "F3" in self.timing_config["settings"]["fit_params"]:
             if "F3" not in fit_params and "F2" in fit_params and "F1" in fit_params:
-                if n_days_to_fit >= 600:
+                if n_days_to_fit >= 120:
                     potential_fit_params.append("F3")
+
+        if "F4" in self.timing_config["settings"]["fit_params"]:
+            if "F4" not in fit_params and "F3" in fit_params and "F2" in fit_params and "F1" in fit_params:
+                if n_days_to_fit >= 150:
+                    potential_fit_params.append("F4")
+
+        if "F5" in self.timing_config["settings"]["fit_params"]:
+            if "F5" not in fit_params and "F4" in fit_params and "F3" in fit_params and "F2" in fit_params and "F1" in fit_params:
+                if n_days_to_fit >= 180:
+                    potential_fit_params.append("F5")
 
         if "PMDEC" in self.timing_config["settings"]["fit_params"]:
             if "PMDEC" not in fit_params:
@@ -673,6 +693,30 @@ class champss_timing:
             if "PMRA" not in fit_params:
                 if n_days_to_fit >= 800:
                     potential_fit_params.append("PMRA")
+
+        # Glitch parameters
+        for this_p in self.timing_config["settings"]["fit_params"]:
+            if this_p not in fit_params:
+                if n_days_to_fit >= 90: # at least 3 months of data to fit glitch robustly
+                    if this_p.startswith("GLEP"):
+                        potential_fit_params.append(this_p)
+
+                    if this_p.startswith("GLF0"):
+                        potential_fit_params.append(this_p)
+
+                    if this_p.startswith("GLF1"):
+                        if this_p.replace("GLF1", "GLF0") in fit_params:
+                            potential_fit_params.append(this_p)
+
+                    if this_p.startswith("GLF2"):
+                        if this_p.replace("GLF2", "GLF1") in fit_params and this_p.replace("GLF2", "GLF0") in fit_params:
+                            potential_fit_params.append(this_p)
+
+        # Remove fit parameters that are not in the config file
+        for this_param in fit_params:
+            if this_param not in self.timing_config["settings"]["fit_params"]:
+                self.logger.warning(f"Removing {this_param} from fit parameters since it is not in the config file. ")
+                fit_params.remove(this_param)
 
         return fit_params, potential_fit_params
 
