@@ -316,7 +316,7 @@ class alias_utils():
         open("test.json", "w").write(json.dumps(self.su.get_data().tolist(), indent=4))
         return self.su.get_data()[:, 0, 0, :], np.mean(self.su.durations), np.mean(self.su.snrs)
 
-    def cf_get_alias_factor(self, af_min=-20, af_max=20, smooth_sigma=5, meth="mse", subint_range=[]):
+    def cf_get_alias_factor(self, af_min=-30, af_max=30, smooth_sigma=5, meth="mse", subint_range=[]):
         # get stacked powers and duration
         data_stacked, duration_, avg_snr = self.get_stacked_powers_and_duration()
         n_subints = len(data_stacked[:, 0])
