@@ -223,7 +223,7 @@ class ProfileAnalyzer(StackTemplate):
         # Zoom in on the profiles
         if zoom_in:
             for i, profile in enumerate(profiles):
-                profiles[i] = self.zoom_in(profile)
+                profiles[i], _ = self.zoom_in(profile)
 
         # Initialize the StackTemplate class
         super().__init__(profiles, size=size, shift_meth=shift_meth, verbose=verbose, logger=logger)
@@ -259,10 +259,13 @@ class ProfileAnalyzer(StackTemplate):
         # Find the width (half_width) of the interested region
         half_width = int(len(data) * percent / 2)
 
-        # Repeat the data to make sure it is long enough, and cut the data to the zoomed in region
-        data = np.tile(data, 3)[len(data) + peak - half_width:len(data) + peak + half_width]
+        # Get range
+        zoom_start, zoom_end = len(data) + peak - half_width, len(data) + peak + half_width
 
-        return data
+        # Repeat the data to make sure it is long enough, and cut the data to the zoomed in region
+        data = np.tile(data, 3)[zoom_start:zoom_end]
+
+        return data, [zoom_start, zoom_end]
 
     def inject_fake_profile_changes(self, n=1):
         """
@@ -425,6 +428,60 @@ class ProfileAnalyzer(StackTemplate):
             raise ValueError(f"Statistic {statistic} not allowed. Allowed statistics are: rms, chisquare")
 
         return threshold, outliers
+    
+    def plot_daily_profiles(self, subfig):
+        # Create ax
+        ax = subfig.subplots(5, 1)
+
+        # Get data ready
+        template = self.get_template()
+        profile_day0 = self.binned_profiles[-1]
+        profile_day1 = self.binned_profiles[-2]
+        mjs_day0 = self.binned_mjds[-1]
+        mjs_day1 = self.binned_mjds[-2]
+
+        # Get zoom ranges
+        _, zoom_range = self.zoom_in(template, percent=0.25)
+
+        def zoom_in(data):
+            return np.tile(data, 3)[zoom_range[0]:zoom_range[1]]
+
+        # Stacked template
+        ax[0].plot(zoom_in(template), c="k", lw=1)
+        ax[0].set_title("Stacked Template")
+        ax[0].set_xticks([])
+        ax[0].set_yticks([])
+
+        # Latest profile
+        ax[1].plot(zoom_in(profile_day0), c="k", lw=1)
+        ax[1].set_title("Latest Profile @ MJD {:.5f}".format(mjs_day0))
+        ax[1].set_xticks([])
+        ax[1].set_yticks([])
+
+        # Latest profile residual
+        ax[2].plot(zoom_in(template), c="b", lw=0.5, alpha=0.5, label="Template")
+        ax[2].plot(zoom_in(profile_day0), c="r", lw=0.5, alpha=0.5, label="Latest Profile")
+        ax[2].plot(zoom_in(profile_day0 - template), c="k", lw=1, label="Residual")
+        ax[2].set_title("Latest Residual @ MJD {:.5f}".format(mjs_day0))
+        ax[2].set_xticks([])
+        ax[2].set_yticks([])
+        ax[2].legend(loc="upper left", fontsize='small', framealpha=0)
+        
+        # Previous profile
+        ax[3].plot(zoom_in(profile_day1), c="k", lw=1)
+        ax[3].set_title("Previous Profile @ MJD {:.5f}".format(mjs_day1))
+        ax[3].set_xticks([])
+        ax[3].set_yticks([])
+
+        # Previous profile residual
+        ax[4].plot(zoom_in(template), c="b", lw=0.5, alpha=0.5, label="Template")
+        ax[4].plot(zoom_in(profile_day1), c="r", lw=0.5, alpha=0.5, label="Previous Profile")
+        ax[4].plot(zoom_in(profile_day1 - template), c="k", lw=1, label="Residual")
+        ax[4].set_title("Previous Residual @ MJD {:.5f}".format(mjs_day1))
+        # ax[4].set_xticks([])
+        ax[4].set_yticks([])
+        ax[4].set_xlabel("Phase Bins (Zoomed In)")
+        ax[4].legend(loc="upper left", fontsize='small', framealpha=0)
 
     def plot(self, savefig=None):
         """
@@ -472,95 +529,107 @@ class ProfileAnalyzer(StackTemplate):
         kstest_thres, kstest_outliers = self.get_threshold_and_outliers(statistic="kstest", threshold=0.05)
 
         # Plot
-        fig, ax = plt.subplots(2, 4, figsize=(15, 12), height_ratios=[1, 4.5], gridspec_kw={'hspace': 0, 'wspace': 0})
+        fig = plt.figure(figsize=(20, 15))
+        fig.set_constrained_layout(True)
+        subfigs = fig.subfigures(1, 2, width_ratios=[1, 4], wspace=0.01)
+        # subfigs[0].set_edgecolor('k')
+        # subfigs[0].set_linewidth(0.25)
+        ## Left: Daily Profiles
+        self.plot_daily_profiles(subfigs[0])
+        ## Right: Stats Diagnostics
+        # fig, ax = plt.subplots(2, 5, figsize=(15, 15), height_ratios=[1, 4.5], gridspec_kw={'hspace': 0, 'wspace': 0})
+        # ax_left, ax_right = ax[:, 0], ax[:, 1:]
+        ax_right = subfigs[1].subplots(2, 4, height_ratios=[1, 4.5], gridspec_kw={'hspace': 0, 'wspace': 0})
         ## get the vmin and vmax
         vmin = np.min(self.binned_profiles)
         vmax = np.max(self.binned_profiles)
         ## Profiles
-        ax[0, 0].plot(np.linspace(0, len(template), len(template)), template, color='k')
-        ax[0, 0].set_title('Profiles')
-        ax[0, 0].set_xticks([])
-        ax[0, 0].set_yticks([])
-        ax[1, 0].matshow(self.binned_profiles, cmap="gray_r", aspect="auto", vmin=vmin, vmax=vmax)
-        ax[1, 0].tick_params(axis='x', labeltop=False, labelbottom=True)
-        ax[1, 0].invert_yaxis()
-        ax[1, 0].set_ylabel('MJDs')
-        ax[1, 0].set_xlabel('Phase')
+        ax_right[0, 0].plot(np.linspace(0, len(template), len(template)), template, color='k')
+        ax_right[0, 0].set_title('Profiles')
+        ax_right[0, 0].set_xticks([])
+        ax_right[0, 0].set_yticks([])
+        ax_right[1, 0].matshow(self.binned_profiles, cmap="gray_r", aspect="auto", vmin=vmin, vmax=vmax)
+        ax_right[1, 0].tick_params(axis='x', labeltop=False, labelbottom=True)
+        ax_right[1, 0].set_yticklabels(ax_right[1, 0].get_yticks(), rotation=90, va='center')
+        ax_right[1, 0].invert_yaxis()
+        ax_right[1, 0].set_ylabel('MJDs')
+        ax_right[1, 0].set_xlabel('Phase')
         ## Residuals
-        ax[0, 1].plot(np.linspace(0, len(residuals[0]), len(residuals[0])), np.mean(residuals, axis=0), color='k')
-        ax[0, 1].set_title('Residuals')
-        ax[0, 1].set_xticks([])
-        ax[0, 1].set_yticks([])
-        ax[1, 1].matshow(residuals, cmap="gray_r", aspect="auto")#, vmin=vmin, vmax=vmax)
-        ax[1, 1].invert_yaxis()
-        ax[1, 1].tick_params(axis='x', labeltop=False, labelbottom=True)
-        ax[1, 1].set_xlabel('Phase')
-        ax[1, 1].set_yticks([])
+        ax_right[0, 1].plot(np.linspace(0, len(residuals[0]), len(residuals[0])), np.mean(residuals, axis=0), color='k')
+        ax_right[0, 1].set_title('Residuals')
+        ax_right[0, 1].set_xticks([])
+        ax_right[0, 1].set_yticks([])
+        ax_right[1, 1].matshow(residuals, cmap="gray_r", aspect="auto")#, vmin=vmin, vmax=vmax)
+        ax_right[1, 1].invert_yaxis()
+        ax_right[1, 1].tick_params(axis='x', labeltop=False, labelbottom=True)
+        ax_right[1, 1].set_xlabel('Phase')
+        ax_right[1, 1].set_yticks([])
         ## RMS
-        ax[0, 2].hist(rms, facecolor="none", edgecolor="k", bins=50, histtype='step')
-        ax[0, 2].set_title('RMS')
-        ax[0, 2].set_xticks([])
-        ax[0, 2].set_yticks([])
-        ax[0, 2].axvline(rms_thres, color='r', linestyle='--', label='Threshold')
-        ax[1, 2].plot(rms, np.linspace(0, len(chisquares) - 1, len(chisquares)), "kx")
-        ax[1, 2].set_xlabel('RMS')
-        ax[1, 2].set_yticks([])
-        ax[1, 2].axvline(rms_thres, color='r', linestyle='--', label='Threshold')
+        ax_right[0, 2].hist(rms, facecolor="none", edgecolor="k", bins=50, histtype='step')
+        ax_right[0, 2].set_title('RMS')
+        ax_right[0, 2].set_xticks([])
+        ax_right[0, 2].set_yticks([])
+        ax_right[0, 2].axvline(rms_thres, color='r', linestyle='--', label='Threshold')
+        ax_right[1, 2].plot(rms, np.linspace(0, len(chisquares) - 1, len(chisquares)), "kx")
+        ax_right[1, 2].set_xlabel('RMS')
+        ax_right[1, 2].set_yticks([])
+        ax_right[1, 2].axvline(rms_thres, color='r', linestyle='--', label='Threshold')
         for i in rms_outliers:
-            ax[1, 2].axhline(i, color='r', linestyle='-', alpha=0.5, linewidth=0.5)
+            ax_right[1, 2].axhline(i, color='r', linestyle='-', alpha=0.5, linewidth=0.5)
         for i in self.injected_idxes:
-            ax[1, 2].axhline(i, color='g', linestyle='-', alpha=0.5, linewidth=0.5)
+            ax_right[1, 2].axhline(i, color='g', linestyle='-', alpha=0.5, linewidth=0.5)
         ## Chi-squares
         log_bins = np.logspace(np.log10(np.min(chisquares)), np.log10(np.max(chisquares)), 50)
         # ax[0, 3].hist(chisquares, facecolor="none", edgecolor="k", bins=50, histtype='step')
-        ax[0, 3].hist(chisquares, facecolor="none", edgecolor="k", bins=log_bins, histtype='step')
-        ax[0, 3].set_xscale('log')
-        ax[0, 3].set_title('Chi-squares')
-        ax[0, 3].set_xticks([])
-        ax[0, 3].set_yticks([])
-        ax[0, 3].axvline(chisquares_thres, color='r', linestyle='--')
-        ax[1, 3].plot(chisquares, np.linspace(0, len(chisquares) - 1, len(chisquares)), "kx")
-        ax[1, 3].set_xlabel('Chi-squares Statistics')
-        ax[1, 3].set_yticks([])
-        ax[1, 3].axvline(chisquares_thres, color='r', linestyle='--')
-        ax[1, 3].set_xscale('log')
+        ax_right[0, 3].hist(chisquares, facecolor="none", edgecolor="k", bins=log_bins, histtype='step')
+        ax_right[0, 3].set_xscale('log')
+        ax_right[0, 3].set_title('Chi-squares')
+        ax_right[0, 3].set_xticks([])
+        ax_right[0, 3].set_yticks([])
+        ax_right[0, 3].axvline(chisquares_thres, color='r', linestyle='--')
+        ax_right[1, 3].plot(chisquares, np.linspace(0, len(chisquares) - 1, len(chisquares)), "kx")
+        ax_right[1, 3].set_xlabel('Chi-squares Statistics')
+        ax_right[1, 3].set_yticks([])
+        ax_right[1, 3].axvline(chisquares_thres, color='r', linestyle='--')
+        ax_right[1, 3].set_xscale('log')
         for i in chisquares_outliers:
-            ax[1, 3].axhline(i, color='r', linestyle='-', alpha=0.5, linewidth=0.5)
+            ax_right[1, 3].axhline(i, color='r', linestyle='-', alpha=0.5, linewidth=0.5)
         for i in self.injected_idxes:
-            ax[1, 3].axhline(i, color='g', linestyle='--', alpha=0.5, linewidth=0.5)
+            ax_right[1, 3].axhline(i, color='g', linestyle='--', alpha=0.5, linewidth=0.5)
         # ## K-S test
         # log_bins = np.logspace(np.log10(np.min(self.get_binned_residual_kstest())), np.log10(np.max(self.get_binned_residual_kstest())), 50)
-        # ax[0, 4].hist(self.get_binned_residual_kstest(), facecolor="none", edgecolor="k", bins=log_bins, histtype='step')
-        # ax[0, 4].set_xscale('log')
-        # ax[0, 4].set_title('K-S test')
-        # ax[0, 4].set_xticks([])
-        # ax[0, 4].set_yticks([])
-        # ax[0, 4].axvline(kstest_thres, color='r', linestyle='--')
-        # ax[1, 4].plot(self.get_binned_residual_kstest(), np.linspace(0, len(chisquares), len(chisquares)), "kx")
-        # ax[1, 4].set_xlabel('K-S test Statistics')
-        # ax[1, 4].set_yticks([])
-        # ax[1, 4].axvline(kstest_thres, color='r', linestyle='--')
-        # ax[1, 4].set_xscale('log')
+        # ax_right[0, 4].hist(self.get_binned_residual_kstest(), facecolor="none", edgecolor="k", bins=log_bins, histtype='step')
+        # ax_right[0, 4].set_xscale('log')
+        # ax_right[0, 4].set_title('K-S test')
+        # ax_right[0, 4].set_xticks([])
+        # ax_right[0, 4].set_yticks([])
+        # ax_right[0, 4].axvline(kstest_thres, color='r', linestyle='--')
+        # ax_right[1, 4].plot(self.get_binned_residual_kstest(), np.linspace(0, len(chisquares), len(chisquares)), "kx")
+        # ax_right[1, 4].set_xlabel('K-S test Statistics')
+        # ax_right[1, 4].set_yticks([])
+        # ax_right[1, 4].axvline(kstest_thres, color='r', linestyle='--')
+        # aax_rightx[1, 4].set_xscale('log')
         # for i in kstest_outliers:
-        #     ax[1, 4].axhline(i, color='r', linestyle='-', alpha=0.5, linewidth=0.5)
+        #     ax_right[1, 4].axhline(i, color='r', linestyle='-', alpha=0.5, linewidth=0.5)
         ## Set limits
-        for i in range(len(ax[1, :])):
-            ax[1, i].set_ylim(ax[1, 0].get_ylim()[0], ax[1, 0].get_ylim()[1])
-            ax[0, i].set_xlim(ax[1, i].get_xlim())
-        # ax[0, 1].set_ylim(ax[0, 0].get_ylim())
+        for i in range(len(ax_right[1, :])):
+            ax_right[1, i].set_ylim(ax_right[1, 0].get_ylim()[0], ax_right[1, 0].get_ylim()[1])
+            ax_right[0, i].set_xlim(ax_right[1, i].get_xlim())
+        # ax_right[0, 1].set_ylim(ax_right[0, 0].get_ylim())
         ## Set y-ticks in time
-        current_yticks = ax[1, 0].get_yticks()
+        current_yticks = ax_right[1, 0].get_yticks()
         current_yticks = current_yticks[current_yticks >= 0]
         current_yticks = current_yticks[current_yticks < len(self.binned_mjds)]
         time_labels = [f"{self.binned_mjds[int(i)]:.2f}" for i in current_yticks]
-        ax[1, 0].set_yticklabels(time_labels)
-        ax[1, 0].set_yticks(current_yticks)
+        ax_right[1, 0].set_yticklabels(time_labels)
+        ax_right[1, 0].set_yticks(current_yticks)
         ## Info text
-        fig.text(0.001, 0, f"CHAMPSS Timing Pipeline ({utils.get_version_hash()}) profile_utils.ProfileAnalyzer | {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | MJDs on y-axis may not be uniform due to data gaps and binned profiles. ", fontsize=9, ha="left", va="bottom", family="monospace")
+        fig.text(0.001, -0.01, f"CHAMPSS Timing Pipeline ({utils.get_version_hash()}) profile_utils.ProfileAnalyzer | {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | MJDs on y-axis may not be uniform due to data gaps and binned profiles. ", fontsize=9, ha="left", va="bottom", family="monospace")
 
-        plt.tight_layout()
+        plt.subplots_adjust(left=0, right=1, top=1, bottom=0.01)
+        # plt.tight_layout()
         if savefig is not None:
-            plt.savefig(savefig)
+            plt.savefig(savefig, pad_inches=0.01, bbox_inches='tight')
             plt.close()
         else:
             plt.show()
