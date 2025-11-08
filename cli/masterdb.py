@@ -24,19 +24,21 @@ class CLIMasterDBHandler:
     # def ls_chimepsr_fil(self, psr="*"):
     #     return glob.glob(self.path_chimepsr_fil.replace("%PSR%", psr))
 
-    def ls(self, path, psr="*"):
+    def ls(self, path, psr=None):
         """
         List files in the given path with the specified pulsar ID.
         """
+        if psr is None:
+            psr = "*"
         return glob.glob(path.replace("%PSR%", psr))
     
-    def insert_data(self, placeholder_if_corrupted):
+    def insert_data(self, placeholder_if_corrupted, psr_id=None):
         with tmg_master(self.db_path, fast_mode=True, mem_gb=self.fast_mode_mem_gb) as tm_hdl:
             db_records = tm_hdl.get_ar_ids_idxed_by_psr_id()
 
             for bknd, info in self.backends.items():
                 self.logger.info(f"Inserting raw data from {info['label']} (path: {info['data_path']})")
-                files = self.ls(info['data_path'], "*")
+                files = self.ls(info['data_path'], psr_id)
                 for i, file in enumerate(files):
                     psr_id = file.split("/")[-2] # TODO: there should be a better way to get the pulsar ID!!
                     ar_id = utils.get_archive_id(file)

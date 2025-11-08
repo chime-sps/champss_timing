@@ -56,7 +56,7 @@ if args.auto_insert_raw_data:
     logger.info(f"Add placehold if a file is corrupted: {args.placeholder_if_corrupted}")
 
     # Run action
-    cli_masterdb_hdl.insert_data(placeholder_if_corrupted=args.placeholder_if_corrupted)
+    cli_masterdb_hdl.insert_data(placeholder_if_corrupted=args.placeholder_if_corrupted, psr_id=args.psr)
 
 elif args.cleanup_raw_data:
     logger.debug("Cleanup unused raw data on the disk. ")
