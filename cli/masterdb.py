@@ -30,28 +30,30 @@ class CLIMasterDBHandler:
         """
         if psr is None:
             psr = "*"
+
+        print(f"Listing files in {path.replace('%PSR%', psr)}")
         return glob.glob(path.replace("%PSR%", psr))
     
-    def insert_data(self, placeholder_if_corrupted, psr_id=None):
+    def insert_data(self, placeholder_if_corrupted, psr=None):
         with tmg_master(self.db_path, fast_mode=True, mem_gb=self.fast_mode_mem_gb) as tm_hdl:
             db_records = tm_hdl.get_ar_ids_idxed_by_psr_id()
 
             for bknd, info in self.backends.items():
                 self.logger.info(f"Inserting raw data from {info['label']} (path: {info['data_path']})")
-                files = self.ls(info['data_path'], psr_id)
+                files = self.ls(info['data_path'], psr=psr)
                 for i, file in enumerate(files):
-                    psr_id = file.split("/")[-2] # TODO: there should be a better way to get the pulsar ID!!
+                    this_psr = file.split("/")[-2] # TODO: there should be a better way to get the pulsar ID!!
                     ar_id = utils.get_archive_id(file)
 
-                    if psr_id in db_records:
-                        if ar_id in db_records[psr_id]:
+                    if this_psr in db_records:
+                        if ar_id in db_records[this_psr]:
                             continue
 
-                    self.logger.debug(f"[{i+1}/{len(files)}] Inserting: {psr_id} -> {file}", end="\r", layer=1)
+                    self.logger.debug(f"[{i+1}/{len(files)}] Inserting: {this_psr} -> {file}", end="\r", layer=1)
 
                     try:
                         tm_hdl.insert_raw_data_from_file(
-                            psr_id = psr_id, 
+                            psr_id = this_psr, 
                             location = file, 
                             backend = bknd, 
                             format = "auto", 
@@ -59,7 +61,7 @@ class CLIMasterDBHandler:
                             placeholder_if_corrupted = placeholder_if_corrupted
                         )
                     except Exception as e:
-                        self.logger.error(f"Failed to insert: {psr_id} -> {file} ({e})")
+                        self.logger.error(f"Failed to insert: {this_psr} -> {file} ({e})")
                         self.logger.error(traceback.format_exc())
 
             # # CHAMPSS
