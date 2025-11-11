@@ -74,7 +74,7 @@ class tmg_master:
             self.conn = sqlite3.connect("file://" + self.db_path + "?mode=ro", uri=True, check_same_thread=False)
         else:
             self.db_path = db_path
-            self.conn = sqlite3.connect(self.db_path)
+            self.conn = sqlite3.connect(self.db_path, timeout=60.0)
 
         self.cur = self.conn.cursor()
     
@@ -92,6 +92,7 @@ class tmg_master:
             self.cur.execute("PRAGMA temp_store = MEMORY;") # use memory for temporary storage
             self.cur.execute("PRAGMA cache_size = 10000;") # set cache size to 10000 pages
             self.cur.execute(f"PRAGMA mmap_size = {self.fast_mode_mem_gb * 1000000000};") # set mmap size
+            self.cur.execute("PRAGMA busy_timeout = 60000;") # set busy timeout to 60000 ms
 
         # create tables
         self.cur.execute("CREATE TABLE IF NOT EXISTS info (version TEXT)")

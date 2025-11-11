@@ -91,7 +91,8 @@ class glitch_utils():
         observer_location = EarthLocation(lat=latitude * u.deg, lon=longitude * u.deg)
 
         # Get source coordinates
-        source_coord = SkyCoord.from_name(f"{ra} {dec}")
+        # source_coord = SkyCoord.from_name(f"{ra} {dec}")
+        source_coord = SkyCoord(ra=ra * u.deg, dec=dec * u.deg) # avoiding name resolution through simbad server that causing problem on narval. 
 
         # Define time range
         obs_time = Time(f"{date} 00:00:00")  # Start of the given day

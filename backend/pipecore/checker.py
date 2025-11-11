@@ -1,12 +1,86 @@
 import os
+import io
+import time
 import pkgutil
 import importlib
 import numpy as np
 import traceback
+import pickle
 
+from ..utils.utils import utils
 from ..utils.logger import logger
 from ..utils.notification import notification
 from ..datastores.database import database
+
+class checker_pickle:
+    """
+    A class to hold checker results for pickling.
+    """
+    @staticmethod
+    def dumps(results, timestamp=time.time()):
+        """
+        Pickle the results, converting attachments to bytes.
+        """
+
+        # Load attachments into bytes
+        for checker_name in results:
+            for key in results[checker_name]:
+                for loc in ["attachments", "attachments_report_only"]:
+                    for i, att in enumerate(results[checker_name][key][loc]):
+                        if os.path.exists(att):
+                            # Read attachment content
+                            with open(att, "rb") as f:
+                                att_cont = f.read()
+
+                            # Store attachment content in the dictionary
+                            results[checker_name][key][loc][i] = {
+                                "content": att_cont,
+                                "original_path": att, 
+                                "valid": True
+                            }
+                        else:
+                            results[checker_name][key][loc][i] = {
+                                "content": None,
+                                "original_path": att, 
+                                "valid": False
+                            }
+
+        # Pickle the results
+        return pickle.dumps((results, timestamp))
+
+    def loads(data):
+        """
+        Unpickle the results.
+        """
+        # Unpickle the data
+        results, timestamp = pickle.loads(data)
+
+        # Save attachments to files
+        for checker_name in results:
+            for key in results[checker_name]:
+                for loc in ["attachments", "attachments_report_only"]:
+                    for i, att in enumerate(results[checker_name][key][loc]):
+                        if att["valid"]:
+                            # Update attachment path
+                            results[checker_name][key][loc][i] = io.BytesIO(att["content"])
+                        else:
+                            results[checker_name][key][loc][i] = att["original_path"]
+
+        return results, timestamp
+
+    def dump(results, f, timestamp=time.time()):
+        """
+        Dump the results to a file.
+        """
+
+        return f.write(checker_pickle.dumps(results, timestamp=timestamp))
+
+    def load(f):
+        """
+        Load the results from a file.
+        """
+
+        return checker_pickle.loads(f.read())
 
 class checker:
     def __init__(self, psr_dir, db_hdl=None, noti_hdl=notification(), psr_id=None, logger=logger(), verbose=False):
@@ -84,9 +158,18 @@ class checker:
 
         return checkers
 
-    def check(self):
+    def check(self, save=False):
         """
         Run checkers
+
+        Parameters
+        ----------
+        save : bool
+            If True, save the checker results to psr_dir as a checker pickle file.
+        Returns
+        -------
+        results : dict
+            The checker results.
         """
         
         # Initialize the results
@@ -159,6 +242,12 @@ class checker:
         self.logger.debug(f"Sending attachments...")
         for att in attachments:
             self.send_attachment(att)
+
+        # Save the results if needed
+        if save:
+            self.logger.debug(f"Saving checker results to {self.psr_dir}/checker_results.pkl ...")
+            with open(self.psr_dir + "/checker_results.pkl", "wb") as f:
+                checker_pickle.dump(results, f, timestamp=time.time())
 
         return results
 

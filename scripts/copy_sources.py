@@ -14,7 +14,8 @@ copy_files = [
     "pulsar.dealias.pdf", 
     "pulsar.dealiased.par", 
     "dealias", 
-    "TMGMaster.sqlite3.db"
+    "TMGMaster.sqlite3.db", 
+    "checker_results.pkl"
 ]
 
 parser = argparse.ArgumentParser(description="Copy necessary files to web server.")

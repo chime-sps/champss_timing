@@ -202,7 +202,7 @@ class champss_timing:
 
             # Run checker
             if self.run_checkers:
-                checker(psr_dir=self.path_psr_dir, db_hdl=self.db_hdl, noti_hdl=self.noti_hdl, psr_id=self.psr_id, logger=self.logger.copy()).check()
+                checker(psr_dir=self.path_psr_dir, db_hdl=self.db_hdl, noti_hdl=self.noti_hdl, psr_id=self.psr_id, logger=self.logger.copy()).check(save=True)
 
             # End of the script
             self.logger.success("Script finished. ")
