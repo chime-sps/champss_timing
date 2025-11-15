@@ -64,7 +64,7 @@ for psrdir in psrdirs:
     if not os.path.exists(os.path.join(psrdir, "champss_timing.sqlite3.db")):
         continue
     mg.add_psrdir(psrdir)
-all_checkers_passed = mg.run_checkers(within_24h=True)
+all_checkers_passed = mg.run_checkers(ts_range=[time.time() - 12*3600, time.time()], checker_noti=True, report=True)
 
 # Send summary
 if os.path.exists(SUMMARY_TEXT):

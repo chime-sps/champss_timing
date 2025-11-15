@@ -309,15 +309,17 @@ class Monitoring:
         else:
             self.logger.warning(f"Pulsar directory already exists: {psrdir}")
 
-    def run_checkers(self, within_24h=True, report=True):
+    def run_checkers(self, ts_range=None, report=True, checker_noti=True):
         """
         Run all available checkers on the pulsar directories and generate a report.
         Parameters
         ----------
-        within_24h : bool
-            If True, only run checkers for pulsars updated in the last 24 hours.
+        ts_range : list
+            List containing start and end timestamps to filter pulsars updated within this range.
+        checker_noti : bool
+            If True, run the checkers and send notifications.
         report : bool
-            If True, generate a monitoring report.
+            If True, generate and send a monitoring report.
         Returns
         -------
         bool
@@ -337,16 +339,17 @@ class Monitoring:
             try:
                 with database(source_db) as db_hdl:
                     # Skip if updated more than 24 hours ago
-                    if within_24h:
-                        if db_hdl.get_last_timing_info()["timestamp"] < time.time() - 43200:
-                            self.logger.warning(f"Skipping {psrdir} as it has not been updated in the last 24 hours.")
+                    if ts_range is not None:
+                        # if db_hdl.get_last_timing_info()["timestamp"] < time.time() - 43200:
+                        if db_hdl.get_last_timing_info()["timestamp"] < ts_range[0] or db_hdl.get_last_timing_info()["timestamp"] > ts_range[1]:
+                            self.logger.warning(f"Skipping {psrdir} as it has not been updated in the specified time range.")
                             continue
 
                     # Run the checker
                     checker_res = checker(
                         psr_dir=psrdir,
                         db_hdl=db_hdl,
-                        noti_hdl=self.noti_hdl, 
+                        noti_hdl=self.noti_hdl if checker_noti else notification(), 
                         psr_id=psr_id, 
                         logger=self.logger.copy()
                     ).check()
