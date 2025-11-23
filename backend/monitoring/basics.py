@@ -285,7 +285,7 @@ class Main:
                 return {"level": 1, "id": "chi2r_sudden_increase", "message": f"Chi2r is out of 2-sigma range of all chi2rs in the last 30 samples ({bckr_res95}).", "attachments": ["%DIAGNOSTIC_PLOT%", verbose_savefig]}
         else:
             # Basic sanity check
-            if len(self.metric_chi2rs["vals"]) > 0:
+            if len(self.metric_chi2rs["vals"]) > 0 and self.metric_chi2rs["vals"][-1] is not None:
                 if self.metric_chi2rs["vals"][-1] < 10:
                     return {"level": 0, "id": "chi2r_ok", "message": "Chi2r is normal.", "attachments": []}
                 
