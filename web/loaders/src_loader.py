@@ -6,7 +6,7 @@ import base64
 import numpy as np
 import hashlib
 from scipy.spatial import KDTree
-from backend.pipecore.checker import checker
+from backend.pipecore.checker import checker, checker_pickle
 from backend.datastores.database import database
 from backend.utils.utils import utils
 
@@ -254,7 +254,27 @@ class src_loader():
         return self.db.get_all_config()
     
     def get_checker_warnings(self):
-        warnings = checker(psr_dir=self.source_dir, db_hdl=self.db).check()
+        # Get warnings from checker
+        warnings = None
+        pickle_path = os.path.join(self.source_dir, "checker_results.pkl")
+
+        #Use checker pickle if available
+        try:
+            if os.path.exists(pickle_path):
+                with open(pickle_path, "rb") as f:
+                    # Read pickle
+                    warnings, timestamp = checker_pickle.load(f)
+
+                    # Check if timestamp is older than the last timing info
+                    if timestamp < self.last_timing_info["timestamp"]:
+                        raise ValueError("Checker pickle is outdated.")
+
+                    print("Loaded checker results from pickle.")
+            else:
+                raise FileNotFoundError(f"Checker pickle not found at {pickle_path}.")
+        except Exception as e:
+            print(f"{e} Re-running checker.")
+            warnings = checker(psr_dir=self.source_dir, db_hdl=self.db).check()
 
         warnings_formatted = []
         for checker_module in warnings.keys():

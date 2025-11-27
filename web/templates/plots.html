@@ -129,6 +129,7 @@
         </div>
     </div>
 </div>
+<script src="{{ url_for('static', filename='transits.js') }}"></script>
 <script>
     function preview(url) {
         $('#preview_iframe').hide();
@@ -149,24 +150,15 @@
             $('#preview').modal('hide');
         });
     }
+
     function get_DRAO_transiting_ra(offset=4.3905555556, obs_length=0.25) {
         // Get UTC now
         var now = new Date();
-        var utc_hours = now.getUTCHours();
-        var utc_minutes = now.getUTCMinutes();
-        var utc_seconds = now.getUTCSeconds();
-        var utc_time = utc_hours + (utc_minutes / 60) + (utc_seconds / 3600);
+        
+        // Calculate transiting RA at DRAO
+        var transit = raDecAtZenith(49.320751, -119.620811, now)
 
-        // Calculate transiting RA
-        var transiting_ra = utc_time + offset;
-        if (transiting_ra > 24) {
-            transiting_ra -= 24;
-        }
-        if (transiting_ra < 0) {
-            transiting_ra += 24;
-        }
-
-        return [transiting_ra - obs_length / 2, transiting_ra + obs_length / 2];
+        return [transit.raHours - obs_length / 2, transit.raHours + obs_length / 2];
 
     }
 </script>
@@ -196,8 +188,14 @@
         }, 
         legend: {
             x: 1,
+            y: 1.08,
+            orientation: 'h', 
             xanchor: 'right',
-            y: 1
+            yanchor: 'top',
+            font: {
+                size: 10
+            }, 
+            bgcolor: 'rgba(0, 0, 0, 0)'
         },
         title: 'Sky Map', 
         margin: {'t':50,'l':110,'b':60,'r':40}
@@ -274,7 +272,8 @@
         legend: {
             x: 1,
             xanchor: 'right',
-            y: 1
+            y: 1, 
+            bgcolor: 'rgba(0, 0, 0, 0)'
         }, 
         title: 'P-Pdot Diagram', 
         margin: {'t':50,'l':110,'b':60,'r':40}
@@ -319,7 +318,8 @@
         legend: {
             x: 1,
             xanchor: 'right',
-            y: 1
+            y: 1, 
+            bgcolor: 'rgba(0, 0, 0, 0)'
         }, 
         title: 'P vs. DM', 
         margin: {'t':50,'l':110,'b':60,'r':40}
@@ -363,7 +363,8 @@
         legend: {
             x: 1,
             xanchor: 'right',
-            y: 1
+            y: 1, 
+            bgcolor: 'rgba(0, 0, 0, 0)'
         }, 
         title: 'NTOA vs. CHI2R', 
         margin: {'t':50,'l':110,'b':60,'r':40}
