@@ -1,5 +1,6 @@
 import os
 import time
+import shutil
 import traceback
 import subprocess
 import datetime
@@ -309,7 +310,7 @@ class Monitoring:
         else:
             self.logger.warning(f"Pulsar directory already exists: {psrdir}")
 
-    def run_checkers(self, ts_range=None, report=True, checker_noti=True):
+    def run_checkers(self, ts_range=None, report=True, checker_noti=True, save_report=None):
         """
         Run all available checkers on the pulsar directories and generate a report.
         Parameters
@@ -320,6 +321,8 @@ class Monitoring:
             If True, run the checkers and send notifications.
         report : bool
             If True, generate and send a monitoring report.
+        save_report : str or None
+            If specified, save the generated report to this file path (only if report=True).
         Returns
         -------
         bool
@@ -392,6 +395,11 @@ class Monitoring:
 
                     # Send report file
                     self.noti_hdl.send_file(report_file)
+
+                    # Save report if specified
+                    if save_report is not None:
+                        shutil.copy(report_file, save_report)
+                        self.logger.info(f"Monitoring report saved to: {save_report}")
 
                     # Clean up
                     if not self.verbose:
