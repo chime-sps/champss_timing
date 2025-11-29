@@ -103,7 +103,14 @@
                 <!-- <button type="button" class="btn btn-outline-primary btn-sm" id="btn_download_diagnostic">Download Diagnostic PDF</button>
                 <button type="button" class="btn btn-outline-secondary btn-sm" id="btn_download_parfile">Download Parfile</button> -->
             </div>
-            <h3>{{ source_id }} <small style="font-size: 0.5em;"><span class="badge text-bg-dark rounded-pill" style="position: absolute; font-size: 0.45em; transform: translateY(0.75em);">#{{sources[source_id].config["metadata"]["tag"]}}</span> Last updated on {{ sources[source_id].get_last_updated() }} </small></h3>
+            <h3>
+                {{ source_id }} 
+                <small style="font-size: 0.5em;" id="source_info_div">
+                    <span class="badge text-bg-dark rounded-pill" style="position: absolute; font-size: 0.45em; transform: translateY(0.75em);">#{{sources[source_id].config["metadata"]["tag"]}}</span>
+                    <span id="last_updated_info">Last updated on {{ sources[source_id].get_last_updated() }} </span>
+                    <span id="transit_info" style="display: none; opacity: 25%; "> → <span id="transit_status"></span></span>
+                </small>
+            </h3>
         </div>
         <hr>
         <h4 id="sec_summary">Summary</h4>
@@ -1347,6 +1354,54 @@
                 $("#show_fermi").click();
             {% endif %}
         }, 500);
+    </script>
+
+    <script src="{{ url_for('static', filename='transits.js') }}"></script>
+    <script>
+        function update_transit() {
+            // Calculate transiting RA at DRAO
+            var transit_ra_hr = raDecAtZenith(49.320751, -119.620811, new Date()).raHours; // in hours
+
+            // Calculate time difference
+            var source_ra_hr = {{ sources[source_id].last_timing_info["fitted_params"]["RAJ"] }}; // in hours
+            var time_diff_hr = source_ra_hr - transit_ra_hr; // in hours
+
+            // Check if transiting now
+            if (time_diff_hr < 0.25 && time_diff_hr > -0.25) {
+                $("#transit_status").text("Transiting Now");
+                $("#transit_status").css("font-weight", "700");
+                $("#transit_status").css("color", "#28a745"); // green
+                $("#transit_info").css("opacity", "1");
+                // Flash the text
+                $("#transit_status").addClass("flash");
+            } else {
+                // Handle with wrap-around
+                if (time_diff_hr < 0) {
+                    time_diff_hr += 24;
+                }
+                
+                // Calculate the hours and minutes
+                var hours = Math.floor(time_diff_hr);
+                var minutes = Math.floor((time_diff_hr - hours) * 60);
+
+                // Update the HTML elements
+                $("#transit_status").css("font-weight", "unset");
+                $("#transit_status").css("color", "unset"); // green
+                $("#transit_info").css("opacity", "0.25");
+                $("#transit_status").text(`Transiting in ${hours} hours ${minutes} minutes`);
+                $("#transit_status").removeClass("flash");
+            }
+        }
+
+        $(document).ready(function() {
+            // Show initial transit time
+            update_transit();
+            $("#transit_info").fadeIn();
+
+            setInterval(() => {
+                update_transit();
+            }, 15000); // Update every 15 seconds
+        });
     </script>
 
     <!-- <script>

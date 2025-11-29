@@ -55,6 +55,19 @@
             font-size: 0.45em; 
             transform: translateY(-0.45em);  
         }
+
+        /* Flash Animation */
+        @keyframes flash {
+            0% { opacity: 1; }
+            35% { opacity: 0.25; }
+            70% { opacity: 1; }
+        }
+
+        .flash {
+            /* animation: flash 1s ease-in-out; */
+            /* Forever */
+            animation: flash 3s ease-in-out infinite;
+        }
     </style>
 
     <script>
