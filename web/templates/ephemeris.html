@@ -65,7 +65,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for this_source in sources %}
+                        {% for this_source in sources.get_sources() %}
                             {% if tag_filter == "all" or tag_filter == this_source.config["metadata"]["tag"] %}
                                 {% if this_source.last_timing_info["fitted_params"]["CHI2R"] > 10 or max(this_source.last_timing_info["notes"]["fitted_mjds"]) - min(this_source.last_timing_info["notes"]["fitted_mjds"]) < 180 %}
                                     <tr style="opacity: 0.25; "

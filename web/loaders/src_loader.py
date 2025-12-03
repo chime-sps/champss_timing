@@ -28,6 +28,7 @@ class src_loader():
         self.dealias_logfile = source_dir + "/dealias/champss_timing.log"
         self.psr_id = source_dir.split("/")[-1]
         self.psr_id_esc = self.psr_id.replace("+", "p").replace("-", "m")
+        self.initialized = False
 
         self.last_timing_info = {}
         self.stats = {}
@@ -70,6 +71,9 @@ class src_loader():
         # # Get checker warnings
         # self.checker_warnings = self.get_checker_warnings()
         # self.checker_warnings_length = len(self.checker_warnings)
+
+        # Set initialized flag
+        self.initialized = True
 
     def on_diagnostic_request(self):
         """
@@ -422,14 +426,6 @@ class src_loader():
             return {"x": x.tolist(), "y": self.stacked_profile}
 
         return self.stacked_profile
-
-    def update_checker(self):
-        this_db_md5 = self.get_db_md5()
-        if this_db_md5 != self.db_md5:
-            self.db.close()
-            self.db_md5 = this_db_md5
-            self.connect_db()
-            print(f"Database {self.psr_id} updated")
 
     def get_source_position_error(self):
         raj_err = 0.5

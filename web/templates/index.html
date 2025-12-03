@@ -141,7 +141,7 @@
         generateHeatmap();
     </script>
     <div class="row">
-        {% for this_source in sources %}
+        {% for this_source in sources.get_sources() %}
             {% if tag_filter == "all" or tag_filter == this_source.config["metadata"]["tag"] %}
                 <div class="col-lg-6" id="div_{{this_source.psr_id_esc}}" style="cursor:pointer;">
                     <div class="card" id="card_{{this_source.psr_id_esc}}" style="margin-bottom: 15px; " xmlns="http://www.w3.org/1999/html">
