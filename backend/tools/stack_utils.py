@@ -36,7 +36,7 @@ class stack_utils():
 
         # Check if npol make sense
         if n_pols != 1 and n_pols != 4:
-            raise ValueError("n_pols must be 1 or 3 to be physically meaningful")
+            raise ValueError("n_pols must be 1 or 4 to be physically meaningful")
 
         # Initialize the stacked data array: subints, pols, freqs, bins
         self.stacked_data = np.zeros((self.n_subs, self.n_pols, self.n_freqs, self.n_bins), dtype=np.float32)
