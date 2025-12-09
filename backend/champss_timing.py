@@ -446,7 +446,8 @@ class champss_timing:
         # Get timing info
         fitted_params = pint_f.get_params_dict("all", "quantity")
         residuals = pint_f.resids.time_resids.to(u.us).value
-        residuals_err = pint_t.get_errors().to(u.us).value
+        # residuals_err = pint_t.get_errors().to(u.us).value
+        residuals_err = pint_f.resids.get_data_error(scaled=True).to(u.us).value # get weighted residuals error with EFAC/EQUAD applied
         residual_mjds = pint_t.get_mjds().value
         bad_residuals = pint_bad_resids.to(u.us).value
         bad_residuals_err = pint_bad_toas.get_errors().to(u.us).value

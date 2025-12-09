@@ -147,7 +147,7 @@ class MCMCFitter(MCMCFitter):
         ax_residuals.errorbar(
             self.toas.get_mjds().to(u.us).value,
             self.resids.time_resids.to(u.us).value,
-            self.toas.get_errors().to(u.us).value,
+            self.resids.get_data_error(scaled=True).to(u.us).value,
             fmt="x",
             label="Post-fit", 
             alpha=0.75, 

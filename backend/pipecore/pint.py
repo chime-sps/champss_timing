@@ -727,7 +727,9 @@ class pint_handler():
             return self.f.plot(savefig=savefig) # use MCMC plot function
 
         # Get residuals
-        rs = Residuals(self.t, self.m).time_resids
+        resids = Residuals(self.t, self.m)
+        rs = resids.time_resids
+        rs_err = resids.get_data_error(scaled=True)
         xt = self.t.get_mjds()
 
         # Initialize the figure
@@ -750,7 +752,7 @@ class pint_handler():
             plt.errorbar(
                 xt.value,
                 self.f.resids.time_resids.to(u.us).value,
-                self.t.get_errors().to(u.us).value,
+                self.f.resids.get_data_error(scaled=True).to(u.us).value,
                 fmt="x",
                 label="Post-fit", 
                 alpha=0.75, 
