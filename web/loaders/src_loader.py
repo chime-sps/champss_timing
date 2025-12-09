@@ -6,7 +6,7 @@ import base64
 import numpy as np
 import hashlib
 from scipy.spatial import KDTree
-from backend.pipecore.checker import checker
+from backend.pipecore.checker import checker, checker_pickle
 from backend.datastores.database import database
 from backend.utils.utils import utils
 
@@ -28,6 +28,7 @@ class src_loader():
         self.dealias_logfile = source_dir + "/dealias/champss_timing.log"
         self.psr_id = source_dir.split("/")[-1]
         self.psr_id_esc = self.psr_id.replace("+", "p").replace("-", "m")
+        self.initialized = False
 
         self.last_timing_info = {}
         self.stats = {}
@@ -70,6 +71,9 @@ class src_loader():
         # # Get checker warnings
         # self.checker_warnings = self.get_checker_warnings()
         # self.checker_warnings_length = len(self.checker_warnings)
+
+        # Set initialized flag
+        self.initialized = True
 
     def on_diagnostic_request(self):
         """
@@ -254,7 +258,27 @@ class src_loader():
         return self.db.get_all_config()
     
     def get_checker_warnings(self):
-        warnings = checker(psr_dir=self.source_dir, db_hdl=self.db).check()
+        # Get warnings from checker
+        warnings = None
+        pickle_path = os.path.join(self.source_dir, "checker_results.pkl")
+
+        #Use checker pickle if available
+        try:
+            if os.path.exists(pickle_path):
+                with open(pickle_path, "rb") as f:
+                    # Read pickle
+                    warnings, timestamp = checker_pickle.load(f)
+
+                    # Check if timestamp is older than the last timing info
+                    if timestamp < self.last_timing_info["timestamp"]:
+                        raise ValueError("Checker pickle is outdated.")
+
+                    print("Loaded checker results from pickle.")
+            else:
+                raise FileNotFoundError(f"Checker pickle not found at {pickle_path}.")
+        except Exception as e:
+            print(f"{e} Re-running checker.")
+            warnings = checker(psr_dir=self.source_dir, db_hdl=self.db).check()
 
         warnings_formatted = []
         for checker_module in warnings.keys():
@@ -402,14 +426,6 @@ class src_loader():
             return {"x": x.tolist(), "y": self.stacked_profile}
 
         return self.stacked_profile
-
-    def update_checker(self):
-        this_db_md5 = self.get_db_md5()
-        if this_db_md5 != self.db_md5:
-            self.db.close()
-            self.db_md5 = this_db_md5
-            self.connect_db()
-            print(f"Database {self.psr_id} updated")
 
     def get_source_position_error(self):
         raj_err = 0.5

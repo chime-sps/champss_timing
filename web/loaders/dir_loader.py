@@ -9,12 +9,37 @@ import numpy as np
 from .src_loader import src_loader
 from backend.utils.utils import utils
 
+class checker_update_thread(threading.Thread):
+    def __init__(self, dir_loader, check_interval):
+        threading.Thread.__init__(self)
+        self.dir_loader = dir_loader
+        self.check_interval = check_interval
+        self.running = True
+
+    def run(self):
+        while self.running:
+            try:
+                # Wait for the check interval
+                time.sleep(self.check_interval)
+
+                # Re-initialize the dir_loader to check for updates
+                if self.dir_loader.initialize() > 0:
+                    # Run preload
+                    if not self.dir_loader.preload_thread.is_alive():
+                        self.dir_loader.preload_on_diagnostic_request()
+
+            except Exception as e:
+                print(f"Error in update checker: {e}")
+
+    def stop(self):
+        self.running = False
+
 class dir_loader():
     def __init__(self, psr_dir, app, query_simbad=True):#, auto_update = False):
         self.app = app
         self.psr_dir = psr_dir
         self.query_simbad = query_simbad
-        self.sources = []
+        self.sources = {}
         self.update_checker_thread = None
         self.running = False
         # self.auto_update = auto_update
@@ -22,17 +47,14 @@ class dir_loader():
         self.plots = {}
         self.tags = []
         self.last_updated = 0
+        self.preload_thread = None
+        self.update_checker_thread = None
 
     def initialize(self):
         self.running = True
 
         # Load sources
-        self.load_sources()
-        print(f"{len(self.sources)} sources loaded")
-
-        # Initialize sources
-        for source in self.sources:
-            source.initialize()
+        n_loaded = self.load_sources()
 
         # Get heatmap
         self.get_heatmap()
@@ -46,26 +68,30 @@ class dir_loader():
         # Set last_updated timestamp
         self.last_updated = time.time()
 
-        # # Start update checker
-        # if self.auto_update:
-        #     self.update_checker_thread = threading.Thread(target = self.update_checker)
-        #     self.update_checker_thread.start()
+        # Preload the on_diagnostic_request events
+        if self.preload_thread is None:
+            self.preload_thread = threading.Thread(target=self.preload_on_diagnostic_request)
+            self.preload_thread.start()
 
-        # preload the on_diagnostic_request events
-        threading.Thread(target=self.__preload_on_diagnostic_request).start()
+        # Start update checker thread
+        if self.update_checker_thread is None:
+            self.update_checker_thread = checker_update_thread(self, check_interval=60)  # Check every 1 minute
+            self.update_checker_thread.start()
+
+        return n_loaded
         
-    def __preload_on_diagnostic_request(self):
+    def preload_on_diagnostic_request(self):
         """
         Preload the on_diagnostic_request events for all sources.
         This is to ensure that the event handlers are ready when the app starts.
         """
-        for source in self.sources:
+        for source in self.sources.values():
             source.on_diagnostic_request()
 
     def get_heatmap(self, n_max=1050, reverse=False):
         heatmap = {}
 
-        for source in self.sources:
+        for source in self.sources.values():
             for toa in source.db.get_all_toas():
                 if "remark" in toa["notes"]:
                     if "INVALID_TOA" in toa["notes"]["remark"]:
@@ -124,10 +150,8 @@ class dir_loader():
             self.plots["pdm"][this_tag] = {"x": [], "y": [], "links": [], "psr_id": []}
             self.plots["ntoachi2r"][this_tag] = {"x": [], "y": [], "links": [], "psr_id": []}
 
-        for source in self.sources:
-            if source.last_timing_info["fitted_params"]["CHI2R"] > 10 or max(source.last_timing_info["notes"]["fitted_mjds"]) - min(source.last_timing_info["notes"]["fitted_mjds"]) < 180:
-                continue
-
+        for source in self.sources.values():
+            # Get tag
             this_tag = source.config["metadata"]["tag"]
 
             # skymap
@@ -135,6 +159,10 @@ class dir_loader():
             self.plots["skymap"][this_tag]["y"].append(source.last_timing_info["fitted_params"]["DECJ"])
             self.plots["skymap"][this_tag]["links"].append(f"/diagnostics/{source.psr_id}")
             self.plots["skymap"][this_tag]["psr_id"].append(source.psr_id)
+
+            # Skip if bad fit for the rest of the plots
+            if source.last_timing_info["fitted_params"]["CHI2R"] > 10 or max(source.last_timing_info["notes"]["fitted_mjds"]) - min(source.last_timing_info["notes"]["fitted_mjds"]) < 180:
+                continue
     
             # p-pdot
             self.plots["ppdot"][this_tag]["x"].append(utils.f02p0(source.last_timing_info["fitted_params"]["F0"]))
@@ -157,7 +185,7 @@ class dir_loader():
     def get_tags(self):
         self.tags = []
 
-        for source in self.sources:
+        for source in self.sources.values():
             this_tag = source.config["metadata"]["tag"]
             if this_tag not in self.tags:
                 self.tags.append(this_tag)
@@ -169,11 +197,18 @@ class dir_loader():
         if not self.running:
             return
         
+        # Stop update checker thread
+        if self.update_checker_thread is not None:
+            print("Stopping update checker thread...")
+            self.update_checker_thread.stop()
+            self.update_checker_thread.join(3)
+            self.update_checker_thread = None
+        
         # Set running to False to stop any ongoing processes
         self.running = False
 
         # Cleanup sources
-        for source in self.sources:
+        for source in self.sources.values():
             source.cleanup()
 
         # # Stop update checker
@@ -181,38 +216,15 @@ class dir_loader():
         #     print("Stopping update checker...")
         #     self.update_checker_thread.join(3)
 
-    # def update_checker(self):
-    #     count = 0
-    #     checking_freq = 1
-    #     while True:
-    #         threading.Event().wait(1)
-    #         count += 1
-    #
-    #         if time.time() - self.app.last_request < 30:
-    #             checking_freq = 5
-    #         else:
-    #             checking_freq = 30
-    #
-    #         if self.running == False:
-    #             break
-    #
-    #         if count >= checking_freq:
-    #             count = 0
-    #             continue
-    #
-    #         if time.time() - self.app.last_request < 300:
-    #             print("Checking for updates...")
-    #             for source in self.sources:
-    #                 source.update_checker()
-    #             self.get_heatmap()
-
     def load_sources(self):
         """
         Load sources from the psr_dir directory.
         """
 
-        self.sources = []
+        # self.sources = {}
 
+        all = []
+        loaded = []
         for source_dir in glob.glob(self.psr_dir + "/*"):
             db = source_dir + "/champss_timing.sqlite3.db"
             pdf = source_dir + "/champss_diagnostic.pdf"
@@ -223,22 +235,58 @@ class dir_loader():
 
             # Check if db and pdf exists
             if not os.path.exists(db) or not os.path.exists(pdf):
-                print(f"Skipping {source_dir} due to missing files")
                 continue
 
-            # Add sources to dictionary
-            print(f"Adding {source_dir} to sources")
-            self.sources.append(src_loader(source_dir, query_simbad=self.query_simbad))
+            # Get psr_id
+            psr_id = os.path.basename(source_dir)
+            all.append(psr_id)
 
-        # Sort sources by psr_id
-        self.sources.sort(key = lambda x: x.psr_id)
+            # Check if source already exists
+            if psr_id in self.sources:
+                if self.sources[psr_id].db_md5 == self.sources[psr_id].get_db_md5():
+                    continue
+                else:
+                    self.sources[psr_id].cleanup()
+                    del self.sources[psr_id]
+                    print(f"Reloading source {psr_id} due to db change")
+
+            # Add sources to dictionary
+            print(f"Adding/updating {source_dir} to sources")
+            this_source = src_loader(source_dir, query_simbad=self.query_simbad)
+
+            # Initialize the newly added source
+            try:
+                this_source.initialize()
+            except Exception as e:
+                print(f"Error initializing source {psr_id}: {e}")
+                this_source.cleanup()
+                continue # Skip adding this source if initialization fails
+            
+            # Add to sources
+            self.sources[psr_id] = this_source
+            loaded.append(psr_id)
+
+        # Check if any sources were removed
+        for psr_id in list(self.sources.keys()):
+            if psr_id not in all:
+                print(f"Removing source {psr_id} as it no longer exists in the directory")
+                self.sources[psr_id].cleanup()
+                del self.sources[psr_id]
+                
+        # Get number of new sources loaded
+        if len(loaded) > 0:
+            print(f"{len(loaded)} new sources (re)loaded")
+            # Sort sources by psr_id
+            self.sources = dict(sorted(self.sources.items(), key=lambda item: item[0]))
+
+        return len(loaded)
 
     def get_sources(self):
         """
         Get the list of sources.
         """
 
-        return self.sources
+        return list(self.sources.values())
     
     def get_last_updated(self, format=True):
         """
@@ -279,9 +327,8 @@ class dir_loader():
 
     # Handle with get item
     def __getitem__(self, key):
-        for source in self.sources:
-            if source.psr_id == key:
-                return source
+        if key in self.sources:
+            return self.sources[key]
 
         raise KeyError(f"Source {key} not found")
 

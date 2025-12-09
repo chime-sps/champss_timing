@@ -1,4 +1,4 @@
-from flask import Flask, url_for
+from flask import Flask, url_for, abort
 from flask import Response
 from flask import render_template
 from flask import request
@@ -154,6 +154,9 @@ def diagnostic(source_id):
     if 'preview' in request.args:
         show_sidebar = False
 
+    if source_id not in app.sources:
+        abort(404)
+
     return render_template(
         'diagnostic.html',
         app=app,
@@ -169,6 +172,9 @@ def diagnostic(source_id):
 
 @app.route('/diagnostic/<source_id>/pulse_profiles')
 def pulse_profiles(source_id):
+    if source_id not in app.sources:
+        abort(404)
+
     return render_template(
         'pulse_profiles.html',
         app=app,
@@ -182,20 +188,32 @@ def pulse_profiles(source_id):
 
 @app.route('/diagnostic/<source_id>/pulse_profiles/<filename>')
 def pulse_profiles_get_data(source_id, filename):
+    if source_id not in app.sources:
+        abort(404)
+
     return app.sources[source_id].get_profile_data(filename)
 
 @app.route('/diagnostic/<source_id>/pdf')
 def diagnostic_pdf(source_id):
+    if source_id not in app.sources:
+        abort(404)
+
     res = Response(open(app.sources[source_id].pdf, 'rb').read())
     res.headers['Content-Type'] = 'application/pdf'
     return res
 
 @app.route('/diagnostic/<source_id>/pdf/')
 def diagnostic_pdf_(source_id):
+    if source_id not in app.sources:
+        abort(404)
+
     return diagnostic_pdf(source_id)
 
 @app.route('/diagnostic/<source_id>/parfile')
 def parfile(source_id):
+    if source_id not in app.sources:
+        abort(404)
+
     res = Response(app.sources[source_id].get_parfile())
     res.headers['Content-Type'] = 'text/plain'
     res.headers['Content-Disposition'] = f'attachment; filename="champss_timing_{source_id}.par"'
@@ -207,6 +225,9 @@ def parfile_(source_id):
 
 @app.route('/diagnostic/<source_id>/timfile')
 def timfile(source_id):
+    if source_id not in app.sources:
+        abort(404)
+
     res = Response(app.sources[source_id].get_timfile())
     res.headers['Content-Type'] = 'text/plain'
     res.headers['Content-Disposition'] = f'attachment; filename="champss_timing_{source_id}.tim"'
@@ -218,6 +239,9 @@ def timfile_(source_id):
 
 @app.route('/diagnostic/<source_id>/dbfile')
 def sqlite3(source_id):
+    if source_id not in app.sources:
+        abort(404)
+
     res = Response(open(app.sources[source_id].source_dir + "/champss_timing.sqlite3.db", 'rb').read())
     res.headers['Content-Type'] = 'application/octet-stream'
     res.headers['Content-Disposition'] = f'attachment; filename="champss_timing_{source_id}.sqlite3.db"'
@@ -229,6 +253,9 @@ def sqlite3_(source_id):
 
 @app.route('/diagnostic/<source_id>/dealias/diagnostics')
 def dealias_diagnostics(source_id):
+    if source_id not in app.sources:
+        abort(404)
+
     res = Response(open(app.sources[source_id].source_dir + "/dealias/diagnostic.pdf", 'rb').read())
     res.headers['Content-Type'] = 'application/pdf'
     res.headers['Content-Disposition'] = f'attachment; filename="champss_timing_{source_id}_dealias_diagnostic.pdf"'
@@ -236,11 +263,16 @@ def dealias_diagnostics(source_id):
 
 @app.route('/diagnostic/<source_id>/dealias/diagnostics/')
 def dealias_diagnostics_(source_id):
+    if source_id not in app.sources:
+        abort(404)
+
     return dealias_diagnostics(source_id)
 
 @app.route('/pint')
 def pint():
     source_id = request.args.get('source_id', '')
+    if source_id not in app.sources:
+        abort(404)
     
     return render_template(
         'pint.html',
@@ -323,7 +355,7 @@ def run(psr_dir, port, host="127.0.0.1", root="/", authenticator="default", quer
 
     with dir_loader.dir_loader(psr_dir, app, query_simbad=query_simbad) as app.sources:
         # Get the list of pulsars
-        app.psr_ids = [s.psr_id for s in app.sources]
+        app.psr_ids = list(app.sources.sources.keys())
 
         # Start the slack run notes service
         if slack_token is not None:
