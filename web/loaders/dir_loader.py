@@ -66,7 +66,8 @@ class dir_loader():
         self.get_tags()
 
         # Set last_updated timestamp
-        self.last_updated = time.time()
+        if n_loaded > 0 or self.last_updated == 0:
+            self.last_updated = time.time()
 
         # Preload the on_diagnostic_request events
         if self.preload_thread is None:
@@ -300,8 +301,12 @@ class dir_loader():
         """
 
         if format:
-            if time.time() - self.last_updated < 3600:
+            if time.time() - self.last_updated < 600:
                 return "Updated just now"
+            if time.time() - self.last_updated < 1800:
+                return "Updated minutes ago"
+            if time.time() - self.last_updated < 3600:
+                return "Updated an hour ago"
             if time.time() - self.last_updated < 3 * 3600:
                 return "Updated hours ago"
             if time.time() - self.last_updated < 24 * 3600:
