@@ -521,11 +521,9 @@ class pint_handler():
 
                 # Check if clustering fitter passed
                 if cf_passed:
-                    # If regular fitter was failed, the accept clustering fitter
-                    # if not self.f_status:
-                    #     self.m = cf_m # update model
-                    # else: # else, check if clustering fitter is better (smaller chi2r)
-                    if cf_f.get_params_dict("all", "quantity")["CHI2R"].value < self.f.get_params_dict("all", "quantity")["CHI2R"].value:
+                    ls_chi2r = self.f.get_params_dict("all", "quantity")["CHI2R"].value
+                    cf_chi2r = cf_f.get_params_dict("all", "quantity")["CHI2R"].value
+                    if cf_chi2r < ls_chi2r and cf_chi2r < 10:
                         # self.m = cf_m
                         self.f = cf_f
                         self.f_status = True
