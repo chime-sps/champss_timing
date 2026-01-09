@@ -13,10 +13,11 @@ pulsars = [v.split("/")[-1] for v in glob.glob(psrbasedir + "/*")]
 # Define arguments
 parser = argparse.ArgumentParser(description="Truncate timing info for CHAMPSS Timing Pipeline. ")
 parser.add_argument("--psr", type=str, help="Pulsar name.")
-parser.add_argument("--info-later-than", type=int, help="Remove timing info later than this MJD.")
+parser.add_argument("-l", "--info-later-than", type=int, help="Remove timing info later than this MJD.")
 parser.add_argument("--delete-archive-cache", action="store_true", help="Delete archive cache.")
 parser.add_argument("--delete-database", action="store_true", help="Delete database.")
 parser.add_argument("--truncate-config", action="store_true", help="Truncate config.")
+parser.add_argument("--confirm", action="store_true", help="Confirm without asking.")
 args = parser.parse_args()
 
 # Get pulsars
@@ -29,7 +30,7 @@ if args.psr is None:
 else:
     pulsars = [args.psr]
 
-# Show information and ask for confirmation
+# Show information
 print(f"Truncating timing info for pulsars: {pulsars}")
 if args.info_later_than:
     print(f"Remove timing info later than MJD: {args.info_later_than}")
@@ -38,9 +39,16 @@ else:
 print(f"Delete archive cache: {args.delete_archive_cache}")
 print(f"Delete database: {args.delete_database}")
 print(f"Truncate config: {args.truncate_config}")
-response = input("Continue? (y/n): ")
-if response != "y":
-    exit()
+
+# Ask for confirmation
+if not args.confirm:
+    response = input("Continue? (y/n): ")
+    if response != "y":
+        exit()
+else:
+    for i in range(2):
+        print(f"Continuing in {2 - i} seconds...", end="\r")
+        time.sleep(1)
 
 # Loop through each pulsar and perform the operations
 for pulsar in pulsars:

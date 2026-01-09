@@ -59,10 +59,19 @@ class pint_handler():
         self.m, self.t = get_model_and_toas(self.model, self.toas)
 
         # Check if required params are present
-        if "F0" not in self.m.params or "F1" not in self.m.params:
-            raise Exception("Spindown parameters F0 and F1 are required. ")
+        if "F0" not in self.m.params:
+            raise Exception("Spindown parameter F0 is required. ")
         if "RAJ" not in self.m.params or "DECJ" not in self.m.params:
             raise Exception("Position parameters RAJ and DECJ are required. ")
+
+        # Add F1 if not present
+        if "F1" not in self.m.params:
+            import io
+            from pint.models import get_model
+            self.logger.debug("Spindown parameter F1 not present. Adding F1 = 0 to the model. ")
+            parfile_text = self.m.as_parfile()
+            parfile_text += "\nF1 0 1\n"
+            self.m= get_model(io.StringIO(parfile_text))
 
         # Run prefit
         self.prefit_resids = Residuals(self.t, self.m)
@@ -335,9 +344,30 @@ class pint_handler():
             self.logger.warning("F-test failed. ")
             return False, 1.0
 
-        # get residuals and rsses
-        rss_current = get_rss(self_current.f.resids.time_resids)
-        rss_additional = get_rss(self_additional.f.resids.time_resids)
+        # Sanity check for postfit parameters
+        raj_current = self_current.f.model.RAJ.quantity.to(u.deg).value
+        raj_additional = self_additional.f.model.RAJ.quantity.to(u.deg).value
+        raj_diff = np.min([
+            (raj_current - raj_additional) % 360,
+            (raj_additional - raj_current) % 360
+        ])
+        decj_current = self_current.f.model.DECJ.quantity.to(u.deg).value
+        decj_additional = self_additional.f.model.DECJ.quantity.to(u.deg).value
+        decj_diff = np.min([
+            (decj_current - decj_additional),
+            (decj_additional - decj_current)
+        ])
+        if raj_diff > beamsize * 2 or decj_diff > beamsize * 1.5:
+            self.logger.warning("F-test failed. Postfit RAJ change is much larger than beam size (i.e., not physical). ")
+            return False, 1.0
+
+        # Get residuals
+        current_resids = self_current.f.resids.time_resids
+        additional_resids = self_additional.f.resids.time_resids
+
+        # get rsses
+        rss_current = get_rss(current_resids)
+        rss_additional = get_rss(additional_resids)
 
         # get number of unfreezed params
         n_current = len(self_current.m.free_params)
@@ -770,7 +800,7 @@ class pint_handler():
         plt.savefig(savefig, bbox_inches="tight", dpi=300)
         self.logger.debug(f"Realtime diagnostic saved to {savefig}")
     
-    def save(self, fmt="tempo2"):
+    def save(self, fmt="tempo2", write_tim=False):
         if not self.initialized:
             self.initialize()
         

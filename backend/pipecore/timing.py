@@ -190,10 +190,8 @@ class timing():
             for p in fit_params:
                 self.pint.unfreeze(p)
 
-        if self.pint.check_toa_gaps(latest_n_days=3, threshold=15):
-            potential_params = [] # Not adding parameter after a huge gap
-
-        if self.pint.check_toa_gaps(latest_n_days=5, threshold=30):
+        if self.pint.check_toa_gaps(latest_n_days=3, threshold=15) or \
+           self.pint.check_toa_gaps(latest_n_days=5, threshold=30):
             potential_params = [] # Not adding parameter after a huge gap
         
         if len(potential_params) > 0:
@@ -202,9 +200,14 @@ class timing():
             for i in range(len(potential_params)): # Loop through all combinations of parameters
                 for param_comb in itertools.combinations(potential_params, i + 1):
                     # Skip if F-test is not possible
+                    if len(param_comb) > len(self.pint.t): # Need at least more number of TOAs than number of parameters to fit
+                        self.logger.debug(f"Testing parameter {param_comb}... Skipped. (not enough TOAs; n_toas={len(self.pint.t)}, n_params={len(param_comb)}) ")
+                        continue
                     if "F2" in param_comb and "F1" not in fit_params:
+                        self.testing.debug(f"Testing parameter {param_comb}... Skipped. (F1 must be fitted before F2) ")
                         continue
                     if "F3" in param_comb and ("F2" not in fit_params or "F1" not in fit_params):
+                        self.testing.debug(f"Testing parameter {param_comb}... Skipped. (F1 and F2 must be fitted before F3) ")
                         continue
 
                     # Run trial fit and get p-value
@@ -252,7 +255,7 @@ class timing():
         self.pint.plot()
 
         self.logger.debug("Saving model... ")
-        self.pint.save()
+        self.pint.save(write_tim=True)
 
         self.logger.debug("Done. ")
 
