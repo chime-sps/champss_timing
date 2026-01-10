@@ -295,7 +295,7 @@ class timing():
     def __exit__(self, exc_type, exc_value, traceback):
         if exc_type is not None:
             self.logger.error(f"Error while running timing. Workspace will NOT be removed at {self.workspace}")
-            raise exc_type(exc_value).with_traceback(traceback)
+            raise exc_value
         else:
             if self.workspace_cleanup:
                 self.cleanup()

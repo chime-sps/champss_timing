@@ -20,12 +20,12 @@ cli_config = CLIConfig(load_error=False)
 
 # Parse arg
 parser = argparse.ArgumentParser(description="CHAMPSS Timing Main Pipeline.")
-parser.add_argument("--ncpus", type=int, help="Number of CPUs to use.")
+parser.add_argument("--ncpus", type=int, default=1, help="Number of CPUs to use.")
 parser.add_argument("--psr", type=str, help="Pulsar name (run timing for all pulsars if not specified).")
 parser.add_argument("--slack-token", type=str, help="Slack token.")
 parser.add_argument("--no-beep", action="store_true", help="Disable beep sound at the end of the script.")
-parser.add_argument("--no-cleanup", action="store_true", help="Disable cleaning up temporary files after pipeline run.")
-parser.add_argument("--skip-checkers", action="store_true", help="Skip running checkers after timing.")
+parser.add_argument("--no-cleanup", action="store_true", default=False, help="Disable cleaning up temporary files after pipeline run.")
+parser.add_argument("--skip-checkers", action="store_true", default=False, help="Skip running checkers after timing.")
 args = parser.parse_args()
 
 # Get run_checkers
