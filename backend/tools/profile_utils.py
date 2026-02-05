@@ -673,6 +673,12 @@ class ProfilePeaks:
         threshold = np.mean(smoothed_template) + median_abs_deviation(smoothed_template) * 3  # Set threshold as mean + 3*MAD
         peaks, props = find_peaks(smoothed_template, height=threshold)
 
+        # If there's no peaks found, find the maximum point as the peak
+        if len(peaks) == 0:
+            peak = np.argmax(smoothed_template)
+            peaks = np.array([peak])
+            props = {'peak_heights': np.array([smoothed_template[peak]])}
+
         # If more than max_peaks, keep only the highest peaks
         if len(peaks) > max_peaks:
             # Get the indices of the highest peaks
