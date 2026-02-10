@@ -131,7 +131,11 @@ class checker:
         checkers = {}
         for _, name, _ in pkgutil.iter_modules([os.path.dirname(__file__) + "/../monitoring"]):
             try:
-                checkers[name] = importlib.import_module(f"..monitoring.{name}", package=__package__).Main
+                # Load the checker module
+                this_checker = importlib.import_module(f"..monitoring.{name}", package=__package__)
+                importlib.reload(this_checker) # Ensure the latest version is loaded
+                checkers[name] = this_checker.Main
+
             except ImportError as e:
                 self.logger.warning(f"Failed to load [{name}] checker: {e}")
                 self.noti_hdl.send_urgent_message({"level": 2, "message": f"Checker [{name}] failed to load. Please check the installation."})
@@ -191,10 +195,10 @@ class checker:
                         'level': 2, 
                         'id': 'checker_error', 
                         'message': 'Checker failed to run. Please check the processing log to debug the issue.',
-                        'attachments': []
+                        'attachments': [], 
+                        'attachments_report_only': []
                     }
                 }
-                continue
                 
             # Make sure the checker results are valid
             for key in results[checker_name]:

@@ -468,30 +468,40 @@ class champss_timing:
         bad_toa_mjds_list = [float(this_mjd) for this_mjd in bad_residual_mjds]
 
         # Prepare notes
-        notes = {"remark": []}
+        remark = []
         if not pint.f_status:
-            notes["remark"].append("FITTING_FAILED")
+            remark.append("FITTING_FAILED")
 
         # Get archive ids
         archive_ids = []
         for ar_info in ar_list:
             archive_ids.append(utils.get_archive_id(ar_info["path"]))
+
+        # Get chi2 and reduced chi2
+        chi2 = fitted_params["CHI2"].value
+        chi2_reduced = fitted_params["CHI2R"].value
         
+        # Sanity check for chi2r
+        if np.isnan(chi2_reduced) or np.isinf(chi2_reduced):
+            chi2_reduced = 0.0
+            remark.append("CHI2R_UNRELIABLE")
+
         # Insert timing info
         self.db_hdl.insert_timing_info(
             files = archive_ids,
             obs_mjds = mjds,
             unfreeze_params = unfreezed_params,
             residuals = {"val": residuals_list, "err": residuals_err_list},
-            chi2 = fitted_params["CHI2"].value,
-            chi2_reduced = fitted_params["CHI2R"].value,
+            chi2 = chi2,
+            chi2_reduced = chi2_reduced,
             fitted_params = fitted_params_dict,
             notes = {
                 "fitted_parfile": pint_f.model.as_parfile(), 
                 "fitted_summary": pint_f.get_summary(), 
                 "fitted_mjds": residual_mjds_list, 
                 "bad_toa_mjds": bad_toa_mjds_list, 
-                "bad_toa_residuals": {"val": bad_residuals_list, "err": bad_residuals_err_list}
+                "bad_toa_residuals": {"val": bad_residuals_list, "err": bad_residuals_err_list}, 
+                "remark": remark
             }
         )
     

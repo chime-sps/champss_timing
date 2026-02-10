@@ -31,6 +31,12 @@ class BasicDistributionChecker:
         if self.metric_rcvrs is None:
             self.metric_rcvrs = [None] * len(self.metric_vals)
 
+        # # Make sure no None values in metric values (chi2r can be None from early version of the pipeline)
+        # valid_indices = [i for i, val in enumerate(self.metric_vals) if val is not None]
+        # self.metric_mjds = [self.metric_mjds[i] for i in valid_indices]
+        # self.metric_vals = [self.metric_vals[i] for i in valid_indices]
+        # self.metric_rcvrs = [self.metric_rcvrs[i] for i in valid_indices]
+
         # Sort the metric values by MJD
         sorted_indices = np.argsort(self.metric_mjds)
         self.metric_mjds = np.array(self.metric_mjds)[sorted_indices]
@@ -202,6 +208,11 @@ class Main:
             self.metric_snrs = self.sort_by_mjd(self.metric_snrs)
             ## metric: chi2 reduced
             for timing in self.timing_info:
+                # Check if chi2_reduced is reliable. 
+                if "CHI2R_UNRELIABLE" in timing["notes"]["remark"]:
+                    print("!!!! WARNING: Skipping chi2r value for MJD {} due to CHI2R_UNRELIABLE remark in notes. !!!!".format(timing["obs_mjds"]))
+                    continue
+
                 # metric: chi2_reduced
                 self.metric_chi2rs["vals"].append(timing["chi2_reduced"])
                 self.metric_chi2rs["mjds"].append(np.max(timing["obs_mjds"]))
