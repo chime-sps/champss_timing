@@ -161,8 +161,8 @@ class dir_loader():
             self.plots["skymap"][this_tag]["links"].append(f"/diagnostics/{source.psr_id}")
             self.plots["skymap"][this_tag]["psr_id"].append(source.psr_id)
 
-            # Skip if bad fit for the rest of the plots
-            if source.last_timing_info["fitted_params"]["CHI2R"] > 10 or max(source.last_timing_info["notes"]["fitted_mjds"]) - min(source.last_timing_info["notes"]["fitted_mjds"]) < 180:
+            # Skip unreliable timing solutions
+            if not source.is_solution_reliable():
                 continue
     
             # p-pdot

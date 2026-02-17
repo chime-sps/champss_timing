@@ -117,6 +117,39 @@
             });
         }
     </script>
+
+    <script>
+        function tag_filter(btn_id, active_class, inactive_class="text-bg-light") {
+            // If button is already active, then deactivate
+            if ($("#" + btn_id).hasClass(active_class)) {
+                $("#" + btn_id).removeClass(active_class).addClass(inactive_class);
+            } else {
+                $("#" + btn_id).removeClass(inactive_class).addClass(active_class);
+            }
+
+            // Get currently activated tags
+            var activated_tags = [];
+            $(".tag-filter-btn").each(function() {
+                if (!$(this).hasClass(inactive_class)) {
+                    activated_tags.push($(this).data("tag-index"));
+                }
+            });
+
+            if (activated_tags.length > 0) {
+                // Hide all panels first
+                $(".source-info").hide();
+
+                // Show panels that match any of the activated tags
+                activated_tags.forEach(function(tag) {
+                    console.log("Showing tag: " + tag);
+                    $(".index-tag-" + tag).show();
+                });
+            } else {
+                // If no tags are activated, show all panels
+                $(".source-info").show();
+            }
+        }
+    </script>
 </head>
 
 <body>

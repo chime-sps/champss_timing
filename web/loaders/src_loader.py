@@ -2,6 +2,7 @@ import os
 import traceback
 import requests
 import json
+import time
 import base64
 import numpy as np
 import hashlib
@@ -31,8 +32,10 @@ class src_loader():
         self.initialized = False
 
         self.last_timing_info = {}
+        self.last_updated = None
         self.stats = {}
         self.parameter_info = {}
+        self.tags = []
         self.preview_residual_data = []
         self.stacked_profile = []
         self.source_coincidences = None
@@ -59,6 +62,9 @@ class src_loader():
         # Get last_timing_info
         self.last_timing_info = self.db.get_last_timing_info()
 
+        # Get last updated
+        self.last_updated = self.get_last_updated()
+
         # Get statistics
         self.stats = self.get_statistics(from_db=True)
 
@@ -66,20 +72,7 @@ class src_loader():
         self.parameter_info = self.get_parameter_info(ra_in_deg=True)
 
         # Get preview residual data
-        try:
-            self.preview_residual_data = self.get_preview_residual_data()
-        except Exception as e:
-            print(f"Error while loading preview residual data: {e}")
-            print(traceback.format_exc())
-            self.preview_residual_data = []
-
-        # # Get source coincidences
-        # self.source_coincidences = None
-        # self.source_coincidences_map_default = "SIMBAD Query"
-
-        # # Get checker warnings
-        # self.checker_warnings = self.get_checker_warnings()
-        # self.checker_warnings_length = len(self.checker_warnings)
+        self.preview_residual_data = self.get_preview_residual_data()
 
         # Set initialized flag
         self.initialized = True
@@ -105,6 +98,9 @@ class src_loader():
             if self.checker_warnings is None:
                 self.checker_warnings = self.get_checker_warnings()
                 self.checker_warnings_length = len(self.checker_warnings)
+
+            # Get tags
+            self.tags = self.get_all_tags()
         except Exception as e:
             print(f"Error while loading diagnostic data: {e}")
             print(traceback.format_exc())
@@ -132,14 +128,17 @@ class src_loader():
             resids = timing_info["residuals"]
 
         if len(mjds) == 0:
-            return {"mjd": [], "val": [], "err": [], "updated": utils.mjd_to_datetime(np.max(timing_info["obs_mjds"]), utc=False).strftime("%Y-%m-%d")}
+            return {"mjd": [], "val": [], "err": [], "updated": self.last_updated.strftime("%Y-%m-%d")}
 
         period = 1 / timing_info["fitted_params"]["F0"]
         resids_val =[float(t) for t in list(np.array(resids["val"]) / period * 1e-6)]
         resids_err = [float(t) for t in list(np.array(resids["err"]) / period * 1e-6)]
 
-        return {"mjd": mjds, "val": resids_val, "err": resids_err, "updated": utils.mjd_to_datetime(np.max(mjds), utc=False).strftime("%Y-%m-%d")}
+        return {"mjd": mjds, "val": resids_val, "err": resids_err, "updated": self.last_updated.strftime("%Y-%m-%d")}
     
+    def get_last_updated(self):
+        return utils.mjd_to_datetime(np.max(self.last_timing_info["obs_mjds"]), utc=True)
+
     def get_snrs(self):
         # Get archive id indexed snrs
         snrs = self.db.get_archive_snrs()
@@ -233,6 +232,26 @@ class src_loader():
 
         return statistics
     
+    def get_all_tags(self):
+        tags = []
+
+        # Source tag
+        tags.append(self.config["metadata"]["tag"])
+
+        # Week tag
+        if (time.time() - self.last_updated.timestamp()) < 7 * 24 * 3600:
+            tags.append("__week")
+
+        # Today tag
+        if (time.time() - self.last_updated.timestamp()) < 24 * 3600:
+            tags.append("__today")
+
+        # Checker warning tags
+        if self.checker_warnings_length > 0:
+            tags.append("__checker_warning")
+
+        return tags
+    
     def get_preview_residual_data(self, min_height=3):
         timing_info = self.last_timing_info
 
@@ -286,11 +305,6 @@ class src_loader():
     
     def get_summary(self):
         return self.last_timing_info["notes"]["fitted_summary"]
-        
-    def get_last_updated(self):
-        # return in YYYY-MM-DD
-        # return datetime.datetime.utcfromtimestamp(self.last_timing_info["timestamp"]).strftime('%Y-%m-%d')
-        return utils.mjd_to_datetime(np.max(self.last_timing_info["notes"]["fitted_mjds"]), utc=False).strftime("%Y-%m-%d")
 
     def get_diagnostic_pdf_base64(self):
         with open(self.pdf, "rb") as f:
@@ -614,3 +628,13 @@ class src_loader():
             np.arange(len(array)),
             array
         )
+        
+
+    def is_solution_reliable(self):
+        if max(self.last_timing_info["notes"]["fitted_mjds"]) - min(self.last_timing_info["notes"]["fitted_mjds"]) < 270:
+            return False
+        
+        if self.last_timing_info["fitted_params"]["F1"] >= 0:
+            return False
+    
+        return True

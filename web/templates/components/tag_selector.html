@@ -1,0 +1,8 @@
+<a class="badge rounded-pill text-bg-light tag-filter-btn" id="tag_btn_warning" data-tag-index="__checker_warning" onclick="tag_filter(this.id, 'text-bg-warning')" style="cursor: pointer;">#warning</a>
+<span style="color: #888; ">·</span>
+<a class="badge rounded-pill text-bg-light tag-filter-btn" id="tag_btn_today" data-tag-index="__today" onclick="tag_filter(this.id, 'text-bg-primary')" style="cursor: pointer;">#today</a>
+<a class="badge rounded-pill text-bg-light tag-filter-btn" id="tag_btn_week" data-tag-index="__week" onclick="tag_filter(this.id, 'text-bg-success')" style="cursor: pointer;">#week</a>
+<span style="color: #888; ">·</span>
+{% for this_tag in sources.tags %}
+    <a class="badge rounded-pill text-bg-light tag-filter-btn" id="tag_btn_{{ this_tag }}" data-tag-index="{{ this_tag }}" onclick="tag_filter(this.id, 'text-bg-dark')" style="cursor: pointer;">#{{ this_tag }}</a>
+{% endfor %}

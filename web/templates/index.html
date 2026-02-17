@@ -5,30 +5,7 @@
 {% block content %}
     <div style="position: relative; width: 100%; ">
         <div style="float: right;">
-            {% if warning_filter == 1 %}
-                <a href="{{ url_for("index") }}?dates={{ date_filter }}&tag={{ tag_filter }}&warning=0" class="badge rounded-pill text-bg-warning">#warning</a>
-            {% else %}
-                <a href="{{ url_for("index") }}?dates={{ date_filter }}&tag={{ tag_filter }}&warning=1" class="badge rounded-pill text-bg-light">#warning</a>
-            {% endif %}
-            <span style="color: #888; ">·</span>
-            {% if date_filter == "today" %}
-                <a href="{{ url_for("index") }}?dates=none&tag={{ tag_filter }}&warning={{  warning_filter }}" class="badge rounded-pill text-bg-primary">#today</a>
-            {% else %}
-                <a href="{{ url_for("index") }}?dates=today&tag={{ tag_filter }}&warning={{  warning_filter }}" class="badge rounded-pill text-bg-light">#today</a>
-            {% endif %}
-            {% if date_filter == "week" %}
-                <a href="{{ url_for("index") }}?dates=none&tag={{ tag_filter }}&warning={{  warning_filter }}" class="badge rounded-pill text-bg-success">#week</a>
-            {% else %}
-                <a href="{{ url_for("index") }}?dates=week&tag={{ tag_filter }}&warning={{  warning_filter }}" class="badge rounded-pill text-bg-light">#week</a>
-            {% endif %}
-            <span style="color: #888; ">·</span>
-            {% for this_tag in sources.tags %}
-                {% if tag_filter == this_tag %}
-                    <a href="{{ url_for("index") }}?dates={{ date_filter }}&tag=all&warning={{  warning_filter }}" class="badge rounded-pill text-bg-dark">#{{ this_tag }}</a>
-                {% else %}
-                    <a href="{{ url_for("index") }}?dates={{ date_filter }}&tag={{ this_tag }}&warning={{  warning_filter }}" class="badge rounded-pill text-bg-light">#{{ this_tag }}</a>
-                {% endif %}
-            {% endfor %}
+            {% include 'components/tag_selector.html' %}
         </div>
         <h3>Dashboard</h3>
     </div>
@@ -142,73 +119,46 @@
     </script>
     <div class="row">
         {% for this_source in sources.get_sources() %}
-            {% if tag_filter == "all" or tag_filter == this_source.config["metadata"]["tag"] %}
-                <div class="col-lg-6" id="div_{{this_source.psr_id_esc}}" style="cursor:pointer;">
-                    <div class="card" id="card_{{this_source.psr_id_esc}}" style="margin-bottom: 15px; " xmlns="http://www.w3.org/1999/html">
-                        <div class="card-body">
-                            <small style="float: right; ">Updated on {{this_source.get_last_updated()}}</small>
-                            <h4 style="margin-bottom: 0;">{{this_source.psr_id}} 
-                                <span class="badge text-bg-dark rounded-pill index-tag">#{{this_source.config["metadata"]["tag"]}}</span>
-                                <span class="badge text-bg-success rounded-pill index-tag" style="display: none; " id="tag_week_{{this_source.psr_id_esc}}">#week</span>
-                                <span class="badge text-bg-primary rounded-pill index-tag" style="display: none; " id="tag_today_{{this_source.psr_id_esc}}">#today</span>
-                                <span class="badge text-bg-warning rounded-pill index-tag" style="display: none; " id="tag_warnings_{{this_source.psr_id_esc}}">#warning</span>
-                            </h4>
+            <div class="col-lg-6 source-info
+            {% for tag in this_source.tags %} index-tag-{{ tag }} {% endfor %}
+            " id="div_{{this_source.psr_id_esc}}" style="cursor:pointer;">
+                <div class="card" id="card_{{this_source.psr_id_esc}}" style="margin-bottom: 15px; " xmlns="http://www.w3.org/1999/html">
+                    <div class="card-body">
+                        <small style="float: right; ">Updated on {{this_source.get_last_updated()}}</small>
+                        <h4 style="margin-bottom: 0;">{{this_source.psr_id}} 
+                            {% for tag in this_source.tags %}
+                                {% if tag == "__week" %}
+                                <span class="badge text-bg-success rounded-pill index-tag" id="tag_week_{{this_source.psr_id_esc}}">#week</span>
+                                {% elif tag == "__today" %}
+                                <span class="badge text-bg-primary rounded-pill index-tag" id="tag_today_{{this_source.psr_id_esc}}">#today</span>
+                                {% elif tag == "__checker_warning" %}
+                                <span class="badge text-bg-warning rounded-pill index-tag" id="tag_warnings_{{this_source.psr_id_esc}}">#warning</span>
+                                {% else %}
+                                <span class="badge text-bg-dark rounded-pill index-tag">#{{ tag }}</span>
+                                {% endif %}
+                            {% endfor %}
+                        </h4>
 
-                            <div class="collapse" id="diagnostic_pdf_{{this_source.psr_id_esc}}">
-                                <br>
-                                <center></center><small>Double-click to view full diagnostic information.</small></center>
-                                <object id="diagnostic_pdf" data="{{ url_for("diagnostic", source_id=this_source.psr_id) }}/pdf" type="application/pdf" style="width: 100%; aspect-ratio: 1.77; border: 0; border-radius: 5px; "></object>
-                            </div>
+                        <!-- <div class="collapse" id="diagnostic_pdf_{{this_source.psr_id_esc}}">
+                            <br>
+                            <center></center><small>Double-click to view full diagnostic information.</small></center>
+                            <object id="diagnostic_pdf" data="{{ url_for("diagnostic", source_id=this_source.psr_id) }}/pdf" type="application/pdf" style="width: 100%; aspect-ratio: 1.77; border: 0; border-radius: 5px; "></object>
+                        </div> -->
 
-                            <div id="resids_{{this_source.psr_id_esc}}" style="width:100%;height:5em; margin: 10px 0; position: relative; ">
-                                {% for this_toa in this_source.preview_residual_data %}
-                                    <div style="background-color: black; height: {{ this_toa[0] - this_toa[1] }}%; width: 2.5px; position: absolute; left: {{ this_toa[2] }}%; bottom: {{ this_toa[1] }}%; min-height: 5%; border-radius: 7px; opacity: 0.75;"></div>
-                                {% endfor %}
-                            </div>
-
-                            <script>
-                                $('#div_{{this_source.psr_id_esc}}').on('click', function() {
-                                    window.open('{{ url_for("diagnostic", source_id=this_source.psr_id) }}', '_blank');
-                                });
-                            </script>
-
-                            <script>            
-                                if(dates.length > 7) {
-                                    if(resids.updated > dates[dates.length-7]) {
-                                        $('#card_{{this_source.psr_id_esc}}').addClass('border-success');
-                                        $('#tag_week_{{this_source.psr_id_esc}}').show();
-                                    } else {
-                                        {% if date_filter == "week" %}
-                                            $('#div_{{this_source.psr_id_esc}}').hide();
-                                        {% endif %}
-                                    }
-                                }
-                                
-                                console.log(dates[dates.length-1])
-                                console.log(resids.updated)
-
-                                if(resids.updated >= dates[dates.length-1]) {
-                                    $('#card_{{this_source.psr_id_esc}}').removeClass('border-success');
-                                    $('#card_{{this_source.psr_id_esc}}').addClass('border-primary');
-                                    $('#tag_today_{{this_source.psr_id_esc}}').show();
-                                } else {
-                                    {% if date_filter == "today" %}
-                                        $('#div_{{this_source.psr_id_esc}}').hide();
-                                    {% endif %}
-                                }
-
-                                if({{ this_source.checker_warnings_length }} > 0) {
-                                    $('#tag_warnings_{{this_source.psr_id_esc}}').show();
-                                } else {
-                                    {% if warning_filter == 1 %}
-                                        $('#div_{{this_source.psr_id_esc}}').hide();
-                                    {% endif %}
-                                }
-                            </script>
+                        <div id="resids_{{this_source.psr_id_esc}}" style="height:5em; margin: 7px; position: relative; ">
+                            {% for this_toa in this_source.preview_residual_data %}
+                                <div style="background-color: black; height: {{ this_toa[0] - this_toa[1] }}%; width: 2.5px; position: absolute; left: {{ this_toa[2] }}%; bottom: {{ this_toa[1] }}%; min-height: 5%; border-radius: 7px; opacity: 0.75;"></div>
+                            {% endfor %}
                         </div>
+
+                        <script>
+                            $('#div_{{this_source.psr_id_esc}}').on('click', function() {
+                                window.open('{{ url_for("diagnostic", source_id=this_source.psr_id) }}', '_blank');
+                            });
+                        </script>
                     </div>
                 </div>
-            {% endif %}
+            </div>
         {% endfor %}
         <div id="test"></div>
     </div>

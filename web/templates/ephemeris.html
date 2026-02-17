@@ -7,13 +7,7 @@
     <div class="col-md-12">
         <div style="float: right;">
             <div id="header_tag_filter">
-                {% for this_tag in sources.tags %}
-                    {% if tag_filter == this_tag %}
-                        <a href="{{ url_for("ephemeris") }}?tag=all" class="badge rounded-pill text-bg-dark">#{{ this_tag }}</a>
-                    {% else %}
-                        <a href="{{ url_for("ephemeris") }}?tag={{ this_tag }}" class="badge rounded-pill text-bg-light">#{{ this_tag }}</a>
-                    {% endif %}
-                {% endfor %}
+                {% include 'components/tag_selector.html' %}
             </div>
             <div id="header_action_btn" style="display: none; ">
                 <div class="btn-group" role="group">
@@ -66,26 +60,39 @@
                     </thead>
                     <tbody>
                         {% for this_source in sources.get_sources() %}
-                            {% if tag_filter == "all" or tag_filter == this_source.config["metadata"]["tag"] %}
-                                {% if this_source.last_timing_info["fitted_params"]["CHI2R"] > 10 or max(this_source.last_timing_info["notes"]["fitted_mjds"]) - min(this_source.last_timing_info["notes"]["fitted_mjds"]) < 180 %}
-                                    <tr style="opacity: 0.25; "
-                                    data-bs-toggle="tooltip" data-bs-placement="bottom"
-                                    data-bs-custom-class="custom-tooltip"
-                                    data-bs-title="Ephemeris may be unreliable">
-                                {% else %}
-                                    <tr>
-                                {% endif %}
-                                    <td><input type="checkbox" name="psr" value="{{ this_source.psr_id }}"></td>
-                                    <td><a href="{{ url_for("diagnostic", source_id=this_source.psr_id) }}" class="diagnostic_link" target="_blank">{{ this_source.psr_id }}</a> <span class="badge text-bg-dark rounded-pill index-tag">#{{this_source.config["metadata"]["tag"]}}</span></td>
-                                    <td>{{ deg2dms(this_source.last_timing_info["fitted_params"]["RAJ"]) }}</td>
-                                    <td>{{ deg2dms(this_source.last_timing_info["fitted_params"]["DECJ"]) }}</td>
-                                    <td>{{ f02p0(this_source.last_timing_info["fitted_params"]["F0"]) }}</td>
-                                    <td>{{ f12p1(this_source.last_timing_info["fitted_params"]["F0"], this_source.last_timing_info["fitted_params"]["F1"]) }}</td>
-                                    <td>{{ round(this_source.last_timing_info["fitted_params"]["DM"], 1) }}</td>
-                                    <td>{{ round(this_source.last_timing_info["fitted_params"]["CHI2R"], 1) }}</td>
-                                    <td>{{ round(min(this_source.last_timing_info["notes"]["fitted_mjds"])) }} → {{ round(max(this_source.last_timing_info["notes"]["fitted_mjds"])) }}</td>
-                                </tr>
+                            <tr
+                            class="source-info {% for tag in this_source.tags %} index-tag-{{ tag }} {% endfor %}"
+                            {% if not this_source.is_solution_reliable() %}
+                                style="opacity: 0.25; "
+                                data-bs-toggle="tooltip" data-bs-placement="bottom"
+                                data-bs-custom-class="custom-tooltip"
+                                data-bs-title="Ephemeris may be unreliable"
                             {% endif %}
+                            >
+                                <td><input type="checkbox" name="psr" value="{{ this_source.psr_id }}"></td>
+                                <td>
+                                    <a href="{{ url_for("diagnostic", source_id=this_source.psr_id) }}" class="diagnostic_link" target="_blank">{{ this_source.psr_id }}</a> 
+                                    <!-- <span class="badge text-bg-dark rounded-pill index-tag">#{{this_source.config["metadata"]["tag"]}}</span> -->
+                                    {% for tag in this_source.tags %}
+                                        {% if tag == "__week" %}
+                                        <span class="badge text-bg-success rounded-pill index-tag" id="tag_week_{{this_source.psr_id_esc}}">&nbsp; </span>
+                                        {% elif tag == "__today" %}
+                                        <span class="badge text-bg-primary rounded-pill index-tag" id="tag_today_{{this_source.psr_id_esc}}">&nbsp; </span>
+                                        {% elif tag == "__checker_warning" %}
+                                        <span class="badge text-bg-warning rounded-pill index-tag" id="tag_warnings_{{this_source.psr_id_esc}}">&nbsp; </span>
+                                        {% else %}
+                                        <span class="badge text-bg-dark rounded-pill index-tag">#{{ tag }}</span>
+                                        {% endif %}
+                                    {% endfor %}
+                                </td>
+                                <td>{{ deg2dms(this_source.last_timing_info["fitted_params"]["RAJ"]) }}</td>
+                                <td>{{ deg2dms(this_source.last_timing_info["fitted_params"]["DECJ"]) }}</td>
+                                <td>{{ f02p0(this_source.last_timing_info["fitted_params"]["F0"]) }}</td>
+                                <td>{{ f12p1(this_source.last_timing_info["fitted_params"]["F0"], this_source.last_timing_info["fitted_params"]["F1"]) }}</td>
+                                <td>{{ round(this_source.last_timing_info["fitted_params"]["DM"], 1) }}</td>
+                                <td>{{ round(this_source.last_timing_info["fitted_params"]["CHI2R"], 1) }}</td>
+                                <td>{{ round(min(this_source.last_timing_info["notes"]["fitted_mjds"])) }} → {{ round(max(this_source.last_timing_info["notes"]["fitted_mjds"])) }}</td>
+                            </tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -93,7 +100,9 @@
         </div>
     </div>
     <i style="color: #888; text-align: center; margin: 15px; ">
-        <small>Pulsars with CHI2R > 10 or timing span < 180 days are shown in gray.</small>
+        <small>Pulsars with <u href="#" style="cursor: pointer; "
+            data-bs-toggle="tooltip" data-bs-placement="top" title="This includes (a) pulsars that do not have a negative F1 solution; (b) pulsars with a fitted data span of less than 270 days. " 
+            >unreliable timing solutions</u> are shown in gray.</small>
     </i>
 </div>
 
