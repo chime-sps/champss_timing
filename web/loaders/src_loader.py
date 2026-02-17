@@ -68,6 +68,9 @@ class src_loader():
         # Get statistics
         self.stats = self.get_statistics(from_db=True)
 
+        # Get tags
+        self.tags = self.get_all_tags()
+
         # Get parameter info
         self.parameter_info = self.get_parameter_info(ra_in_deg=True)
 
@@ -99,7 +102,7 @@ class src_loader():
                 self.checker_warnings = self.get_checker_warnings()
                 self.checker_warnings_length = len(self.checker_warnings)
 
-            # Get tags
+            # Update tags to check for checker warnings
             self.tags = self.get_all_tags()
         except Exception as e:
             print(f"Error while loading diagnostic data: {e}")

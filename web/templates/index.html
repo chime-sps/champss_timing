@@ -25,15 +25,13 @@
             <i class="bi bi-info-square" style="float: right; "></i>
         </div>
     {% endif %}
-    {% if date_filter == "none" and tag_filter == "all" %}
-        <div class="card" style="margin-bottom: 15px; " xmlns="http://www.w3.org/1999/html">
-            <div class="card-body">
-                <div class="heatmap" id="heatmap"></div>
-                <small style="float: left; position: absolute; font-size: 0.75em; ">Number of TOAs the pipeline has processed for each day. </small>
-                <div class="heatmap" id="heatmap_legend" style="flex-direction: row-reverse; height: 15px; "></div>
-            </div>
+    <div class="card hide-as-filter-activate" style="margin-bottom: 15px; " xmlns="http://www.w3.org/1999/html">
+        <div class="card-body">
+            <div class="heatmap" id="heatmap"></div>
+            <small style="float: left; position: absolute; font-size: 0.75em; ">Number of TOAs the pipeline has processed for each day. </small>
+            <div class="heatmap" id="heatmap_legend" style="flex-direction: row-reverse; height: 15px; "></div>
         </div>
-    {% endif %}
+    </div>
     <script>
         var values = {{ sources.heatmap["val_normalized"] | safe }};
         var counts = {{ sources.heatmap["val"] | safe }};

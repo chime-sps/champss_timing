@@ -144,9 +144,15 @@
                     console.log("Showing tag: " + tag);
                     $(".index-tag-" + tag).show();
                 });
+
+                // Hide hide-as-filter-activate panels
+                $(".hide-as-filter-activate").hide();
             } else {
                 // If no tags are activated, show all panels
                 $(".source-info").show();
+
+                // Show hide-as-filter-activate panels
+                $(".hide-as-filter-activate").show();
             }
         }
     </script>
