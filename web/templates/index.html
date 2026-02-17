@@ -160,84 +160,19 @@
                                 <object id="diagnostic_pdf" data="{{ url_for("diagnostic", source_id=this_source.psr_id) }}/pdf" type="application/pdf" style="width: 100%; aspect-ratio: 1.77; border: 0; border-radius: 5px; "></object>
                             </div>
 
-                            <div id="resids_{{this_source.psr_id_esc}}" style="width:100%;height:5em;"></div>
+                            <div id="resids_{{this_source.psr_id_esc}}" style="width:100%;height:5em; margin: 10px 0; position: relative; ">
+                                {% for this_toa in this_source.preview_residual_data %}
+                                    <div style="background-color: black; height: {{ this_toa[0] - this_toa[1] }}%; width: 2.5px; position: absolute; left: {{ this_toa[2] }}%; bottom: {{ this_toa[1] }}%; min-height: 5%; border-radius: 7px; opacity: 0.75;"></div>
+                                {% endfor %}
+                            </div>
 
                             <script>
-                                // $('#div_{{this_source.psr_id_esc}}').on('click', function() {
-                                //     // If already open, go to top of page
-                                //     if ($('#diagnostic_pdf_{{this_source.psr_id_esc}}').hasClass('show')) {
-                                //         $('.collapse').collapse('hide');
-                                //         return
-                                //     }
-                                //
-                                //     $('.collapse').collapse('hide');
-                                //     $('#diagnostic_pdf_{{this_source.psr_id_esc}}').collapse('toggle');
-                                //     console.log('clicked');
-                                // });
-                                //
-                                // $('#div_{{this_source.psr_id_esc}}').on('dblclick', function() {
-                                //     window.location.href='{{ url_for("diagnostic", source_id=this_source.psr_id) }}';
-                                // });
-
                                 $('#div_{{this_source.psr_id_esc}}').on('click', function() {
                                     window.open('{{ url_for("diagnostic", source_id=this_source.psr_id) }}', '_blank');
                                 });
                             </script>
 
-                            <script>
-                                var resids = {{this_source.get_resids() | safe}};
-                                var resids_plot = {
-                                    x: resids["mjd"],
-                                    y: resids["val"],
-                                    error_y: {
-                                        type: 'data',
-                                        array: resids["err"],
-                                        visible: true
-                                    },
-                                    mode: 'markers',
-                                    type: 'scatter',
-                                    marker: {
-                                        color: 'black',
-                                        size: 5
-                                    }
-                                };
-                                var resids_layout = {
-                                    // title: 'Residuals for {{this_source.psr_id}}',
-                                    xaxis: {
-                                        // title: 'MJD',
-                                        showticklabels: false,
-                                        showline: false,
-                                        showgrid: false,
-                                        zeroline: true
-                                    },
-                                    yaxis: {
-                                        // title: 'Residual (us)',
-                                        showticklabels: false,
-                                        showline: false,
-                                        showgrid: false,
-                                        zeroline: true
-                                    },
-                                    showlegend: false,
-                                    margin: {'t':0,'l':0,'b':0,'r':0}
-                                };
-
-                                var zero_line = {
-                                    x: [resids["mjd"][0], resids["mjd"][resids["mjd"].length-1]],
-                                    y: [0, 0],
-                                    mode: 'lines',
-                                    type: 'scatter',
-                                    line: {
-                                        color: 'grey',
-                                        width: 1
-                                    }
-                                };
-
-                                var config = {
-                                    responsive: true
-                                };
-
-                                Plotly.newPlot('resids_{{this_source.psr_id_esc}}', [zero_line, resids_plot], resids_layout, config);
-                                
+                            <script>            
                                 if(dates.length > 7) {
                                     if(resids.updated > dates[dates.length-7]) {
                                         $('#card_{{this_source.psr_id_esc}}').addClass('border-success');

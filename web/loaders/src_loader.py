@@ -33,6 +33,7 @@ class src_loader():
         self.last_timing_info = {}
         self.stats = {}
         self.parameter_info = {}
+        self.preview_residual_data = []
         self.stacked_profile = []
         self.source_coincidences = None
         self.source_coincidences_radius = 0.25 # deg
@@ -42,7 +43,7 @@ class src_loader():
         self.plot_colors = ["black", "red", "blue", "green", "orange", "purple", "brown", "pink", "gray"]
 
     def connect_db(self):
-        self.db = database(self.source_dir + "/champss_timing.sqlite3.db", readonly=True)
+        self.db = database(self.source_dir + "/champss_timing.sqlite3.db", readonly=True, readonly_tempdir="/tmp")
         self.db.initialize()
 
     def initialize(self):
@@ -63,6 +64,14 @@ class src_loader():
 
         # Get parameter info
         self.parameter_info = self.get_parameter_info(ra_in_deg=True)
+
+        # Get preview residual data
+        try:
+            self.preview_residual_data = self.get_preview_residual_data()
+        except Exception as e:
+            print(f"Error while loading preview residual data: {e}")
+            print(traceback.format_exc())
+            self.preview_residual_data = []
 
         # # Get source coincidences
         # self.source_coincidences = None
@@ -223,6 +232,39 @@ class src_loader():
             statistics[key] = {"val": statistics[key], "mjd": mjd}
 
         return statistics
+    
+    def get_preview_residual_data(self, min_height=3):
+        timing_info = self.last_timing_info
+
+        if len(timing_info["notes"]["fitted_mjds"]) == 0:
+            return []
+
+        # Prepare data
+        residual_data = []
+        for i in range(len(timing_info["notes"]["fitted_mjds"])):
+            residual_data.append([
+                timing_info["residuals"]["val"][i] + timing_info["residuals"]["err"][i], 
+                timing_info["residuals"]["val"][i] - timing_info["residuals"]["err"][i], 
+                timing_info["notes"]["fitted_mjds"][i]
+            ])
+
+        # Get max and min for vertical and horizontal lines
+        residual_data = np.array(residual_data)
+        vert_max = np.max(residual_data[:, 0])
+        vert_min = np.min(residual_data[:, 1])
+        hori_max = np.max(residual_data[:, 2])
+        hori_min = np.min(residual_data[:, 2])
+
+        # Normalize data into percentage for plotting
+        residual_data[:, 0] = (residual_data[:, 0] - vert_min)
+        residual_data[:, 0] = residual_data[:, 0] / (vert_max - vert_min) * 100 if vert_max - vert_min != 0 else 50
+        residual_data[:, 1] = (residual_data[:, 1] - vert_min)
+        residual_data[:, 1] = residual_data[:, 1] / (vert_max - vert_min) * 100 if vert_max - vert_min != 0 else 50
+        residual_data[:, 2] = (residual_data[:, 2] - hori_min)
+        residual_data[:, 2] = residual_data[:, 2] / (hori_max - hori_min) * 100 if hori_max - hori_min != 0 else 50
+
+        return residual_data
+
 
     def get_parfile(self, derived_params=False):
         parfile = self.last_timing_info["notes"]["fitted_parfile"]

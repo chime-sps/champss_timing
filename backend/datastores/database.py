@@ -36,7 +36,7 @@ class database:
     Columns: key, value
     key unique
     """
-    def __init__(self, psr_db, readonly=False, logger=logger()):
+    def __init__(self, psr_db, readonly=False, readonly_tempdir=None, logger=logger()):
         self.version = "1.1"
         self.readonly = readonly
         self.psr_db = None
@@ -51,7 +51,9 @@ class database:
                 raise Exception(f"Database {psr_db} does not exist. Please provide a valid database file.")
 
             # copy the database to a temporary file
-            self.psr_db = os.path.abspath(f"{psr_db}.readonly{utils.get_rand_string()}.tmp")
+            if readonly_tempdir is None:
+                readonly_tempdir = os.path.dirname(psr_db)
+            self.psr_db = os.path.abspath(f"{readonly_tempdir}/{os.path.basename(psr_db)}.readonly{utils.get_rand_string()}.tmp")
             shutil.copyfile(psr_db, self.psr_db)
             self.logger.debug(f"Readonly temporary database created at {self.psr_db}")
 
