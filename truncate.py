@@ -13,7 +13,7 @@ pulsars = [v.split("/")[-1] for v in glob.glob(psrbasedir + "/*")]
 # Define arguments
 parser = argparse.ArgumentParser(description="Truncate timing info for CHAMPSS Timing Pipeline. ")
 parser.add_argument("--psr", type=str, help="Pulsar name.")
-parser.add_argument("-l", "--info-later-than", type=int, help="Remove timing info later than this MJD.")
+parser.add_argument("-l", "--info-later-than", type=int, help="Remove timing info later than this MJD (negative value means the latest N days).")
 parser.add_argument("--delete-archive-cache", action="store_true", help="Delete archive cache.")
 parser.add_argument("--delete-database", action="store_true", help="Delete database.")
 parser.add_argument("--truncate-config", action="store_true", help="Truncate config.")
@@ -62,6 +62,16 @@ for pulsar in pulsars:
         print(f"Truncating timing info for {pulsar} at {db_path}")
         with database(db_path) as db:
             if args.info_later_than:
+                if args.info_later_than < 0:
+                    # If negative, calculate the MJD threshold based on the latest timing info
+                    last_timing_info = db.get_last_timing_info()
+                    if last_timing_info is not None:
+                        latest_mjd = max(last_timing_info["obs_mjds"])
+                        args.info_later_than = latest_mjd + args.info_later_than
+                        print(f"Calculated MJD threshold: {args.info_later_than} (latest MJD: {latest_mjd})")
+                    else:
+                        print("No timing info found in the database. Skipping truncation.")
+                        continue
                 db.remove_timing_info(mjd_later_than=args.info_later_than, show_warning=False)
                 db.remove_dealias_history(mjd_later_than=args.info_later_than, show_warning=False)
             else:

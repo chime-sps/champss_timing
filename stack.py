@@ -16,6 +16,7 @@ parser = argparse.ArgumentParser(description="Stack data from multiple observati
 parser.add_argument("--psr", type=str, required=True, help="Pulsar name to stack data for.")
 parser.add_argument("--output", type=str, required=True, help="Output file for stacked data.")
 parser.add_argument("--nobs", type=int, required=False, default=32, help="Number of observations to stack (default: all).")
+parser.add_argument("--mjd-range", type=int, required=False, help="MJD range to stack (START:FINISH).")
 parser.add_argument("--npols", type=int, required=False, default=4, help="Number of polarizations to scrunch (default: 4).")
 parser.add_argument("--nsubs", type=int, required=False, default=16, help="Number of frequency channels to scrunch (default: 16).")
 parser.add_argument("--nfreqs", type=int, required=False, default=1024, help="Number of frequency bins to stack into (default: 1024).")
@@ -42,14 +43,46 @@ with tmg_master.tmg_master(MASTER_DB_PATH, readonly=True) as tmgm:
     if data is None or len(data) == 0:
         raise ValueError(f"No data found for pulsar {args.psr} in master database.")
 
+    # files = []
+    # while len(files) < args.nobs and len(data) > 0:
+    #     entry = data.pop(0)
+
+    #     if args.backend != "all" and entry['backend'] != args.backend:
+    #         continue
+
+    #     files.append({"location": entry['location'], "backend": entry['backend']})
+
+    # Filter data by backend
+    data_ = []
+    for entry in data:
+        if args.backend == "all" or entry['backend'] == args.backend:
+            data_.append(entry)
+    data = data_
+
+    # Filter data by MJD range
+    if args.mjd_range is not None:
+        try:
+            mjd_start, mjd_end = map(float, args.mjd_range.split(":"))
+        except:
+            raise ValueError("Invalid MJD range format. Use START:FINISH.")
+        
+        data_ = []
+        for entry in data:
+            if mjd_start <= entry['mjd'] <= mjd_end:
+                data_.append(entry)
+        data = data_
+
+    # Sort data by MJD (newest to oldest)
+    data.sort(key=lambda x: x['mjd'], reverse=True)
+
+    # Filter data by number of observations
+    data = data[:args.nobs]
+
+    # Extract file locations and backends
     files = []
-    while len(files) < args.nobs and len(data) > 0:
-        entry = data.pop(0)
-
-        if args.backend != "all" and entry['backend'] != args.backend:
-            continue
-
+    for entry in data:
         files.append({"location": entry['location'], "backend": entry['backend']})
+
 
 # Load jump parameters
 jumps = {}

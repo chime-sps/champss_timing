@@ -36,6 +36,7 @@ if __name__ == "__main__":
         "dealias": "Resolve dealiasing in pulsar period solution.",
         "template": "Generate a template for the pulsar.",
         "stack": "Stack data from multiple observations.",
+        "pintk": "Generate par and tim files and run pintk.", 
         "mcmc": "Run MCMC fitting for the pulsar.",
         "truncate": "Truncate source database.",
         "masterdb": "Run master database utilities.",

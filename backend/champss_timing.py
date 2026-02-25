@@ -655,20 +655,20 @@ class champss_timing:
             if "F0" not in fit_params:
                 fit_params.append("F0")
 
+        if "F1" in self.timing_config["settings"]["fit_params"]:
+            if "F1" not in fit_params:
+                if n_days_to_fit >= 7:
+                    potential_fit_params.append("F1")
+
         if "DECJ" in self.timing_config["settings"]["fit_params"]:
             if "DECJ" not in fit_params:
-                if n_days_to_fit >= 7: # DEC offset can be large for detections at CHIME
+                if n_days_to_fit >= 15: # DEC offset can be large for detections at CHIME
                     potential_fit_params.append("DECJ")
         
         if "RAJ" in self.timing_config["settings"]["fit_params"]:
             if "RAJ" not in fit_params:
-                if n_days_to_fit >= 10:
+                if n_days_to_fit >= 30:
                     potential_fit_params.append("RAJ")
-
-        if "F1" in self.timing_config["settings"]["fit_params"]:
-            if "F1" not in fit_params:
-                if n_days_to_fit >= 60:
-                    potential_fit_params.append("F1")
 
         if "PX" in self.timing_config["settings"]["fit_params"]:
             if "PX" not in fit_params:
