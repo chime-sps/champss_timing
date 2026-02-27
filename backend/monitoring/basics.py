@@ -134,12 +134,12 @@ class BasicDistributionChecker:
 
         return "ok"
     
-    def test_95_997(self, n_samples=365, min_samples=7):
+    def test_low_high(self, n_samples=365, min_samples=7, low_threshold=3, high_threshold=5):
         """
         Perform the basic checks on the latest metric values with a 95% and 99.7% confidence interval.
         """
         
-        return self.test(z_score_threshold=1.96, n_samples=n_samples, min_samples=min_samples), self.test(z_score_threshold=3, n_samples=n_samples, min_samples=min_samples)
+        return self.test(z_score_threshold=low_threshold, n_samples=n_samples, min_samples=min_samples), self.test(z_score_threshold=high_threshold, n_samples=n_samples, min_samples=min_samples)
 
 class Main:
     def __init__(self, db_hdl, basic_checker_results, psr_id, psr_dir, logger=logger(), temp_dir="/tmp"):
@@ -174,6 +174,9 @@ class Main:
         self.period = 0
         if len(self.timing_info) > 0:
             self.period = (1 / self.timing_info[-1]["fitted_params"]["F0"])
+
+        # Define low and high confidence thresholds for the checks
+        self.thresholds = {"low": 5, "high": 7}
 
         # Get basic metric information
         self.metric_residuals = {"mjds": [], "vals": [], "rcvrs": []}
@@ -287,13 +290,13 @@ class Main:
                     return {"level": 0, "id": "chi2r_ok", "message": "Chi2r is normal.", "attachments": []}
                 
             # Distribution check
-            bckr_res95, bckr_res997 = bckr.test_95_997(n_samples=30)
-            if bckr_res997 == "too_high" and self.metric_chi2rs["vals"][-1] > 10:
+            bckr_low_conf, bckr_high_conf = bckr.test_low_high(n_samples=30, low_threshold=self.thresholds["low"], high_threshold=self.thresholds["high"])
+            if bckr_high_conf == "too_high" and self.metric_chi2rs["vals"][-1] > 10:
                 if self.metric_chi2rs["vals"][-1] > 100:
                     return {"level": 3, "id": "chi2r_extremely_high", "message": f"Chi2r is extremely high ({self.metric_chi2rs['vals'][-1]}).", "attachments": ["%DIAGNOSTIC_PLOT%", verbose_savefig]}
-                return {"level": 2, "id": "chi2r_very_sudden_increase", "message": f"Chi2r is out of 3-sigma range of all chi2rs in the last 30 samples ({bckr_res997}).", "attachments": ["%DIAGNOSTIC_PLOT%", verbose_savefig]}
-            elif bckr_res95 == "too_high":
-                return {"level": 1, "id": "chi2r_sudden_increase", "message": f"Chi2r is out of 2-sigma range of all chi2rs in the last 30 samples ({bckr_res95}).", "attachments": ["%DIAGNOSTIC_PLOT%", verbose_savefig]}
+                return {"level": 2, "id": "chi2r_very_sudden_increase", "message": f"Chi2r is out of {self.thresholds['high']}-sigma range of all chi2rs in the last 30 samples ({bckr_high_conf}).", "attachments": ["%DIAGNOSTIC_PLOT%", verbose_savefig]}
+            elif bckr_low_conf == "too_high":
+                return {"level": 1, "id": "chi2r_sudden_increase", "message": f"Chi2r is out of {self.thresholds['low']}-sigma range of all chi2rs in the last 30 samples ({bckr_low_conf}).", "attachments": ["%DIAGNOSTIC_PLOT%", verbose_savefig]}
         else:
             # Basic sanity check
             if len(self.metric_chi2rs["vals"]) > 0 and self.metric_chi2rs["vals"][-1] is not None:
@@ -301,9 +304,9 @@ class Main:
                     return {"level": 0, "id": "chi2r_ok", "message": "Chi2r is normal.", "attachments": []}
                 
             # Distribution check
-            _, bckr_res997 = bckr.test_95_997(n_samples=7) # only check for very sudden increase
-            if bckr_res997 == "too_high":
-                return {"level": 1, "id": "chi2r_very_sudden_increase", "message": f"Chi2r is out of 3-sigma range of all chi2rs in the last 7 samples ({bckr_res997}).", "attachments": ["%DIAGNOSTIC_PLOT%"], "attachments_report_only": [verbose_savefig]}
+            _, bckr_high_conf = bckr.test_low_high(n_samples=7, low_threshold=self.thresholds["low"], high_threshold=self.thresholds["high"]) # only check for very sudden increase
+            if bckr_high_conf == "too_high":
+                return {"level": 1, "id": "chi2r_very_sudden_increase", "message": f"Chi2r is out of {self.thresholds['high']}-sigma range of all chi2rs in the last 7 samples ({bckr_high_conf}).", "attachments": ["%DIAGNOSTIC_PLOT%"], "attachments_report_only": [verbose_savefig]}
         
         # check if chi2r keeps increasing in the last 7 days
         _, samp_vals = bckr.get_samples_from_same_rcvr() # get samples from the same receiver as the latest value
@@ -328,14 +331,14 @@ class Main:
             verbose_savefig=verbose_savefig, 
             logger=self.logger.copy()
         )
-        bckr_res95, bckr_res997 = bckr.test_95_997(n_samples=90)
-        if bckr_res997 == "too_high":
-            return {"level": 2, "id": "toa_error_very_sudden_increase", "message": f"TOA error is out of 3-sigma range of all TOA errors in the last 90 samples ({bckr_res997}).", "attachments": ["%DIAGNOSTIC_PLOT%"], "attachments_report_only": [verbose_savefig]}
-        elif bckr_res95 == "too_high":
-            return {"level": 1, "id": "toa_error_sudden_increase", "message": f"TOA error is out of 2-sigma range of all TOA errors in the last 90 samples ({bckr_res95}).", "attachments": ["%DIAGNOSTIC_PLOT%"], "attachments_report_only": [verbose_savefig]}
+        bckr_low_conf, bckr_high_conf = bckr.test_low_high(n_samples=90, low_threshold=self.thresholds["low"], high_threshold=self.thresholds["high"])
+        if bckr_high_conf == "too_high":
+            return {"level": 2, "id": "toa_error_very_sudden_increase", "message": f"TOA error is out of {self.thresholds['high']}-sigma range of all TOA errors in the last 90 samples ({bckr_high_conf}).", "attachments": ["%DIAGNOSTIC_PLOT%"], "attachments_report_only": [verbose_savefig]}
+        elif bckr_low_conf == "too_high":
+            return {"level": 1, "id": "toa_error_sudden_increase", "message": f"TOA error is out of {self.thresholds['low']}-sigma range of all TOA errors in the last 90 samples ({bckr_low_conf}).", "attachments": ["%DIAGNOSTIC_PLOT%"], "attachments_report_only": [verbose_savefig]}
         # else:
-        #     if bckr_res997 == "too_low":
-        #         return {"level": 1, "id": "toa_error_very_sudden_decrease", "message": f"TOA error is out of 3-sigma range of all TOA errors in the last 90 samples ({bckr_res997}).", "attachments": ["%DIAGNOSTIC_PLOT%"], "attachments_report_only": [verbose_savefig]}
+        #     if bckr_high_conf == "too_low":
+        #         return {"level": 1, "id": "toa_error_very_sudden_decrease", "message": f"TOA error is out of 5-sigma range of all TOA errors in the last 90 samples ({bckr_high_conf}).", "attachments": ["%DIAGNOSTIC_PLOT%"], "attachments_report_only": [verbose_savefig]}
         # DO WE ACTUALLY NEED THIS? It's not a problem if TOA error is very low. If this is due to sudden brightening of the pulsar, it will be caught by the SNR check I think. 
 
         # Check residuals
@@ -348,14 +351,14 @@ class Main:
             verbose_savefig=verbose_savefig, 
             logger=self.logger.copy()
         )
-        bckr_res95, bckr_res997 = bckr.test_95_997(n_samples=90)
-        if bckr_res997 != "ok" and self.metric_residuals["vals"][-1] > self.metric_toa_errs["vals"][-1]: # It's ok if residual is still within the TOA error range
+        bckr_low_conf, bckr_high_conf = bckr.test_low_high(n_samples=90, low_threshold=self.thresholds["low"], high_threshold=self.thresholds["high"])
+        if bckr_high_conf != "ok" and self.metric_residuals["vals"][-1] > self.metric_toa_errs["vals"][-1]: # It's ok if residual is still within the TOA error range
             # Check if residual is very high
             if self.metric_residuals["vals"][-1] * 1e-6 / self.period > 0.5: # more than half of the phase
                 return {"level": 3, "id": "residual_extremely_high", "message": f"Residual is extremely high ({self.metric_residuals['vals'][-1] * 1e-3} ms).", "attachments": ["%DIAGNOSTIC_PLOT%"], "attachments_report_only": [verbose_savefig]}
-            return {"level": 2, "id": "residual_very_sudden_increase", "message": f"Residual is out of 3-sigma range of all residuals in the last 90 samples ({bckr_res997}).", "attachments": ["%DIAGNOSTIC_PLOT%"], "attachments_report_only": [verbose_savefig]}
-        elif bckr_res95 != "ok" and self.metric_residuals["vals"][-1] > self.metric_toa_errs["vals"][-1]:
-            return {"level": 1, "id": "residual_sudden_increase", "message": f"Residual is out of 2-sigma range of all residuals in the last 90 samples ({bckr_res95}).", "attachments": ["%DIAGNOSTIC_PLOT%"], "attachments_report_only": [verbose_savefig]}
+            return {"level": 2, "id": "residual_very_sudden_increase", "message": f"Residual is out of {self.thresholds['high']}-sigma range of all residuals in the last 90 samples ({bckr_high_conf}).", "attachments": ["%DIAGNOSTIC_PLOT%"], "attachments_report_only": [verbose_savefig]}
+        elif bckr_low_conf != "ok" and self.metric_residuals["vals"][-1] > self.metric_toa_errs["vals"][-1]:
+            return {"level": 1, "id": "residual_sudden_increase", "message": f"Residual is out of {self.thresholds['low']}-sigma range of all residuals in the last 90 samples ({bckr_low_conf}).", "attachments": ["%DIAGNOSTIC_PLOT%"], "attachments_report_only": [verbose_savefig]}
 
         return {"level": 0, "id": "residual_ok", "message": "Residual is normal.", "attachments": []}
 
@@ -373,11 +376,11 @@ class Main:
             verbose_savefig=verbose_savefig, 
             logger=self.logger.copy()
         )
-        bckr_res95, bckr_res997 = bckr.test_95_997(n_samples=90, min_samples=30)
-        if bckr_res997 != "ok":
-            return {"level": 2, "id": "snr_very_sudden_change", "message": f"SNR is out of 3-sigma range of all SNRs in the last 90 samples ({bckr_res997}).", "attachments": ["%DIAGNOSTIC_PLOT%"], "attachments_report_only": [verbose_savefig]}
-        elif bckr_res95 != "ok":
-            return {"level": 1, "id": "snr_sudden_change", "message": f"SNR is out of 2-sigma range of all SNRs in the last 90 samples ({bckr_res95}).", "attachments": ["%DIAGNOSTIC_PLOT%"], "attachments_report_only": [verbose_savefig]}
+        bckr_low_conf, bckr_high_conf = bckr.test_low_high(n_samples=90, min_samples=30, low_threshold=self.thresholds["low"], high_threshold=self.thresholds["high"])
+        if bckr_high_conf != "ok":
+            return {"level": 2, "id": "snr_very_sudden_change", "message": f"SNR is out of {self.thresholds['high']}-sigma range of all SNRs in the last 90 samples ({bckr_high_conf}).", "attachments": ["%DIAGNOSTIC_PLOT%"], "attachments_report_only": [verbose_savefig]}
+        elif bckr_low_conf != "ok":
+            return {"level": 1, "id": "snr_sudden_change", "message": f"SNR is out of {self.thresholds['low']}-sigma range of all SNRs in the last 90 samples ({bckr_low_conf}).", "attachments": ["%DIAGNOSTIC_PLOT%"], "attachments_report_only": [verbose_savefig]}
         
         # Check if SNR keeps increasing/decreasing in the last 7 days
         _, samp_vals = bckr.get_samples_from_same_rcvr() # get samples from the same receiver as the latest value

@@ -159,10 +159,9 @@ class DiscontinuityDetector:
         mad = mad * dt**2
 
         # Estimate the noise level
-        # Ideally median is 0, but just in case of non-zero median, we add it to the noise
-        noise = np.median(self.state.residual(self.mjds, self.residuals)) + stats_utils.mad_to_stdev(mad)
+        noise = stats_utils.mad_to_stdev(mad)
         
-        is_discontinuous = residual > self.threshold * noise
+        is_discontinuous = (residual) > self.threshold * noise
 
         if get_details:
             return is_discontinuous, predicted, residual, noise, residual / noise
@@ -272,8 +271,8 @@ class Main:
         mjds = mjds[sorted_indices]
         resids = resids[sorted_indices]
 
-        # Run discontinuity detection by 3 sigma
-        dd = DiscontinuityDetector(mjds[-15:-1], resids[-15:-1], threshold=3, verbose=False)
+        # Run discontinuity detection by 5 sigma
+        dd = DiscontinuityDetector(mjds[-21:-1], resids[-21:-1], threshold=5, verbose=False)
         dd.fit()
         is_discontinuous, sigma = dd.is_discontinuous(mjds[-1], resids[-1])
 

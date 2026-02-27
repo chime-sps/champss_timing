@@ -321,26 +321,34 @@ class ProfileAnalyzer(StackTemplate):
 
         return residuals
 
-    def get_binned_residual_chisquares(self):
-        """
-        Get the residuals of the profiles.
+    def get_binned_residual_chisquares(self, n_bins=10, threshold=0.99):
+        residuals = self.get_binned_residuals()
+        
+        # Calculate chi-squares for each residual
+        chisquares = []
+        for residual in residuals:
+            # Fit a normal distribution to the residual
+            mu, std = norm.fit(residual)
+            
+            # Define bin edges and observed counts
+            _, bin_edges = np.histogram(residual, bins=n_bins)
+            observed, _ = np.histogram(residual, bins=bin_edges)
+            
+            # Expected counts from the fitted normal distribution
+            cdf_vals = norm.cdf(bin_edges, mu, std)
+            expected = np.diff(cdf_vals) * len(residual)
+            
+            # Mask bins with too few expected counts
+            mask = expected >= 5
+            chi2_val = np.sum((observed[mask] - expected[mask])**2 / expected[mask])
+            chisquares.append(chi2_val)
 
-        Returns
-        -------
-        list
-            List of chi-squares.
-        """
+        # Thresholds
+        threshold = chi2.ppf(threshold, df=n_bins - 1 - 2) # degrees of freedom = n_bins - 1 (for mean) - 1 (for std)
+        
+        return np.array(chisquares), threshold
 
-        # Get the residuals
-        residuals = self.get_binned_residuals()**2
-
-        # Get the chi-squares
-        # chisquares = np.array([chisquare(residual)[0] for residual in residuals])
-        chisquares = np.array([chisquare(residual, f_exp=np.full(len(residual), np.mean(residual)))[0] for residual in residuals])
-
-        return chisquares
-
-    def get_binned_residual_rms(self):
+    def get_binned_residual_rms(self, threshold=3):
         """
         Get the residuals of the profiles.
 
@@ -359,29 +367,10 @@ class ProfileAnalyzer(StackTemplate):
             # Get the RMS
             rms.append(np.sqrt(np.mean(residual**2)))
 
-        return np.array(rms)
+        # Get threshold
+        threshold = stats_utils.mad_outlier_thresholds(rms, z_score=threshold, return_interval=True)[1]
 
-    def get_binned_residual_kstest(self):
-        """
-        Get the residuals of the profiles.
-
-        Returns
-        -------
-        list
-            List of KS test results.
-        """
-
-        # Get the residuals
-        residuals = self.get_binned_residuals()
-
-        # Get the KS test results
-        ks_results = []
-        for residual in residuals:
-            # Get the KS test result
-            ks_results.append(kstest(residual, 'norm')[1])
-            # ks_results.append(kstest(residual, 'poisson', args=(np.mean(residual),))[1])
-
-        return np.array(ks_results)
+        return np.array(rms), threshold
 
     def get_peak_fluences(self):
         # Initialize the ProfilePeaks class
@@ -390,44 +379,29 @@ class ProfileAnalyzer(StackTemplate):
         # Get the peak fluence
         peak_fluences = pp.get_peak_fluences()
 
-    def get_threshold_and_outliers(self, statistic="rms", threshold=3):
+    def get_threshold_and_outliers(self, statistic="rms", threshold=None):
         if statistic == "rms":
-            # Get the RMS
-            rms = self.get_binned_residual_rms()
+            if threshold is None:
+                threshold = 5
 
-            # Get thresholds
-            threshold = stats_utils.mad_outlier_thresholds(rms, z_score=threshold, return_interval=True)[1]
+            # Get the RMS
+            metric_vals, threshold = self.get_binned_residual_rms(threshold=threshold)
             
             # Get the outliers
-            outliers = np.where(rms > threshold)[0]
+            outliers = np.where(metric_vals > threshold)[0]
         elif statistic == "chisquare":
+            if threshold is None:
+                threshold = 1 - 1e-12 # ~ 7 sigma
+
             # Get the chi-squares
-            chisquares = self.get_binned_residual_chisquares()
-
-            # # Get thresholds
-            # threshold = stats_utils.mad_outlier_thresholds(chisquares, z_score=threshold, return_interval=True)[1]
-
-            # # Get the outliers
-            # outliers = np.where(chisquares > threshold)[0]
-
-            # Get thresholds (note: the distribution is no longer normal, so we use the chi-square distribution!!)
-            threshold = chi2.ppf(0.95, len(self.get_template())-1)
+            metric_vals, threshold = self.get_binned_residual_chisquares(n_bins=15, threshold=threshold)
 
             # Get the outliers
-            outliers = np.where(chisquares > threshold)[0]
-        elif statistic == "kstest":
-            # Get the KS test results
-            ks_results = self.get_binned_residual_kstest()
-
-            # Get thresholds
-            threshold = 0.05
-
-            # Get the outliers
-            outliers = np.where(ks_results < threshold)[0]
+            outliers = np.where(metric_vals > threshold)[0]
         else:
             raise ValueError(f"Statistic {statistic} not allowed. Allowed statistics are: rms, chisquare")
 
-        return threshold, outliers
+        return metric_vals, threshold, outliers
     
     def plot_daily_profiles(self, subfig):
         # Create ax
@@ -483,53 +457,24 @@ class ProfileAnalyzer(StackTemplate):
         ax[4].set_xlabel("Phase Bins (Zoomed In)")
         ax[4].legend(loc="upper left", fontsize='small', framealpha=0)
 
-    def plot(self, savefig=None):
+    def plot(self, savefig=None, show_chisquares=True):
         """
         Plot the profiles.
         """
-
-        # # Get the mjds
-        # mjds = self.mjds # this mjds may not be uniform as the binned mjds and not uniform profile sampling. 
-        # mjds_uniform = np.linspace(np.min(mjds), np.max(mjds), int(len(self.get_aligned_profiles()) / np.mean(self.profile_bins))) # get mjds in uniform bins
-
-        # Get the binned profiles
-        binned_profiles = self.binned_profiles
-        # binned_profiles_uniform = np.zeros((len(mjds_uniform), len(binned_profiles[0])))
-        # mjds_y = []
-        # for i, mjd in enumerate(self.binned_mjds):
-        #     # Get the index of the closest mjd
-        #     idx = np.argmin(np.abs(mjds_uniform - mjd))
-
-        #     # Get the binned profile
-        #     binned_profiles_uniform[idx] = binned_profiles[i]
-
-        #     # Append the mjd to the list
-        #     mjds_y.append(mjd)
         
         # Get the template
         template = self.get_template()
 
         # Get the residuals
         residuals = self.get_binned_residuals()
-        # residuals_uniform = np.zeros((len(mjds_uniform), len(residuals[0])))
-        # for i, mjd in enumerate(self.binned_mjds):
-        #     # Get the index of the closest mjd
-        #     idx = np.argmin(np.abs(mjds_uniform - mjd))
 
-        #     # Get the binned profile
-        #     residuals_uniform[idx] = residuals[i]
-
-        # Get statistics
-        chisquares = self.get_binned_residual_chisquares()
-        rms = self.get_binned_residual_rms()
-
-        # Get the threshold and outliers
-        chisquares_thres, chisquares_outliers = self.get_threshold_and_outliers(statistic="chisquare", threshold=3)
-        rms_thres, rms_outliers = self.get_threshold_and_outliers(statistic="rms", threshold=3)
-        kstest_thres, kstest_outliers = self.get_threshold_and_outliers(statistic="kstest", threshold=0.05)
+        # Get statistics and outliers
+        rms, rms_thres, rms_outliers = self.get_threshold_and_outliers(statistic="rms")
+        if show_chisquares:
+            chisquares, chisquares_thres, chisquares_outliers = self.get_threshold_and_outliers(statistic="chisquare")
 
         # Plot
-        fig = plt.figure(figsize=(20, 15))
+        fig = plt.figure(figsize=(4 * (4 + show_chisquares), 15))
         fig.set_constrained_layout(True)
         subfigs = fig.subfigures(1, 2, width_ratios=[1, 4], wspace=0.01)
         # subfigs[0].set_edgecolor('k')
@@ -539,7 +484,7 @@ class ProfileAnalyzer(StackTemplate):
         ## Right: Stats Diagnostics
         # fig, ax = plt.subplots(2, 5, figsize=(15, 15), height_ratios=[1, 4.5], gridspec_kw={'hspace': 0, 'wspace': 0})
         # ax_left, ax_right = ax[:, 0], ax[:, 1:]
-        ax_right = subfigs[1].subplots(2, 4, height_ratios=[1, 4.5], gridspec_kw={'hspace': 0, 'wspace': 0})
+        ax_right = subfigs[1].subplots(2, 3 +  show_chisquares, height_ratios=[1, 4.5], gridspec_kw={'hspace': 0, 'wspace': 0})
         ## get the vmin and vmax
         vmin = np.min(self.binned_profiles)
         vmax = np.max(self.binned_profiles)
@@ -570,7 +515,7 @@ class ProfileAnalyzer(StackTemplate):
         ax_right[0, 2].set_xticks([])
         ax_right[0, 2].set_yticks([])
         ax_right[0, 2].axvline(rms_thres, color='r', linestyle='--', label='Threshold')
-        ax_right[1, 2].plot(rms, np.linspace(0, len(chisquares) - 1, len(chisquares)), "kx")
+        ax_right[1, 2].plot(rms, np.linspace(0, len(rms) - 1, len(rms)), "kx")
         ax_right[1, 2].set_xlabel('RMS')
         ax_right[1, 2].set_yticks([])
         ax_right[1, 2].axvline(rms_thres, color='r', linestyle='--', label='Threshold')
@@ -578,44 +523,32 @@ class ProfileAnalyzer(StackTemplate):
             ax_right[1, 2].axhline(i, color='r', linestyle='-', alpha=0.5, linewidth=0.5)
         for i in self.injected_idxes:
             ax_right[1, 2].axhline(i, color='g', linestyle='-', alpha=0.5, linewidth=0.5)
-        ## Chi-squares
-        log_bins = np.logspace(np.log10(np.min(chisquares)), np.log10(np.max(chisquares)), 50)
-        # ax[0, 3].hist(chisquares, facecolor="none", edgecolor="k", bins=50, histtype='step')
-        ax_right[0, 3].hist(chisquares, facecolor="none", edgecolor="k", bins=log_bins, histtype='step')
-        ax_right[0, 3].set_xscale('log')
-        ax_right[0, 3].set_title('Chi-squares')
-        ax_right[0, 3].set_xticks([])
-        ax_right[0, 3].set_yticks([])
-        ax_right[0, 3].axvline(chisquares_thres, color='r', linestyle='--')
-        ax_right[1, 3].plot(chisquares, np.linspace(0, len(chisquares) - 1, len(chisquares)), "kx")
-        ax_right[1, 3].set_xlabel('Chi-squares Statistics')
-        ax_right[1, 3].set_yticks([])
-        ax_right[1, 3].axvline(chisquares_thres, color='r', linestyle='--')
-        ax_right[1, 3].set_xscale('log')
-        for i in chisquares_outliers:
-            ax_right[1, 3].axhline(i, color='r', linestyle='-', alpha=0.5, linewidth=0.5)
-        for i in self.injected_idxes:
-            ax_right[1, 3].axhline(i, color='g', linestyle='--', alpha=0.5, linewidth=0.5)
-        # ## K-S test
-        # log_bins = np.logspace(np.log10(np.min(self.get_binned_residual_kstest())), np.log10(np.max(self.get_binned_residual_kstest())), 50)
-        # ax_right[0, 4].hist(self.get_binned_residual_kstest(), facecolor="none", edgecolor="k", bins=log_bins, histtype='step')
-        # ax_right[0, 4].set_xscale('log')
-        # ax_right[0, 4].set_title('K-S test')
-        # ax_right[0, 4].set_xticks([])
-        # ax_right[0, 4].set_yticks([])
-        # ax_right[0, 4].axvline(kstest_thres, color='r', linestyle='--')
-        # ax_right[1, 4].plot(self.get_binned_residual_kstest(), np.linspace(0, len(chisquares), len(chisquares)), "kx")
-        # ax_right[1, 4].set_xlabel('K-S test Statistics')
-        # ax_right[1, 4].set_yticks([])
-        # ax_right[1, 4].axvline(kstest_thres, color='r', linestyle='--')
-        # aax_rightx[1, 4].set_xscale('log')
-        # for i in kstest_outliers:
-        #     ax_right[1, 4].axhline(i, color='r', linestyle='-', alpha=0.5, linewidth=0.5)
-        ## Set limits
-        for i in range(len(ax_right[1, :])):
-            ax_right[1, i].set_ylim(ax_right[1, 0].get_ylim()[0], ax_right[1, 0].get_ylim()[1])
-            ax_right[0, i].set_xlim(ax_right[1, i].get_xlim())
-        # ax_right[0, 1].set_ylim(ax_right[0, 0].get_ylim())
+
+        if show_chisquares:
+            ## Chi-squares
+            log_bins = np.logspace(np.log10(np.min(chisquares)), np.log10(np.max(chisquares)), 50)
+            # ax[0, 3].hist(chisquares, facecolor="none", edgecolor="k", bins=50, histtype='step')
+            ax_right[0, 3].hist(chisquares, facecolor="none", edgecolor="k", bins=log_bins, histtype='step')
+            ax_right[0, 3].set_xscale('log')
+            ax_right[0, 3].set_title('Chi-squares')
+            ax_right[0, 3].set_xticks([])
+            ax_right[0, 3].set_yticks([])
+            ax_right[0, 3].axvline(chisquares_thres, color='r', linestyle='--')
+            ax_right[1, 3].plot(chisquares, np.linspace(0, len(chisquares) - 1, len(chisquares)), "kx")
+            ax_right[1, 3].set_xlabel('Chi-squares Statistics')
+            ax_right[1, 3].set_yticks([])
+            ax_right[1, 3].axvline(chisquares_thres, color='r', linestyle='--')
+            ax_right[1, 3].set_xscale('log')
+            for i in chisquares_outliers:
+                ax_right[1, 3].axhline(i, color='r', linestyle='-', alpha=0.5, linewidth=0.5)
+            for i in self.injected_idxes:
+                ax_right[1, 3].axhline(i, color='g', linestyle='--', alpha=0.5, linewidth=0.5)
+            ## Set limits
+            for i in range(len(ax_right[1, :])):
+                ax_right[1, i].set_ylim(ax_right[1, 0].get_ylim()[0], ax_right[1, 0].get_ylim()[1])
+                ax_right[0, i].set_xlim(ax_right[1, i].get_xlim())
+            # ax_right[0, 1].set_ylim(ax_right[0, 0].get_ylim())
+
         ## Set y-ticks in time
         current_yticks = ax_right[1, 0].get_yticks()
         current_yticks = current_yticks[current_yticks >= 0]
@@ -772,9 +705,9 @@ class ProfilePeaks:
 
         return thresholds
 
-    def get_outliers_thresholds_CL95(self, savefig=None):
+    def get_outliers_thresholds_3sigma(self, savefig=None):
         """
-        Get the thresholds for outliers based on the peak fluences using a 95% confidence level.
+        Get the thresholds for outliers based on the peak fluences using a 3 sigma threshold.
 
         Returns
         -------
@@ -783,16 +716,16 @@ class ProfilePeaks:
         """
 
         # Calculate thresholds
-        thresholds = self.get_outliers_thresholds(threshold=1.96)
+        thresholds = self.get_outliers_thresholds(threshold=3)
 
         # Plot
-        outliers = self.plot(threshold=1.96, savefig=savefig)
+        outliers = self.plot(threshold=3, savefig=savefig)
 
         return thresholds, outliers
 
-    def get_outliers_thresholds_CL997(self, savefig=None):
+    def get_outliers_thresholds_5sigma(self, savefig=None):
         """
-        Get the thresholds for outliers based on the peak fluences using a 99.7% confidence level.
+        Get the thresholds for outliers based on the peak fluences using a 5 sigma threshold.
 
         Returns
         -------
@@ -801,10 +734,10 @@ class ProfilePeaks:
         """
 
         # Calculate thresholds
-        thresholds = self.get_outliers_thresholds(threshold=2.965)
+        thresholds = self.get_outliers_thresholds(threshold=5)
 
         # Plot
-        outliers = self.plot(threshold=2.965, savefig=savefig)
+        outliers = self.plot(threshold=5, savefig=savefig)
 
         return thresholds, outliers
     

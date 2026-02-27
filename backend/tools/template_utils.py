@@ -52,19 +52,40 @@ class StackTemplateState:
         """
         Calculate the signal-to-noise ratio (SNR) of the template.
         """
-        # calculate the mean and standard deviation
-        template_signal = np.max(self.template)
-        # template_noise = np.std(self.template)
-        template_noise = np.quantile(self.template, 0.75) - np.quantile(self.template, 0.25)  # IQR as noise estimate
 
-        # sanity check
-        if template_noise == 0:
-            return 0
+        # Center the peak
+        n = len(self.template)
+        peak_idx = np.argmax(np.abs(self.template))
+        shift = (n // 2) - peak_idx
+        centered = np.roll(self.template, shift)
 
-        # calculate the SNR
-        template_snr = template_signal / template_noise
+        # Estimate duty cycle
+        duty_cycle = np.sum(centered > np.min(centered) + np.std(centered)) / n
+        if duty_cycle < 0.02:
+            duty_cycle = 0.02 
+        if duty_cycle > 0.75:
+            duty_cycle = 0.75
+        # print(f"Estimated duty cycle: {duty_cycle:.4f}")
 
-        return template_snr
+        # Estimate noise from the off-pulse region 
+        n_noise = max(1, int(n * (1 - duty_cycle) / 2))  # Number of samples in the off-pulse region on each side
+        noise_samples = np.concatenate([centered[:n_noise], centered[-n_noise:]])
+        noise_std = np.std(noise_samples)
+
+        if noise_std == 0:
+            return np.inf
+
+        # Calculate signal power from the on-pulse region
+        abs_centered = np.abs(centered)
+        threshold = duty_cycle * np.max(abs_centered)
+        burst_mask = abs_centered >= threshold
+
+        if not np.any(burst_mask):
+            return np.nan
+
+        signal_rms = np.sqrt(np.mean(centered[burst_mask] ** 2))
+
+        return signal_rms / noise_std
     
     def plot(self):
         """
@@ -96,7 +117,7 @@ class StackTemplate:
         self.verbose = verbose
         self.logger = logger
 
-    def optimize(self, tol=1e-8, max_iter=100):
+    def optimize(self, tol=1e-16, max_iter=100):
         """
         Optimize the template by iteratively updating it.
         """
