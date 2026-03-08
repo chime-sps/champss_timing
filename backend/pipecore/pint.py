@@ -99,7 +99,7 @@ class pint_handler():
                 # Quantile filter
                 # if quantile:
                 #     self.quantile_filter()
-            if len(self.t) > 90 and len(self.get_unfreezed_params()) >=4:
+            if len(self.t) > 30 and len(self.get_unfreezed_params()) >=4:
                 self.mad_filter2()
             else:
                 # Dropout filter
