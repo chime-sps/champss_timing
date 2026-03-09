@@ -267,8 +267,8 @@ class glitch_utils():
 
         # Plot pulse profile residual (day1 - day0)
         ax[2, 0].plot(day0_amps, color="blue", lw=0.25, alpha=0.25)
-        ax[2, 0].plot(np.roll(day1_amps, int(toa_shift)), color="red", lw=0.5, alpha=0.25)
-        ax[2, 0].plot(np.roll(day1_amps, int(toa_shift)) - day0_amps, color="k", lw=0.5)
+        ax[2, 0].plot(np.roll(day1_amps, -int(toa_shift)), color="red", lw=0.5, alpha=0.25)
+        ax[2, 0].plot(np.roll(day1_amps, -int(toa_shift)) - day0_amps, color="k", lw=0.5)
         ax[2, 0].text(0, 0.915, "Note: This pulse profile residual could be misleading\nif the SNR of the single observation profile is low. \nPlease check carefully with std. profile / fitbirst to conclude any changes.", ha="left", va="bottom", c="r", fontsize=8, fontweight="heavy", fontfamily="serif")
         ax[2, 0].set_title(f"Pulse Profile Residual (Day 1 - Day 0)")
         ax[2, 0].axis("off")

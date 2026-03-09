@@ -237,8 +237,10 @@ for i, psr in enumerate(psrs):
         ar_list = []
         for f_info in mdb_hdl.get_raw_data_by_mjd_range(psr, mjd_range=mjd_range):
             if f_info["status"] != "good":
+                logger.info(f"Skipping archive {f_info['location']} due to bad status.")
                 continue
 
+            logger.debug(f"Using: {f_info['location']} (backend: {f_info['backend']})")
             ar_list.append({
                 "location": f_info["location"],
                 "backend": f_info["backend"]
