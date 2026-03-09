@@ -515,26 +515,21 @@ class pint_handler():
                 fitter = "ls"
                 self.logger.debug("Using LS fitter. ", layer=1)
 
+        # Initialize fitter
+        f_prefit = None
+        if fitter == "ls": # Least Squares fitting
+            f_prefit = WLSFitter(self.t, self.m)
+            self.f = copy.deepcopy(f_prefit)
+        elif fitter == "mcmc": # MCMC fitting
+            f_prefit = MCMCFitter(self.t, self.m, nwalkers=nwalkers, nsteps=nsteps, n_pools=self.n_pools)
+            self.f = copy.deepcopy(f_prefit)
+        else:
+            raise Exception(f"Fitter {fitter} is not supported. Supported fitters: ls, mcmc. ")
+
         # Run fit
         try:
-            if fitter == "ls": # Least Squares fitting
-                # Initialize fitter
-                f_prefit = WLSFitter(self.t, self.m)
-                self.f = copy.deepcopy(f_prefit)
-
-                # Fit toas
-                self.f.fit_toas(maxiter=maxiter)
-                self.f_status = True
-            elif fitter == "mcmc": # MCMC fitting
-                # Initialize fitter
-                f_prefit = MCMCFitter(self.t, self.m, nwalkers=nwalkers, nsteps=nsteps, n_pools=self.n_pools)
-                self.f = copy.deepcopy(f_prefit)
-
-                # Fit toas
-                self.f.fit_toas()
-                self.f_status = True
-            else:
-                raise Exception(f"Fitter {fitter} is not supported. Supported fitters: ls, mcmc. ")
+            self.f.fit_toas(maxiter=maxiter)
+            self.f_status = True
         except Exception as e:
             self.logger.warning("Fitting failed, restoring prefit model. Error:", e)
 

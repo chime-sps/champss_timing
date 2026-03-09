@@ -405,13 +405,38 @@ class Main:
     def check_fitting_failure(self):
         self.logger.debug("Checking fitting status...")
 
-        if len(self.timing_info) > 3:
-            if ("FITTING_FAILED" in self.timing_info[-1]["notes"]["remark"]
-            and "FITTING_FAILED" in self.timing_info[-2]["notes"]["remark"]
-            and "FITTING_FAILED" in self.timing_info[-3]["notes"]["remark"]):
-                return {"level": 3, "id": "fitting_failed", "message": "All PINT fittings failed in last 3 samples. ", "attachments": ["%DIAGNOSTIC_PLOT%"]}
+        # Count number of consecutive fitting failures in the latest samples
+        n_fitting_failures = 0
+        for timing in reversed(self.timing_info):
+            if "FITTING_FAILED" not in timing["notes"]["remark"]:
+                break
+            
+            n_fitting_failures += 1
+
+        # Initialize fitting status results
+        status = {"level": 0, "id": "fitting_ok", "message": f"PINT fitting failed in the latest {n_fitting_failures} consecutive samples. ", "attachments": [], "attachments_report_only": []}
+
+        # Setup level according to the number of consecutive fitting failures
+        if n_fitting_failures >= 5:
+            status["level"] = 3
+            status["id"] = "fitting_failed_5_samples"
+            self.logger.debug(f"PINT fitting failed in the latest {n_fitting_failures} consecutive samples, which is >= 5. Setting status to level 3. ", layer=1)
+        elif n_fitting_failures >= 3:
+            status["level"] = 2
+            status["id"] = "fitting_failed_3_samples"
+            self.logger.debug(f"PINT fitting failed in the latest {n_fitting_failures} consecutive samples, which is >= 3. Setting status to level 2. ", layer=1)
+        elif n_fitting_failures >= 1:
+            status["level"] = 1
+            status["id"] = "fitting_failed_1_sample"
+            self.logger.debug(f"PINT fitting failed in the latest {n_fitting_failures} consecutive samples, which is >= 1. Setting status to level 1. ", layer=1)
+        else:
+            self.logger.debug("No fitting failure detected in the latest sample. ", layer=1)
+            
+        # Add attachments if there's any fitting failure
+        if status["level"] >= 1:
+            status["attachments"].append("%DIAGNOSTIC_PLOT%")
         
-        return {"level": 0, "id": "fitting_ok", "message": "Fitting status is normal.", "attachments": []}
+        return status
 
     def _mad_outlier_test(self, samples, point):
         """

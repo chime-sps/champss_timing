@@ -67,7 +67,7 @@ class MCMCFitter(MCMCFitter):
         # Set initial state
         self.sampler.random_state = np.random.mtrand.RandomState()
 
-    def fit_toas(self):
+    def fit_toas(self, *args, **kwargs): # Receive dummy arguments for compatibility with wls fitter (e.g., maxiter)
         self.fitted = True
         return super().fit_toas(maxiter=self.nsteps)
 
