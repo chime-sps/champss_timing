@@ -43,10 +43,10 @@ class pint_handler():
         self.logger = self_super.logger.copy()
         self.n_pools = self_super.n_pools
 
-        self.m, self.t = False, False
-        self.f = False
+        self.m, self.t = None, None
+        self.f = None
         self.f_status = None
-        self.prefit_resids = False
+        self.prefit_resids = None
         self.bad_toas = []
         self.bad_resids = []
 
@@ -504,10 +504,7 @@ class pint_handler():
 
         # Check if there are enough TOAs to fit
         if len(self.t) <= 1:
-            self.f_status = False
-            self.f = {"error": "Not enough TOAs to fit. "}
-            self.logger.warning("TOAs are less than 2. Skipping fitting. ")
-            return
+            raise Exception("Not enough TOAs to fit (need at least 2). ")
 
         # Automatically choose the fitter
         if fitter == "auto":
@@ -521,19 +518,28 @@ class pint_handler():
         # Run fit
         try:
             if fitter == "ls": # Least Squares fitting
-                self.f = WLSFitter(self.t, self.m)
+                # Initialize fitter
+                f_prefit = WLSFitter(self.t, self.m)
+                self.f = copy.deepcopy(f_prefit)
+
+                # Fit toas
                 self.f.fit_toas(maxiter=maxiter)
                 self.f_status = True
             elif fitter == "mcmc": # MCMC fitting
-                self.f = MCMCFitter(self.t, self.m, nwalkers=nwalkers, nsteps=nsteps, n_pools=self.n_pools)
+                # Initialize fitter
+                f_prefit = MCMCFitter(self.t, self.m, nwalkers=nwalkers, nsteps=nsteps, n_pools=self.n_pools)
+                self.f = copy.deepcopy(f_prefit)
+
+                # Fit toas
                 self.f.fit_toas()
                 self.f_status = True
             else:
                 raise Exception(f"Fitter {fitter} is not supported. Supported fitters: ls, mcmc. ")
         except Exception as e:
+            self.logger.warning("Fitting failed, restoring prefit model. Error:", e)
+
             self.f_status = False
-            self.f = {"error": e}
-            self.logger.warning("Fitting failed. ", e)
+            self.f = f_prefit # Return the prefit model if fitting fails
             
             if raise_exception: # Raise exception if required
                 raise e
@@ -601,7 +607,7 @@ class pint_handler():
                 fitter.fit_toas()
                 this_model = fitter.model
             except Exception as e:
-                self.logger.warning("Fitting failed in clustering fitter. ", e)
+                self.logger.warning("Fitting failed in clustering fitter. Error: %s", e)
                 self.logger.warning("Returning the last successful model. ")
                 return m, fitter, False
 

@@ -470,6 +470,7 @@ class champss_timing:
         # Prepare notes
         remark = []
         if not pint.f_status:
+            print("!!!! WARNING: Fitting failed, adding FITTING_FAILED remark. !!!!")
             remark.append("FITTING_FAILED")
 
         # Get archive ids
