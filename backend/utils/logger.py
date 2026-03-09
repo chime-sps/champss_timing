@@ -2,19 +2,33 @@ import time
 import copy
 import inspect
 
-# from .notification import notification
+class LoggerCache:
+    def __init__(self):
+        self.logs = []
+
+    def append(self, log):
+        self.logs.append(log)
+
+    def get(self):
+        return self.logs
+
+    def clear(self):
+        self.logs = []
 
 class logger():
     def __init__(self, noti=False, level="INFO"):
         self.level = level
         self.default_layer = 0
-        self.log_cache = []
-        # self.notification = noti
-        # self.noti_hdl = notification()
+        self.log_cache = LoggerCache()
     
     def copy(self, level_up=True):
+        # Deep copy the logger
         logger = copy.deepcopy(self)
+
+        # Restore the log cache to the original one
+        logger.log_cache = self.log_cache
         
+        # Level up the logger if needed
         if level_up:
             logger.level_up()
 
@@ -104,9 +118,6 @@ class logger():
 
         for line in text.split("\n"):
             print(self.format_text(line, "WARNING", self.default_layer + layer, color="yellow"), end=end)
-        
-        # if self.notification:
-        #     self.noti_hdl.send_message(text, psr_id=self.psr_id)
 
     def error(self, *args, layer=0, end="\n"):
         text = " ".join([str(arg) for arg in args])
@@ -117,9 +128,6 @@ class logger():
         except Exception as e:
             print("ERROR: ", text)
             print("\033[91m[ Logger Error ] While printing the error message, an error occurred: ", e, "\033[0m")
-        
-        # if self.notification:
-        #     self.noti_hdl.send_urgent_message(text, psr_id=self.psr_id)
 
     def success(self, *args, layer=0, end="\n"):
         text = " ".join([str(arg) for arg in args])
@@ -140,14 +148,14 @@ class logger():
             print(self.format_text(line, "       ", self.default_layer + layer, color="purple"), end=end)
 
     def get_log_cache(self):
-        return self.log_cache
+        return self.log_cache.get()
 
     def clear_log_cache(self):
-        self.log_cache = []
+        self.log_cache.clear()
 
     def save_log(self, file_path, clear=True):
         with open(file_path, "w") as f:
-            for log in self.log_cache:
+            for log in self.log_cache.get():
                 f.write(log + "\n")
 
         if clear:
