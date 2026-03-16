@@ -515,13 +515,18 @@ class pint_handler():
                 fitter = "ls"
                 self.logger.debug("Using LS fitter. ", layer=1)
 
+        # Compute pulse number
+        this_m = copy.deepcopy(self.m)
+        this_t = copy.deepcopy(self.t)
+        this_t.compute_pulse_numbers(this_m) # compute pulse number to help fitters converge better
+
         # Initialize fitter
         f_prefit = None
         if fitter == "ls": # Least Squares fitting
-            f_prefit = WLSFitter(self.t, self.m)
+            f_prefit = WLSFitter(this_t, this_m)
             self.f = copy.deepcopy(f_prefit)
         elif fitter == "mcmc": # MCMC fitting
-            f_prefit = MCMCFitter(self.t, self.m, nwalkers=nwalkers, nsteps=nsteps, n_pools=self.n_pools)
+            f_prefit = MCMCFitter(this_t, this_m, nwalkers=nwalkers, nsteps=nsteps, n_pools=self.n_pools)
             self.f = copy.deepcopy(f_prefit)
         else:
             raise Exception(f"Fitter {fitter} is not supported. Supported fitters: ls, mcmc. ")
@@ -542,13 +547,13 @@ class pint_handler():
                 self.logger.error(traceback.format_exc())
 
         # Run clustering fitter if required
-        if clustering_fitter and len(self.t) > 15:
+        if clustering_fitter and len(this_t) > 15:
             # If fitting failed, or chi2r > 10, try clustering fitter
             if not self.f_status or self.f.get_params_dict("all", "quantity")["CHI2R"].value > 10:
                 self.logger.warning("Fitting failed or chi2r > 10. Try clustering fitter. ")
 
                 # Initialize clustering fitter
-                cf_m, cf_f, cf_passed = self.clustering_fitter(copy.deepcopy(self.m), copy.deepcopy(self.t), debug=True)
+                cf_m, cf_f, cf_passed = self.clustering_fitter(copy.deepcopy(this_m), copy.deepcopy(this_t), debug=True)
 
                 # Check if clustering fitter passed
                 if cf_passed:
