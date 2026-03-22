@@ -39,24 +39,19 @@ class MatchedFilterSNR:
             np.quantile(self.profile, 0.99) / np.quantile(self.template, 0.99)
         )
 
-    def compute(self):
+    def compute(self, noise_std=None):
         """
         Compute the matched filter SNR.
+        noise_std: externally provided noise estimate (recommended).
+                If None, falls back to std of residual (less accurate).
         """
-        
-        # # Calculate signal and noise levels
-        # chisq_signal = np.sum((self.profile)**2)
-        # chisq_noise = np.sum((self.profile - self.template)**2)
 
-        # # Calculate SNR
-        # if chisq_signal - chisq_noise < 0:
-        #     return 0.0
-        # snr = np.sqrt(chisq_signal - chisq_noise)
-
-        # return snr
+        # Estimate noise level if not provided
+        if noise_std is None:
+            noise_std = np.std(self.profile - self.template)
         
         # Calculate SNR
-        snr = np.sum(self.profile * self.template) / np.sqrt(np.sum(self.template**2)) # Equation from Wikipedia. I think this can handle faint signals better. 
+        snr = np.sum(self.profile * self.template) / np.sqrt(np.sum(self.template**2)) / noise_std # Can handle faint signals better. 
         
         # Sanity checks
         if np.isnan(snr) or np.isinf(snr) or snr < 0:
