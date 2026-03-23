@@ -177,7 +177,7 @@ class timing():
         self.psrchive.get_toas(self.fs, template=f"{self.workspace}/paas.std", output=f"{self.workspace}/pulsar.tim")
         self.logger.debug("Getting TOAs... Done. ")
 
-    def time(self, fit_params="auto", potential_params=[], mcmc_report=None):
+    def time(self, fit_params="auto", potential_params=[], mcmc_report=None, run_fit=True):
         if not self.initialized:
             raise Exception("Workspace not initialized")
         
@@ -244,8 +244,12 @@ class timing():
         self.logger.debug("Filtering TOAs... ")
         self.pint.filter()
 
-        self.logger.debug("Fitting TOAs... ")
-        self.pint.fit(raise_exception=False)
+        if run_fit:
+            self.logger.debug("Fitting TOAs... ")
+            self.pint.fit(raise_exception=False)
+        else:
+            self.logger.debug("Skipping fitting... ")
+            self.pint.fit(maxiter=1) # run a fake fit to update the model and residuals without changing the parameters
 
         if mcmc_report is not None:
             self.logger.debug("Running MCMC... ")

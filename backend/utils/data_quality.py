@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.stats import normaltest
 from .correlation import fourier_shifts, discrete_shifts, subsample_shifts
 
 class MatchedFilterSNR:
@@ -58,6 +59,13 @@ class MatchedFilterSNR:
             return 0.0
 
         return snr
+
+    def normaltest(self):
+        """
+        Compute the probability that the profile is consistent with noise using a normality test on the residual.
+        """
+
+        return normaltest(self.profile)
     
     def plot(self, ax=None):
         """

@@ -391,21 +391,42 @@ class champss_timing:
                     for i, f in enumerate(tim.fs):
                         self.archive_cache.add_archive(f"{f}.clfd.FTp", tim.rcvrs[i])
 
+                # Apply quality check threshold
+                self.logger.debug(f" > Applying quality check thresholds")
+                ar_list_filtered = self.archive_cache.filter_archives_by_quality_checks(ar_list, checks=self.timing_config["settings"]["use_quality_checks"])
+
+                # Check if the same set of files are already timed in the last timing info
+                run_fit = True
+                for ar in ar_list_filtered["good"]:
+                    if utils.get_archive_id(ar["path"]) not in last_timing_info["files"]:
+                        break
+                else:
+                    self.logger.info(f"The same set of files have been timed in the last timing info. Skip fitting and just update the database with the timing info from PINT. ")
+                    run_fit = False
+
+                # Sanity check for number of good files after quality check
+                if len(ar_list_filtered["good"]) < 1:
+                    self.logger.error(f"No good file after quality check. Timing failed. Please make sure the first observation is of good quality to get the timing started. ")
+                    return {"status": "error"}
+                elif len(ar_list_filtered["good"]) < 2:
+                    run_fit = False
+                    self.logger.warning(f"Skip fitting since only one good file after quality check. ")
+
                 # Create new timfile from database and overwrite the one in the workspace
                 self.logger.debug(f" > Creating timfile")
                 open(f"{tim.workspace}/pulsar.tim", "w").write(
-                    self.db_create_timfile(ar_list)
+                    self.db_create_timfile(ar_list_filtered["good"])
                 )
 
                 # Run timing from PINT
                 self.logger.debug(f" > Timing TOAs")
                 # tim.time(fit_params=fit_params, potential_params=potential_fit_params, mcmc_report=mcmc_report)
-                tim.time(fit_params=fit_params, potential_params=potential_fit_params)
+                tim.time(fit_params=fit_params, potential_params=potential_fit_params, run_fit=run_fit)
                 # tim.time(fit_params=fit_params)
                 
                 # Insert timing info
                 self.logger.debug(f"Saving timing info to database")
-                self.db_insert_timing_info(ar_list, mjds, tim.pint)
+                self.db_insert_timing_info(ar_list_filtered, mjds, tim.pint)
 
                 # Finishing and print summary
                 self.logger.success(f"Timing module finished")
@@ -435,7 +456,7 @@ class champss_timing:
 
         return {"status": "success"}
 
-    def db_insert_timing_info(self, ar_list, mjds, pint):
+    def db_insert_timing_info(self, ar_list_filtered, mjds, pint):
         # Get PINT objects
         pint_f = pint.f
         pint_t = pint.t
@@ -475,7 +496,7 @@ class champss_timing:
 
         # Get archive ids
         archive_ids = []
-        for ar_info in ar_list:
+        for ar_info in ( ar_list_filtered["good"] + ar_list_filtered["bad"] ): # include both good and bad files
             archive_ids.append(utils.get_archive_id(ar_info["path"]))
 
         # Get chi2 and reduced chi2
@@ -502,6 +523,7 @@ class champss_timing:
                 "fitted_mjds": residual_mjds_list, 
                 "bad_toa_mjds": bad_toa_mjds_list, 
                 "bad_toa_residuals": {"val": bad_residuals_list, "err": bad_residuals_err_list}, 
+                "bad_files": [utils.get_archive_id(ar_info["path"]) for ar_info in ar_list_filtered["bad"]],
                 "remark": remark
             }
         )

@@ -65,9 +65,14 @@ class plot:
             "bad_resids_err": [],
             "bad_resids_err_phase": [],
 
+            # Bad Files
+            "bad_files": [],
+            "bad_files_mjds": [], 
+
             # Diagnostic Data
             "chi2r": [], 
             "snr": [], 
+            "snr_mjds": [], 
             "n_params": [], 
             "params_x": [], 
             "params_y": [], 
@@ -83,42 +88,125 @@ class plot:
             "mjd_gaps": []
         }
 
-        last_mjd = 0
-        for this_timing in self.timing_info:
-            i_range = np.where(np.array(this_timing["obs_mjds"]) > last_mjd)[0]
-            for i in i_range:
-                plot_data["mjds"].append(this_timing["obs_mjds"][i])
-                plot_data["chi2r"].append(this_timing["chi2_reduced"])
-                plot_data["snr"].append(self.archive_info_file_inxed[this_timing["files"][i]]["psr_snr"])
+        # last_mjd = 0
+        # for this_timing in self.timing_info:
+        #     i_range = np.where(np.array(this_timing["obs_mjds"]) > last_mjd)[0]
+        #     for i in i_range:
+        #         plot_data["mjds"].append(this_timing["obs_mjds"][i])
+        #         plot_data["chi2r"].append(this_timing["chi2_reduced"])
+        #         # plot_data["snr"].append(self.archive_info_file_inxed[this_timing["files"][i]]["psr_snr"])
 
-                plot_data["n_params"].append(len(this_timing["unfreeze_params"]))
-                for this_param in this_timing["unfreeze_params"]:
-                    plot_data["params_x"].append(this_timing["obs_mjds"][i])
-                    plot_data["params_y"].append(this_param)
+        #         plot_data["n_params"].append(len(this_timing["unfreeze_params"]))
+        #         for this_param in this_timing["unfreeze_params"]:
+        #             plot_data["params_x"].append(this_timing["obs_mjds"][i])
+        #             plot_data["params_y"].append(this_param)
 
-                # Find mjd gaps and add blanks to amplitude for no observation days
-                if len(plot_data["mjds"]) > 1:
-                    d_mjd = plot_data["mjds"][-1] - plot_data["mjds"][-2]
-                    if d_mjd > 1:
-                        for _ in range(int(d_mjd - 1)):
-                            plot_data["amps"].append(np.zeros_like(plot_data["amps"][-1]))
-                            plot_data["amps_normalized"].append(np.zeros_like(plot_data["amps_normalized"][-1]))
-                        plot_data["mjd_gaps"].append([plot_data["mjds"][-2] + 0.75, plot_data["mjds"][-1] - 0.75])
+        #         # # Find mjd gaps and add blanks to amplitude for no observation days
+        #         # if len(plot_data["mjds"]) > 1:
+        #         #     d_mjd = plot_data["mjds"][-1] - plot_data["mjds"][-2]
+        #         #     if d_mjd > 1:
+        #         #         for _ in range(int(d_mjd - 1)):
+        #         #             plot_data["amps"].append(np.zeros_like(plot_data["amps"][-1]))
+        #         #             plot_data["amps_normalized"].append(np.zeros_like(plot_data["amps_normalized"][-1]))
+        #         #         plot_data["mjd_gaps"].append([plot_data["mjds"][-2] + 0.75, plot_data["mjds"][-1] - 0.75])
 
-                # Get Amplitude
-                plot_data["amps"].append(self.archive_info_file_inxed[this_timing["files"][i]]["psr_amps"])
+        #         # Get Amplitude
+        #         # plot_data["amps"].append(self.archive_info_file_inxed[this_timing["files"][i]]["psr_amps"])
                 
-                # Normalize amplitude
-                plot_data["amps_normalized"].append(plot_data["amps"][-1])
-                if np.any(plot_data["amps_normalized"][-1] != np.min(plot_data["amps_normalized"][-1])) :
-                    plot_data["amps_normalized"][-1] = np.array(plot_data["amps_normalized"][-1]) - min(plot_data["amps_normalized"][-1])
-                    plot_data["amps_normalized"][-1] = np.array(plot_data["amps_normalized"][-1]) / max(plot_data["amps_normalized"][-1])
-                else:
-                    plot_data["amps_normalized"][-1] = np.zeros_like(plot_data["amps_normalized"][-1])
+        #         # Normalize amplitude
+        #         # plot_data["amps_normalized"].append(plot_data["amps"][-1])
+        #         # if np.any(plot_data["amps_normalized"][-1] != np.min(plot_data["amps_normalized"][-1])) :
+        #         #     plot_data["amps_normalized"][-1] = np.array(plot_data["amps_normalized"][-1]) - min(plot_data["amps_normalized"][-1])
+        #         #     plot_data["amps_normalized"][-1] = np.array(plot_data["amps_normalized"][-1]) / max(plot_data["amps_normalized"][-1])
+        #         # else:
+        #         #     plot_data["amps_normalized"][-1] = np.zeros_like(plot_data["amps_normalized"][-1])
 
-                # get rms
-                plot_data["rms"].append(np.sqrt(np.mean(np.array(this_timing["residuals"]["val"])**2)))
-            last_mjd = max(this_timing["obs_mjds"])
+        #         # get rms
+        #         plot_data["rms"].append(np.sqrt(np.mean(np.array(this_timing["residuals"]["val"])**2)))
+        #     last_mjd = max(this_timing["obs_mjds"])
+
+        for this_timing in self.timing_info:
+            plot_data["mjds"].append(np.max(this_timing["obs_mjds"]))
+            plot_data["chi2r"].append(this_timing["chi2_reduced"])
+
+            plot_data["n_params"].append(len(this_timing["unfreeze_params"]))
+            for this_param in this_timing["unfreeze_params"]:
+                plot_data["params_x"].append(np.max(this_timing["obs_mjds"]))
+                plot_data["params_y"].append(this_param)
+
+            plot_data["rms"].append(np.sqrt(np.mean(np.array(this_timing["residuals"]["val"])**2)))
+
+        # get files and metadata
+        profiles_mjd_idxed = {}
+        for ar_id in self.timing_info[-1]["files"]:
+            # find the entry in the archive info
+            if ar_id in self.archive_info_file_inxed:
+                ar_info = self.archive_info_file_inxed[ar_id]
+                profiles_mjd_idxed[ar_info["notes"]["init_epoch"]] = {
+                    "amps": ar_info["psr_amps"],
+                    "snr": ar_info["psr_snr"], 
+                    "epoch": ar_info["notes"]["init_epoch"],
+                }
+            else:
+                utils.print_warning(f"Archive {ar_id} not found in the database. Skipping amplitude retrieval for this file.")
+
+        # sort profiles_mjd_idxed by mjd
+        profiles_mjd_idxed = dict(sorted(profiles_mjd_idxed.items()))
+
+        # get bad files
+        if "bad_files" in self.timing_info[-1]["notes"]:
+            plot_data["bad_files"] = self.timing_info[-1]["notes"]["bad_files"]
+            for this_bad_file in plot_data["bad_files"]:
+                if this_bad_file in self.archive_info_file_inxed:
+                    plot_data["bad_files_mjds"].append(self.archive_info_file_inxed[this_bad_file]["notes"]["init_epoch"])
+                else:
+                    utils.print_warning(f"Bad file {this_bad_file} not found in the database. Skipping MJD retrieval for this file.")
+
+        # get daily profiles
+        profiles_epochs = np.array(list(profiles_mjd_idxed.keys()))
+        last_mjd = 0
+        no_obs_since_last = False
+        for mjd in range(int(np.floor(np.min(profiles_epochs))), int(np.floor(np.max(profiles_epochs))) + 1):
+            # profile_i_in_day = np.where(profiles_epochs >= mjd)[0] & np.where(profiles_epochs < mjd + 1)[0]
+            profile_i_in_day = np.where((profiles_epochs >= mjd) & (profiles_epochs < mjd + 1))[0]
+            if len(profile_i_in_day) > 0: # if there are profiles in this day
+                if profile_i_in_day.shape[0] > 1:
+                    utils.print_warning(f"Multiple profiles found in MJD {mjd}. Taking the first one for plotting.")
+
+                # take the first one if there are multiple profiles in this day
+                profile_i_in_day = profile_i_in_day[0]
+
+                # amp
+                this_amp = profiles_mjd_idxed[profiles_epochs[profile_i_in_day]]["amps"]
+
+                # normalized amp
+                this_amp_normalized = this_amp
+                this_amp_normalized = np.array(this_amp_normalized) - min(this_amp_normalized)
+                if max(this_amp_normalized) > 0:
+                    this_amp_normalized = this_amp_normalized / max(this_amp_normalized)
+
+                # if there is a gap since last observation, update mjd_gaps
+                if no_obs_since_last:
+                    plot_data["mjd_gaps"].append([last_mjd + 0.75, profiles_epochs[profile_i_in_day] - 0.75])
+                    no_obs_since_last = False
+
+                last_mjd = profiles_epochs[profile_i_in_day]
+            else: # no profile
+                # insert blank profile for days with no observation for better visualization of gaps
+                this_amp = np.zeros_like(plot_data["amps"][-1])
+                this_amp_normalized = np.zeros_like(plot_data["amps_normalized"][-1])
+
+                # also add the gap to the plot data
+                no_obs_since_last = True
+
+            # append to plot data
+            plot_data["amps"].append(this_amp)
+            plot_data["amps_normalized"].append(this_amp_normalized)
+
+        # get snrs
+        for profile in profiles_mjd_idxed:
+            plot_data["snr_mjds"].append(profiles_mjd_idxed[profile]["epoch"])
+            plot_data["snr"].append(profiles_mjd_idxed[profile]["snr"])
         
         # get residuals
         plot_data["resids"] = self.timing_info[-1]["residuals"]["val"]
@@ -194,6 +282,12 @@ class plot:
     def diagnostic(self, savefig=None, show_ephms=True):
         plot_data = self.get_plot_data()
 
+        # calculate xlim for residual plot
+        resid_xlim = (
+            min(plot_data["snr_mjds"]) - (max(plot_data["snr_mjds"]) - min(plot_data["snr_mjds"])) * 0.01, 
+            max(plot_data["snr_mjds"]) + (max(plot_data["snr_mjds"]) - min(plot_data["snr_mjds"])) * 0.01
+        )
+
         # create grid of plots
         if show_ephms:
             fig, axs = plt.subplots(4, 5, figsize=(20, 11.25))
@@ -236,12 +330,18 @@ class plot:
         ## also show the same x-tick in the bottom
         axs_amps2 = axs_amps.twiny()
         axs_amps2.set_xlim(axs_amps.get_xlim())
-        ## set right axis to mark bad toa mjds
-        if len(plot_data["bad_toa_mjds"]) > 0:
+        ## set right axis to mark bad toa mjds and bad file mjds
+        if (len(plot_data["bad_toa_mjds"]) + len(plot_data["bad_files_mjds"])) > 0:
+            bad_mjds = plot_data["bad_toa_mjds"] + plot_data["bad_files_mjds"]
+            bad_mjds_label = ["←"] * len(plot_data["bad_toa_mjds"]) + ["✕"] * len(plot_data["bad_files_mjds"])
             ax_right = axs_amps.twinx()
             ax_right.set_ylim(axs_amps.get_ylim())
-            ax_right.set_yticks(np.array(plot_data["bad_toa_mjds"]) - min(plot_data["mjds"]))
-            ax_right.set_yticklabels(["←"] * len(plot_data["bad_toa_mjds"]), fontdict={"verticalalignment": "center"}, color="r")
+            # ax_right.set_yticks(np.array(plot_data["bad_toa_mjds"]) - min(plot_data["mjds"]))
+            # ax_right.set_yticklabels(["←"] * len(plot_data["bad_toa_mjds"]), fontdict={"verticalalignment": "center"}, color="r")
+            ax_right.set_yticks(np.array(bad_mjds) - min(plot_data["mjds"]) + 1)
+            ax_right.set_yticklabels(bad_mjds_label, fontdict={"verticalalignment": "center"}, color="r")
+            ax_right.tick_params(axis='y', which='both', length=0)  # hide ticks
+            # ax_right.set_title("Red marks indicate bad TOAs. '?' marks indicate bad files.")
 
         # plot residuals horizontally across 2 grids
         ## remove the underlying Axes
@@ -276,8 +376,13 @@ class plot:
         ## fill mjd gaps
         for this_gap in plot_data["mjd_gaps"]:
             axs_resids.fill_between(this_gap, lim_0, lim_1, color="gray", alpha=0.10, label="No Observation")    
+        ## show bad file mjds
+        for this_bad_file_mjd in plot_data["bad_files_mjds"]:
+            axs_resids.fill_between([this_bad_file_mjd-0.5, this_bad_file_mjd+0.5], lim_0, lim_1, color="mistyrose", label="Data Quality Issue")
         ## scientific notation for y-axis
         axs_resids.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
+        ## set xlim to the range of mjds
+        axs_resids.set_xlim(resid_xlim[0], resid_xlim[1])
         # self.__legend_without_duplicate_labels(axs_resids)
 
         # plot chi2r horizontally across 2 grids
@@ -300,6 +405,11 @@ class plot:
         axs_chi2r.set_ylim(lim_0, lim_1)
         for this_gap in plot_data["mjd_gaps"]:
             axs_chi2r.fill_between(this_gap, lim_0, lim_1, color="gray", alpha=0.10)
+        ## show bad file mjds
+        for this_bad_file_mjd in plot_data["bad_files_mjds"]:
+            axs_chi2r.fill_between([this_bad_file_mjd-0.5, this_bad_file_mjd+0.5], lim_0, lim_1, color="mistyrose", label="Data Quality Issue")
+        ## set xlim to the range of mjds
+        axs_chi2r.set_xlim(resid_xlim[0], resid_xlim[1])
         # self.__legend_without_duplicate_labels(axs_chi2r)
 
         # # plot n_params horizontally across 2 grids
@@ -341,6 +451,11 @@ class plot:
         axs_n_params.set_ylim(lim_0, lim_1)
         for this_gap in plot_data["mjd_gaps"]:
             axs_n_params.fill_between(this_gap, lim_0, lim_1, color="gray", alpha=0.10)
+        ## show bad file mjds
+        for this_bad_file_mjd in plot_data["bad_files_mjds"]:
+            axs_n_params.fill_between([this_bad_file_mjd-0.5, this_bad_file_mjd+0.5], lim_0, lim_1, color="mistyrose", label="Data Quality Issue")
+        ## set xlim to the range of mjds
+        axs_n_params.set_xlim(resid_xlim[0], resid_xlim[1])
         # self.__legend_without_duplicate_labels(axs_n_params)
 
         # # plot rms horizontally across 2 grids
@@ -370,7 +485,7 @@ class plot:
         ## combine the 2 grids
         snr_gs = axs[3, 1].get_gridspec()
         axs_snr = fig.add_subplot(snr_gs[3, 1:4])
-        axs_snr.plot(plot_data["mjds"], plot_data["snr"], "kx", label="SNR")
+        axs_snr.plot(plot_data["snr_mjds"], plot_data["snr"], "kx", label="SNR")
         # axs_snr.set_title("SNR")
         axs_snr.set_xlabel("MJD")
         axs_snr.set_ylabel("Signal to Noise Ratio")
@@ -380,6 +495,10 @@ class plot:
         axs_snr.set_ylim(lim_0, lim_1)
         for this_gap in plot_data["mjd_gaps"]:
             axs_snr.fill_between(this_gap, lim_0, lim_1, color="gray", alpha=0.10)
+        for this_bad_file_mjd in plot_data["bad_files_mjds"]:
+            axs_snr.fill_between([this_bad_file_mjd-0.5, this_bad_file_mjd+0.5], lim_0, lim_1, color="mistyrose", label="Data Quality Issue")
+        ## set xlim to the range of mjds
+        axs_snr.set_xlim(resid_xlim[0], resid_xlim[1])
         # self.__legend_without_duplicate_labels(axs_snr)
 
         if show_ephms:
@@ -408,12 +527,17 @@ class plot:
             # Add info to the right bottom corner
             for i, label in enumerate(plot_data["resids_label_types"]): 
                 fig.text(0.999, 0 + (i) * 0.0125, f"{label} ⨯", fontsize=9, ha="right", va="bottom", color=self.label_colors[i])
-            fig.text(0.999, 0 + (i + 1) * 0.0125, f"Outliers →", fontsize=9, ha="right", va="bottom", color="red")
+            if len(plot_data["bad_files"]) > 0:
+                fig.text(0.999, 0 + (i + 1) * 0.0125, f"Nulling ✕ | Outliers →", fontsize=9, ha="right", va="bottom", color="red")
+            else:
+                fig.text(0.999, 0 + (i + 1) * 0.0125, f"Outliers →", fontsize=9, ha="right", va="bottom", color="red")
         else:
             # show the info horizontally at the bottom
             legend_text = ""
             for i, label in enumerate(plot_data["resids_label_types"]): 
                 legend_text += f"{label} [ {self.label_colors[i]} ⨯ ] | "
+            if len(plot_data["bad_files"]) > 0:
+                legend_text += f"Nulling [ red ✕ ] | "
             legend_text += f"Outliers [ red → ]"
             fig.text(0.999, 0, legend_text, fontsize=9, ha="right", va="bottom")
 

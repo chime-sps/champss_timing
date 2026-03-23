@@ -292,6 +292,9 @@ class database:
         if "fitted_summary" not in formatted_info["notes"]:
             formatted_info["notes"]["fitted_summary"] = "NO_SUMMARY_PROVIDED"
 
+        if "bad_files" not in formatted_info["notes"]:
+            formatted_info["notes"]["bad_files"] = []
+
         if "remark" not in formatted_info["notes"]:
             formatted_info["notes"]["remark"] = []
 

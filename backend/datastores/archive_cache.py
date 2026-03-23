@@ -15,21 +15,21 @@ from ..io.archive import ArchiveReader
 from ..processing.archive_shutils import archive_shutils
 from ..tools.ephm_install import EphmInstall
 
-# Putting function outside of the class since db_hdl cannot be pickled and passed to Pool
-def _archive_cache__db_update_psr_amps_many__get_amp_and_snr(filename, prof_templ):
-    # Get profile amps
-    amps = ArchiveReader(filename).get_amps()
+# # Putting function outside of the class since db_hdl cannot be pickled and passed to Pool
+# def _archive_cache__db_update_psr_amps_many__get_amp_and_snr(filename, prof_templ):
+#     # Get profile amps
+#     amps = ArchiveReader(filename).get_amps()
 
-    # Calculate matched filter SNR
-    if prof_templ is None:
-        snr = 0
-    else:
-        snr = MatchedFilterSNR(amps, prof_templ).compute()
+#     # Calculate matched filter SNR
+#     if prof_templ is None:
+#         snr = 0
+#     else:
+#         snr = MatchedFilterSNR(amps, prof_templ).compute()
 
-    return amps, snr
+#     return amps, snr
 
-def _archive_cache__shutils_update_model(archive, parfile, jump):
-        return archive_shutils(archive).install_parfile(parfile, jump)
+# def _archive_cache__shutils_update_model(archive, parfile, jump):
+#         return archive_shutils(archive).install_parfile(parfile, jump)
 
 def _archive_cache__pint_update_model(ar, parfile, jumps):
     # Initialize EphmInstall object
@@ -157,13 +157,13 @@ class archive_cache:
 
             # recalculate snr
             # uncomment the following lines if you want to recalculate SNR for all archives for any reason
-            # snr = MatchedFilterSNR(ar["notes"]["init_amps"], json.loads(self.db_hdl.get_config("__template:amps"))).compute()
-            # self.logger.info(f"[update_model_internal] Recalculated SNR for archive {ar['filename']}: {snr}", layer=1)
-            # self.db_hdl.update_archive_info(
-            #     filename = ar["filename"],
-            #     psr_snr = snr,
-            #     commit = True
-            # )
+            snr = MatchedFilterSNR(ar["notes"]["init_amps"], json.loads(self.db_hdl.get_config("__template:amps"))).compute()
+            self.logger.info(f"[update_model_internal] Recalculated SNR for archive {ar['filename']}: {snr}", layer=1)
+            self.db_hdl.update_archive_info(
+                filename = ar["filename"],
+                psr_snr = snr,
+                commit = True
+            )
 
         # # Update model in all timed files
         # filenames = []
@@ -224,81 +224,43 @@ class archive_cache:
         return True
 
     def update_model(self, jumps, parfile="auto", n_pools="auto", tempdir="auto", cleanup=True):
-        self.logger.debug(f"[update_model] Updating model in all cached archives using PSRCHIVE... ", layer=1)
+        '''
+        Legacy method replaced by update_model_internal. 
+        '''
 
-        # Initialze variables
-        if parfile == "auto":
-            parfile = f"{self.psr_dir}/pulsar.par"
+        self.update_model_internal(jumps, parfile=parfile, n_pools=n_pools)
 
-        if tempdir == "auto":
-            tempdir = f"{self.cache_dir}/temp"
-        else:
-            tempdir = f"{tempdir}/" + self.utils.get_rand_string()
+    def filter_archives_by_quality_checks(self, ar_list, checks=[]):
+        if len(checks) == 0:
+            return {"good": ar_list, "bad": []}
 
-        if not os.path.exists(tempdir):
-            os.makedirs(tempdir, exist_ok=True)
+        res = {"good": [], "bad": []}
+        for ar in ar_list:
+            ar_info = self.db_hdl.get_archive_info_by_filename(self.utils.get_archive_id(ar["path"]))
 
-        # get all timed files
-        timed_files = self.db_hdl.get_last_timing_info()["files"] # only get latest timing info files
-
-        # get all archives
-        archives = []
-        archive_shutils_objects = []
-        for ar in tqdm.tqdm(self.db_hdl.get_all_archive_info(), desc="Preparing archives"):
-            if ar["filename"] not in timed_files:
-                self.logger.warning(f"Archive {ar['filename']} not in timing_info. Skipping.", layer=1)
-                continue
-
-            this_path = f"{self.cache_dir}/{ar['filename']}"
-            this_temp_path = f"{tempdir}/{ar['filename']}"
-            if os.path.exists(f"{this_path}"):
-                # copy archive to temp directory
-                shutil.copyfile(this_path, this_temp_path)
-
-                # get jump value
-                if ar["notes"]["rcvr"] in jumps:
-                    jump = jumps[ar["notes"]["rcvr"]][0]
+            passed_checks = False
+            for check in checks:
+                if check["name"] == "snr":
+                    if ar_info["psr_snr"] > check["threshold"]:
+                        passed_checks = True
+                        break
+                elif check["name"] == "normaltest_p":
+                    normaltest_p = ar_info["notes"].get("normaltest_p", None)
+                    if normaltest_p is None: 
+                        continue # skip this check if normaltest_p is not available in notes (this can happen for older archives before this feature is introduced)
+                    if normaltest_p < check["threshold"]:
+                        passed_checks = True
+                        break
                 else:
-                    raise Exception(f"Receiver {ar['notes']['rcvr']} not found in jumps. Please add it to jumps in configurations.")
+                    self.logger.warning(f"Quality check {check['name']} not recognized. Skipping this check.", layer=1)
 
-                # append to archives
-                archives.append({
-                    "filename": this_path,
-                    "temp_filename": this_temp_path,
-                    "rcvr": ar["notes"]["rcvr"],
-                    "jump": jump
-                })
+            if passed_checks:
+                res["good"].append(ar)
             else:
-                self.logger.warning(f"Archive {ar['filename']} not found in cache. Skipping.", layer=1)
+                res["bad"].append(ar)
 
-        # update model and apply jump
-        with Pool(processes=n_pools) as pool:
-            self.logger.info(f"[update_model] Using {n_pools} processes... ", layer=1)
-            tqdm.tqdm(
-                pool.starmap(
-                    _archive_cache__shutils_update_model, 
-                    [
-                        (this_ar["temp_filename"], parfile, this_ar["jump"]) for this_ar in archives
-                    ]
-                ), 
-                total=len(archives), 
-                desc="Updating model in archives"
-            )
-
-        # update psr_amps in database
-        self.logger.debug(f"[update_model] updating archive information in database... ", layer=1)
-        self.db_update_psr_amps_many(
-            [this_ar["temp_filename"] for this_ar in archives],
-            n_pools=n_pools, 
-            commit=True
-        )
-        self.logger.success(f"[update_model] archive information in database updated for {len(archives)} observations. ", layer=1)
-
-        # cleanup
-        if cleanup:
-            shutil.rmtree(tempdir)
-
-        return True
+        self.logger.info(f"Applied quality checks. {len(res['good'])}/{len(ar_list)} archives passed the checks. ", layer=1)
+        return res
 
     def db_insert_archive_info(self, filename, rcvr):
         archive_hdl = ArchiveReader(filename)
@@ -308,8 +270,11 @@ class archive_cache:
         prof_templ = self.db_hdl.get_config("__template:amps")
         if prof_templ is None:
             snr = 0
+            normaltest_p = 0
         else:
-            snr = MatchedFilterSNR(amps, json.loads(prof_templ)).compute()
+            mf_snr = MatchedFilterSNR(amps, json.loads(prof_templ))
+            snr = mf_snr.compute()
+            normaltest_p = mf_snr.normaltest()[1]
 
         self.db_hdl.insert_archive_info(
             filename = self.utils.get_archive_id(filename), 
@@ -322,58 +287,9 @@ class archive_cache:
                 "freq": archive_hdl.get_freq(), 
                 "site": archive_hdl.get_telescope(), 
                 "init_epoch": archive_hdl.get_epoch(), 
-                "init_amps": archive_hdl.get_amps()
+                "init_amps": archive_hdl.get_amps(), 
+                "normaltest_p": normaltest_p
             }
-        )
-    
-    def db_update_psr_amps(self, filename, commit=True):
-        archive_hdl = ArchiveReader(filename)
-
-        last_archive_info = self.db_hdl.get_archive_info_by_filename(self.utils.get_archive_id(filename))
-        notes = last_archive_info["notes"]
-        notes["md5"] = self.get_md5(filename)
-
-        self.db_hdl.update_archive_info(
-            filename = self.utils.get_archive_id(filename),
-            psr_amps = archive_hdl.get_amps(),
-            psr_snr = archive_hdl.get_snr(), 
-            notes = notes, 
-            commit = commit
-        )
-
-    def db_update_psr_amps_many(self, filenames, n_pools=4, commit=True):
-        # get profile template from database
-        prof_templ = self.db_hdl.get_config("__template:amps")
-        if prof_templ is not None: 
-            prof_templ = json.loads(prof_templ)
-        else:
-            self.logger.warning("No profile template found in database. SNR will be set to 0.", layer=1)
-
-        with Pool(processes=n_pools) as pool:
-            # results = list(tqdm.tqdm(pool.imap(_archive_cache__db_update_psr_amps_many__get_amp_and_snr, filenames), total=len(filenames)))
-            results = list(
-                pool.starmap(
-                    _archive_cache__db_update_psr_amps_many__get_amp_and_snr, 
-                    tqdm.tqdm(
-                        [(f, prof_templ) for f in filenames], 
-                        total=len(filenames)
-                    )
-                )
-            )
-        
-        ar_ids = []
-        amps = []
-        snrs = []
-        for i, filename in enumerate(filenames):
-            ar_ids.append(self.utils.get_archive_id(filename))
-            amps.append(results[i][0])
-            snrs.append(results[i][1])
-
-        self.db_hdl.update_archive_amps_info_many(
-            filenames = ar_ids,
-            amps = amps,
-            snrs = snrs,
-            commit = commit
         )
 
     def db_commit(self):

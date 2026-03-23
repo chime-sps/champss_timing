@@ -422,6 +422,10 @@ class pint_handler():
         mjds.sort()
         mjds = mjds[-latest_n_days:]
 
+        # Sanity check if there's more than 1 TOA in the latest n days
+        if len(mjds) < 2:
+            return False
+
         # Check if the difference between the latest n MJDs is greater than the threshold
         if np.max(np.diff(mjds)) > threshold:
             return True
@@ -503,7 +507,7 @@ class pint_handler():
                 self.m["PMDEC"].value = 0
 
         # Check if there are enough TOAs to fit
-        if len(self.t) <= 1:
+        if len(self.t) <= 1 and maxiter > 1:
             raise Exception("Not enough TOAs to fit (need at least 2). ")
 
         # Automatically choose the fitter

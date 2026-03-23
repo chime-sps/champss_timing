@@ -16,7 +16,8 @@ class config():
                 "fit_every_n_days": 1,
                 "reset_params": True, 
                 "fit_params": ["F0", "F1", "RAJ", "DECJ"], 
-                "use_filters": []
+                "use_filters": [], 
+                "use_quality_checks": [],
             }, 
             "ignore_mjds": {
                 "earlier_than": 0,
