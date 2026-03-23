@@ -182,9 +182,12 @@ class plot:
 
                 # normalized amp
                 this_amp_normalized = this_amp
-                this_amp_normalized = np.array(this_amp_normalized) - min(this_amp_normalized)
-                if max(this_amp_normalized) > 0:
-                    this_amp_normalized = this_amp_normalized / max(this_amp_normalized)
+                # this_amp_normalized = np.array(this_amp_normalized) - min(this_amp_normalized)
+                # if max(this_amp_normalized) > 0:
+                #     this_amp_normalized = this_amp_normalized / max(this_amp_normalized)
+                this_amp_normalized = np.array(this_amp_normalized) - np.median(this_amp_normalized)
+                if np.std(this_amp_normalized) > 0:
+                    this_amp_normalized = this_amp_normalized / np.std(this_amp_normalized)
 
                 # if there is a gap since last observation, update mjd_gaps
                 if no_obs_since_last:
