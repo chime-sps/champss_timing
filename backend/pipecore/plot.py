@@ -18,6 +18,7 @@ class plot:
         self.toas = []
         self.toas_mjdint_idxed = {}
         self.label_colors = ["black", "darkblue", "darkred", "darkgreen", "darkgoldenrod"]
+        self.ignore_ephm_keys = ["INFO", "TIMEEPH", "T2CMETHOD", "DILATEFREQ", "DMDATA", "DMRES", "TRACK", "EPHEM", "UNITS", "RM", "JUMP"]
 
         self.initialize()
 
@@ -283,9 +284,11 @@ class plot:
         plot_data = self.get_plot_data()
 
         # calculate xlim for residual plot
+        mjds_min = min([min(plot_data["mjds"]), min(plot_data["resid_mjds"]), min(plot_data["snr_mjds"])])
+        mjds_max = max([max(plot_data["mjds"]), max(plot_data["resid_mjds"]), max(plot_data["snr_mjds"])])
         resid_xlim = (
-            min(plot_data["snr_mjds"]) - (max(plot_data["snr_mjds"]) - min(plot_data["snr_mjds"])) * 0.01, 
-            max(plot_data["snr_mjds"]) + (max(plot_data["snr_mjds"]) - min(plot_data["snr_mjds"])) * 0.01
+            mjds_min - (mjds_max - mjds_min) * 0.02, 
+            mjds_max + (mjds_max - mjds_min) * 0.02
         )
 
         # create grid of plots
@@ -505,6 +508,15 @@ class plot:
             # Plot fitted_params as table
             table_data = []
             for key, value in plot_data["fitted_params"].items():
+                if key in self.ignore_ephm_keys:
+                    continue
+                
+                if key.startswith("JUMP"):
+                    continue
+
+                if value == "None":
+                    continue
+
                 if key in plot_data["unfreeze_params"]:
                     table_data.append(["◼︎ " + key, value])
                 else:

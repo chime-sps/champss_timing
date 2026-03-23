@@ -155,15 +155,15 @@ class archive_cache:
                 )
                 self.logger.success(f"[update_model_internal] Added freq and epoch info to archive {ar['filename']} in database.", layer=1)
 
-            # recalculate snr
-            # uncomment the following lines if you want to recalculate SNR for all archives for any reason
-            snr = MatchedFilterSNR(ar["notes"]["init_amps"], json.loads(self.db_hdl.get_config("__template:amps"))).compute()
-            self.logger.info(f"[update_model_internal] Recalculated SNR for archive {ar['filename']}: {snr}", layer=1)
-            self.db_hdl.update_archive_info(
-                filename = ar["filename"],
-                psr_snr = snr,
-                commit = True
-            )
+            # # recalculate snr
+            # # uncomment the following lines if you want to recalculate SNR for all archives for any reason
+            # snr = MatchedFilterSNR(ar["notes"]["init_amps"], json.loads(self.db_hdl.get_config("__template:amps"))).compute()
+            # self.logger.info(f"[update_model_internal] Recalculated SNR for archive {ar['filename']}: {snr}", layer=1)
+            # self.db_hdl.update_archive_info(
+            #     filename = ar["filename"],
+            #     psr_snr = snr,
+            #     commit = True
+            # )
 
         # # Update model in all timed files
         # filenames = []
