@@ -173,19 +173,52 @@ class utils:
             return (d, m, s)
 
     @staticmethod
-    def get_raw_data_format(filename, raise_exception=True):
-        from ..io.archive import ArchiveReader
-        from ..io.filterbank import FilterbankReader
+    def read_file_header(filename, num_bytes=1024, parse_string=False):
+        with open(filename, "rb") as f:
+            header = f.read(num_bytes)
+            if parse_string:
+                parsed = "".join(
+                    chr(byte) if 32 <= byte < 127 else "."
+                    for byte in header
+                )
+                return parsed
+            return header
 
-        try:
-            ArchiveReader(filename)
+    @staticmethod
+    def get_raw_data_format(filename, raise_exception=True, ignore_extension=False):
+        # Make sure the file exists
+        if not os.path.isfile(filename):
+            if raise_exception:
+                raise Exception("File does not exist")
+            return None
+
+        # Try to distinguish the format base of the extensions first since it is always faster than trying to read the file
+        if not ignore_extension:
+            ext = filename.split('.')[-1].lower()
+            if ext in ["fil"]:
+                return "filterbank"
+            elif ext in ["ar", "clfd"]:
+                return "archive"
+
+        # Try to identify from the header
+        parsed_header = utils.read_file_header(filename, num_bytes=1024, parse_string=True)
+        if "HEADER_START" in parsed_header or "HEADER_END" in parsed_header:
+            return "filterbank"
+        elif "TimerArchive" in parsed_header or "ChebyModel" in parsed_header:
             return "archive"
+
+        # If the above methods fail, try to actually read the file with both readers and see which one succeeds
+        try:
+            from ..io.filterbank import FilterbankReader
+            FilterbankReader(filename)
+            return "filterbank"
         except:
             pass
 
         try:
-            FilterbankReader(filename)
-            return "filterbank"
+            from ..io.archive import ArchiveReader
+            ArchiveReader(filename)
+            return "archive"
         except:
             pass
 
