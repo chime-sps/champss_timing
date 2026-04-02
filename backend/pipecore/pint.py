@@ -121,7 +121,7 @@ class pint_handler():
 
     #     return self.t
 
-    def mad_filter2(self, threshold=3): # mad is the robust estimate of std dev. thres of 3 corresponds to 99.7% confidence interval
+    def mad_filter2(self, threshold=3, max_iters=3): # mad is the robust estimate of std dev. thres of 3 corresponds to 99.7% confidence interval
         # get resids
         prefit_resids = Residuals(self.t, self.m)
         resids = np.array(prefit_resids.time_resids.to(u.s).value)
@@ -150,11 +150,10 @@ class pint_handler():
                 toas_good = np.append(toas_good, i)
                 toas_bad = np.delete(toas_bad, np.where(toas_bad == i))
 
-        # sanity check: do not filter out toas within 2 times median of toa error or 1% of the phase
+        # sanity check: do not filter out toas within 1.5 times its toa error or 1% of the phase
         P0 = (1 / self.m.F0.value)
-        resids_errs_med = np.median(resids_errs) * 2
         for i in toas_bad:
-            if np.abs(resids[i]) / P0 < 0.015 or np.abs(resids[i]) < resids_errs_med:
+            if np.abs(resids[i]) / P0 < 0.015 or np.abs(resids[i]) < resids_errs[i] * 1.5:
                 toas_good = np.append(toas_good, i)
                 toas_bad = np.delete(toas_bad, np.where(toas_bad == i))
 
@@ -164,7 +163,11 @@ class pint_handler():
         self.bad_resids = np.concatenate((self.bad_resids, prefit_resids.time_resids[toas_bad]))
         self.t = self.t[toas_good]
 
-        return self.t
+        # Breaking the iteration if no more bad TOAs or max iters reached
+        if max_iters == 0 or len(toas_bad) == 0:
+            return self.t
+            
+        return self.mad_filter2(threshold=threshold, max_iters=max_iters-1)
 
     def quantile_filter(self, threshold=0.95):
         # get resids
@@ -204,12 +207,12 @@ class pint_handler():
             toas_bad = np.where(error_ok == False)[0]
             toas_good = np.where(error_ok == True)[0]
 
-            # do not filter out more than 10% of points
-            if len(toas_bad) / len(error_ok) < 0.10:
+            # do not filter out more than 25% of points
+            if len(toas_bad) / len(error_ok) < 0.25:
                 break
 
             threshold += 0.05
-            self.logger.warning(f"More than 10% of points were filtered out by the error filter. Lowering threshold to {threshold}")
+            self.logger.warning(f"More than 25% of points were filtered out by the error filter. Lowering threshold to {threshold}")
 
         # get toas and mjds
         self.logger.debug(f"Bad TOAs (error): {toas_bad}")
@@ -431,6 +434,37 @@ class pint_handler():
             return True
 
         return False
+
+    def compute_phoff(self, m, t):
+        # Make sure the PHOFF component present
+        if not hasattr(m, 'PHOFF'):
+            m.add_component(
+                Component.component_types["PhaseOffset"]()
+            )
+
+        # Freeze all parameters except PHOFF
+        freezed_params = []
+        for param in m.params:
+            if param != 'PHOFF' and not m[param].frozen:
+                m[param].frozen = True
+                freezed_params.append(param)
+        
+        # Unfreeze PHOFF
+        m['PHOFF'].frozen = False
+
+        # Fit the model
+        f = WLSFitter(t, m)
+        f.fit_toas()
+        self.logger.debug(f"Computed PHOFF: {f.model['PHOFF'].value}")
+
+        # Restore the frozen parameters
+        for param in freezed_params:
+            f.model[param].frozen = False
+
+        # Freeze PHOFF again
+        f.model['PHOFF'].frozen = True
+
+        return f.model
     
     def fit_mcmc_report(self, savefig, nwalkers=50, nsteps=1500):
         '''
@@ -518,10 +552,16 @@ class pint_handler():
             else:
                 fitter = "ls"
                 self.logger.debug("Using LS fitter. ", layer=1)
+        
 
-        # Compute pulse number
+        # Initialize a copy of model and toas
         this_m = copy.deepcopy(self.m)
         this_t = copy.deepcopy(self.t)
+
+        # Compute PHOFF
+        this_m = self.compute_phoff(this_m, this_t)
+
+        # Compute pulse number
         this_t.compute_pulse_numbers(this_m) # compute pulse number to help fitters converge better
 
         # Initialize fitter
