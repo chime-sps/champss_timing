@@ -435,7 +435,7 @@ class pint_handler():
 
         return False
 
-    def compute_phoff(self, m, t):
+    def compute_phoff(self, m, t, freeze_phoff=True):
         # Make sure the PHOFF component present
         if not hasattr(m, 'PHOFF'):
             m.add_component(
@@ -461,8 +461,9 @@ class pint_handler():
         for param in freezed_params:
             f.model[param].frozen = False
 
-        # Freeze PHOFF again
-        f.model['PHOFF'].frozen = True
+        # Freeze PHOFF again if required
+        if freeze_phoff:
+            f.model['PHOFF'].frozen = True
 
         return f.model
     
@@ -559,7 +560,7 @@ class pint_handler():
         this_t = copy.deepcopy(self.t)
 
         # Compute PHOFF
-        this_m = self.compute_phoff(this_m, this_t)
+        this_m = self.compute_phoff(this_m, this_t, freeze_phoff=False)
 
         # Compute pulse number
         this_t.compute_pulse_numbers(this_m) # compute pulse number to help fitters converge better
