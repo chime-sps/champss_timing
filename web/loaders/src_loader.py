@@ -634,7 +634,7 @@ class src_loader():
         
 
     def is_solution_reliable(self):
-        if max(self.last_timing_info["notes"]["fitted_mjds"]) - min(self.last_timing_info["notes"]["fitted_mjds"]) < 270:
+        if max(self.last_timing_info["notes"]["fitted_mjds"]) - min(self.last_timing_info["notes"]["fitted_mjds"]) < 90:
             return False
         
         if self.last_timing_info["fitted_params"]["F1"] >= 0:
