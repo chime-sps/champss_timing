@@ -12,7 +12,7 @@ class PosteriorSamples:
         self.thin = thin
 
     def plot_chain(self):
-        fig, ax = plt.subplots(len(self.labels), 1, figsize=(10, 6), sharex=True)
+        fig, ax = plt.subplots(len(self.labels), 1, figsize=(10, 6), sharex=True, squeeze=False)
             
         # Get samples without burn-in and thinning
         samples = self.sampler.get_chain(discard=0, thin=1)

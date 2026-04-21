@@ -35,7 +35,7 @@ class ShiftFinder:
 
         # Estimate noise level
         residuals = self.compute_residuals(shift, amplitude)
-        sigma = np.std(residuals)
+        sigma = np.std(residuals) if np.std(residuals) > 0 else 1.0
 
         return shift, amplitude, sigma
     

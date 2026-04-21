@@ -255,18 +255,20 @@ for i, psr in enumerate(psrs):
             })
 
         # Determine backend to use
+        this_backend = None
         if args.backend is None: 
             # Use the backend that has the most observations
             if len(backend_stats) == 0:
                 raise ValueError(f"No good archives found for pulsar {psr} in the specified MJD range.")
-            args.backend = max(backend_stats, key=backend_stats.get)
-            logger.info(f"Auto-detected backend: {args.backend}")
+            this_backend = max(backend_stats, key=backend_stats.get)
+            logger.info(f"Auto-detected backend: {this_backend}")
         else:
-            logger.info(f"Using user specified backend: {args.backend}")
+            this_backend = args.backend
+            logger.info(f"Using user specified backend: {this_backend}")
 
         # Select archives from the specified backend
-        ar_list = [ar for ar in ar_list if ar["backend"] == args.backend]
-        logger.info(f"Number of archives from backend {args.backend}: {len(ar_list)}", layer=1)
+        ar_list = [ar for ar in ar_list if ar["backend"] == this_backend]
+        logger.info(f"Number of archives from backend {this_backend}: {len(ar_list)}", layer=1)
 
         # Check if there are archives to process
         if len(ar_list) == 0:
