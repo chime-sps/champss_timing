@@ -36,11 +36,13 @@ parser.add_argument("-o", "--pickle-output", type=str, help="Output directory of
 parser.add_argument("-N", "--n-files", type=int, help="Maximum number of archives to use.", default=None, required=False)
 parser.add_argument("--parfile", type=str, help="Specify the path to timing model (default: ./timing_sources/<psr_id>/pulsar.par).", default=None, required=False)
 parser.add_argument("--subints", type=str, help="Subint range to use for alias factor calculation (e.g., 20:128). Subint converted to data point index by [int(np.floor(subint_range[0] / bin_size)), int(np.ceil(subint_range[1] / bin_size))]", default=None, required=False)
-parser.add_argument("--n-subints", type=int, help="Binsize for alias factor calculation.", default=16, required=False)
-parser.add_argument("--smoothing", type=int, help="Smoothing factor for alias factor calculation.", default=1, required=False)
+parser.add_argument("--n-subints", type=int, help="Binsize for alias factor calculation.", default=8, required=False)
+parser.add_argument("--n-bins", type=int, help="Number of bins for alias factor calculation.", default=64, required=False)
+parser.add_argument("--smoothing", type=int, help="Smoothing factor for alias factor calculation.", default=0, required=False)
 parser.add_argument("--max-n-psrs", type=int, help="Maximum number of pulsars to process.", default=None, required=False)
 parser.add_argument("--max-execution-time", type=int, help="Maximum execution time in seconds. If the execution time exceeds this value, the process will be terminated after the current pulsar is processed.", default=None, required=False)
 parser.add_argument("--mjd-range", type=str, help="MJD range to use for alias factor calculation (e.g., 59000:60000, inclusive).", default=None, required=False)
+parser.add_argument("--backend", type=str, help="Use the data from the specified backend.", default=None, required=False)
 parser.add_argument("--show-dealias-history", action="store_true", help="Show dealias history and skip processing.", required=False, default=False)
 parser.add_argument("--no-commit", action="store_true", help="Do not commit changes to the psrdir and database.", required=False, default=False)
 parser.add_argument("--no-beep", action="store_true", help="Do not beep when the process is finished.", required=False, default=False)
@@ -235,16 +237,38 @@ for i, psr in enumerate(psrs):
 
         # Get the list of time to process
         ar_list = []
+        backend_stats = {}
         for f_info in mdb_hdl.get_raw_data_by_mjd_range(psr, mjd_range=mjd_range):
             if f_info["status"] != "good":
                 logger.info(f"Skipping archive {f_info['location']} due to bad status.")
                 continue
+
+            # Append to backend stats
+            if f_info["backend"] not in backend_stats:
+                backend_stats[f_info["backend"]] = 0
+            backend_stats[f_info["backend"]] += 1
 
             logger.debug(f"Using: {f_info['location']} (backend: {f_info['backend']})")
             ar_list.append({
                 "location": f_info["location"],
                 "backend": f_info["backend"]
             })
+
+        # Determine backend to use
+        this_backend = None
+        if args.backend is None: 
+            # Use the backend that has the most observations
+            if len(backend_stats) == 0:
+                raise ValueError(f"No good archives found for pulsar {psr} in the specified MJD range.")
+            this_backend = max(backend_stats, key=backend_stats.get)
+            logger.info(f"Auto-detected backend: {this_backend}")
+        else:
+            this_backend = args.backend
+            logger.info(f"Using user specified backend: {this_backend}")
+
+        # Select archives from the specified backend
+        ar_list = [ar for ar in ar_list if ar["backend"] == this_backend]
+        logger.info(f"Number of archives from backend {this_backend}: {len(ar_list)}", layer=1)
 
         # Check if there are archives to process
         if len(ar_list) == 0:
@@ -266,7 +290,7 @@ for i, psr in enumerate(psrs):
         logger.info(f"Number of archives: {len(ar_list)}")
 
         # Find alias
-        with alias_utils(psrdir, ar_list, parfile, n_subints=args.n_subints, jumps=JUMPS, workspace=TEMPDIR, n_pools=args.ncpus, logger=logger.copy()) as au:
+        with alias_utils(psrdir, ar_list, parfile, n_subints=args.n_subints, n_bins=args.n_bins, jumps=JUMPS, workspace=TEMPDIR, n_pools=args.ncpus, logger=logger.copy()) as au:
             # Get alias factor
             au.cf_get_alias_factor(subint_range=subint_range, smooth_sigma=args.smoothing)
 
