@@ -81,10 +81,10 @@ class ShiftFinder:
             return -np.inf
         return lp + self.log_likelihood(params)
     
-    def compute(self, n_walkers=50, n_steps=2000, burn_in=1000):
+    def compute(self, n_walkers=50, n_steps=2000, burn_in=1000, progress=True):
         initial_pos = self.compute_initial_walker_positions(n_walkers)
         self.sampler = emcee.EnsembleSampler(n_walkers, 2, self.log_posterior)
-        self.sampler.run_mcmc(initial_pos, n_steps, progress=True)
+        self.sampler.run_mcmc(initial_pos, n_steps, progress=progress)
         
         self.result = PosteriorSamples(
             self.sampler,

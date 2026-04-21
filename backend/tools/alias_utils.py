@@ -127,7 +127,7 @@ class dealias_utils():
         # remove PHOFF component if exists
         if hasattr(m, "PHOFF"):
             self.logger.debug("Removing PHOFF component from model")
-            m.remove_component("PHOFF")
+            m.remove_component("PhaseOffset")
 
         # filterout bad toas
         rs_aliased = Residuals(t, m).phase_resids
@@ -183,7 +183,7 @@ class dealias_utils():
         return True
 
 class alias_utils():
-    def __init__(self, psrdir, ar_list, parfile, jumps={}, n_subints=32, workspace="/tmp", cleanup=True, mode="auto", n_pools="auto", logger=logger()):
+    def __init__(self, psrdir, ar_list, parfile, jumps={}, n_subints=32, n_bins=128, workspace="/tmp", cleanup=True, mode="auto", n_pools="auto", logger=logger()):
         # self.ars = ars
         # self.ar_list = [ar["path"] for ar in ars]
 
@@ -196,6 +196,7 @@ class alias_utils():
         self.fs_prepared = []
         self.jumps = jumps
         self.n_subints = n_subints
+        self.n_bins = n_bins
         self.workspace = workspace + f"/{utils.get_time_string()}__{utils.get_rand_string()}"
         self.outdir = self.workspace + "/outfiles"
         self.sidereal_day = 0.99727 # day
@@ -236,7 +237,7 @@ class alias_utils():
             files=self.ar_list,
             parfile=self.parfile,
             workspace=self.workspace, 
-            n_subs=self.n_subints, n_pols=1, n_freqs=1, n_bins=1024, 
+            n_subs=self.n_subints, n_pols=1, n_freqs=1, n_bins=self.n_bins, 
             n_pools=self.n_pools, 
             jumps=self.jumps, 
             logger=self.logger.copy()
@@ -249,73 +250,14 @@ class alias_utils():
         if self.su.n_stacked == 0:
             raise Exception("Stacking failed, no files stacked. This may be due to the input files being empty or all files being skipped due to failure in processing.")
 
-    def __calculate_shift(self, power_0, power_1, meth="mse", center_ref_point=False):
-        # normalize input powers
-        power_0 = self.normalize_power(power_0)
-        power_1 = self.normalize_power(power_1)
-
-        # check if two time series have the same length
-        if len(power_0) != len(power_1):
-            raise Exception("Two time series have different lengths")
-        
-        # get mse/std
-        ref = []
-        for i in range(len(power_0)):
-            if meth == "mse":
-                ref.append(np.mean(
-                    (power_0 - np.roll(power_1, -i, axis=0))**2
-                ))
-            elif meth == "std":
-                ref.append(np.std(
-                    (power_0 - np.roll(power_1, -i, axis=0))**2
-                ))
-            else:
-                raise Exception("unknown method")
-            
-        # get shift
-        shift = np.where(np.array(ref) == np.min(ref))[0][0]
-
-        # center ref point
-        if center_ref_point:
-            if shift > 0.5 * len(power_0):
-                shift -= len(power_0)
-
-        return shift, ref
-
-    def __calculate_shift_uncertainty(self, power_0, power_1, meth="mse", center_ref_point=False, iterations=1000):
-        shifts = []
-        noise_level = np.std(power_1)
-        for _ in range(iterations):
-            # Add random noise to the inputs
-            # noisy_power_0 = power_0 + np.random.normal(0, noise_level, size=len(power_0))
-            noisy_power_0 = power_0 # no noise for std profile
-            noisy_power_1 = power_1 + np.random.normal(0, noise_level, size=len(power_1))
-            
-            # Calculate shift with noise
-            shift, _ = self.__calculate_shift(noisy_power_0, noisy_power_1, meth, center_ref_point)
-            shifts.append(shift)
-        
-        # Calculate uncertainty as the standard deviation of the shifts
-        uncertainty = np.std(shifts)
-
-        # Zero uncertainty
-        if uncertainty == 0:
-            self.logger.warning("Uncertainty is zero. Setting uncertainty to 1.")
-            uncertainty = 1
-
-        return uncertainty
-
-    def get_shift(self, std_profile, power, meth="mse", center_ref_point=True, unc_iterations=2000):
-        # # get shift
-        # shift, ref = self.__calculate_shift(std_profile, power, meth=meth, center_ref_point=center_ref_point)
-
-        # # find shift uncertainty
-        # shift_unc = self.__calculate_shift_uncertainty(std_profile, power, meth=meth, center_ref_point=center_ref_point, iterations=unc_iterations)
-
-        # return {"shift": shift, "shift_unc": shift_unc, "ref": ref}
-
+    def get_shift(self, std_profile, power, n_steps=2000):
+        # Initialize shift finder
         shift_finder = ShiftFinder(std_profile, power)
-        shift_finder.compute(n_steps=unc_iterations, burn_in=int(unc_iterations/2))
+
+        # Find shift
+        shift_finder.compute(n_steps=n_steps, burn_in=int(n_steps/2), progress=False)
+
+        # Get shift result
         measured_shift = shift_finder.result.shift
 
         return {"shift": measured_shift.n, "shift_unc": measured_shift.s}
@@ -325,10 +267,10 @@ class alias_utils():
 
     def get_stacked_powers_and_duration(self):
         import json
-        open("test.json", "w").write(json.dumps(self.su.get_data().tolist(), indent=4))
+        # open("test.json", "w").write(json.dumps(self.su.get_data().tolist(), indent=4))
         return self.su.get_data()[:, 0, 0, :], np.mean(self.su.durations), np.mean(self.su.snrs)
 
-    def cf_get_alias_factor(self, af_min=-30, af_max=30, smooth_sigma=5, meth="mse", subint_range=[]):
+    def cf_get_alias_factor(self, af_min=-30, af_max=30, smooth_sigma=5, subint_range=[]):
         # get stacked powers and duration
         data_stacked, duration_, avg_snr = self.get_stacked_powers_and_duration()
         n_subints = len(data_stacked[:, 0])
@@ -347,7 +289,7 @@ class alias_utils():
             get_shift_args = []
             for this_subint_powers in data_stacked:
                 # add to args
-                get_shift_args.append((std_profile, this_subint_powers, meth, True))
+                get_shift_args.append((std_profile, this_subint_powers))
                 
             # run get shifts
             get_shift_res = list(tqdm.tqdm(pool.starmap(self.get_shift, get_shift_args), total=len(get_shift_args), desc="Calculating shifts", unit="subint"))
