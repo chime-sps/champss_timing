@@ -5,7 +5,6 @@ import pickle
 import shutil
 import tqdm
 import numpy as np
-import pint.fitter
 import astropy.units as u
 import pandas as pd
 import multiprocessing
@@ -13,6 +12,7 @@ import matplotlib.pyplot as plt
 import datetime
 import traceback
 from pint import models
+from pint.fitter import WLSFitter
 from scipy.ndimage import gaussian_filter
 from pint.residuals import Residuals
 from astropy.io import ascii
@@ -21,6 +21,7 @@ from astropy.table import Table
 from ..utils.utils import utils
 from ..utils.exec import exec
 from ..utils.logger import logger
+from ..tools.shift_finder import ShiftFinder
 from ..pipecore.psrchive import psrchive_handler
 from ..tools.stack_utils import stack_utils
 from ..datastores.database import database
@@ -123,6 +124,11 @@ class dealias_utils():
         m.F0.quantity = (1 / p_dealiased)
         m.F0.frozen = False
 
+        # remove PHOFF component if exists
+        if hasattr(m, "PHOFF"):
+            self.logger.debug("Removing PHOFF component from model")
+            m.remove_component("PHOFF")
+
         # filterout bad toas
         rs_aliased = Residuals(t, m).phase_resids
         i_good = np.abs(rs_aliased) < np.quantile(np.abs(rs_aliased), 0.95)
@@ -131,7 +137,7 @@ class dealias_utils():
 
         # fit model
         try:
-            f = pint.fitter.Fitter.auto(t, m)
+            f = WLSFitter(t, m)
             f.fit_toas()
             f.print_summary()
             self.info["chi2r_unaliased"] = f.model.CHI2R.value
@@ -299,14 +305,20 @@ class alias_utils():
 
         return uncertainty
 
-    def get_shift(self, std_profile, power, meth="mse", center_ref_point=True, unc_iterations=1000):
-        # get shift
-        shift, ref = self.__calculate_shift(std_profile, power, meth=meth, center_ref_point=center_ref_point)
+    def get_shift(self, std_profile, power, meth="mse", center_ref_point=True, unc_iterations=2000):
+        # # get shift
+        # shift, ref = self.__calculate_shift(std_profile, power, meth=meth, center_ref_point=center_ref_point)
 
-        # find shift uncertainty
-        shift_unc = self.__calculate_shift_uncertainty(std_profile, power, meth=meth, center_ref_point=center_ref_point, iterations=unc_iterations)
+        # # find shift uncertainty
+        # shift_unc = self.__calculate_shift_uncertainty(std_profile, power, meth=meth, center_ref_point=center_ref_point, iterations=unc_iterations)
 
-        return {"shift": shift, "shift_unc": shift_unc, "ref": ref}
+        # return {"shift": shift, "shift_unc": shift_unc, "ref": ref}
+
+        shift_finder = ShiftFinder(std_profile, power)
+        shift_finder.compute(n_steps=unc_iterations, burn_in=int(unc_iterations/2))
+        measured_shift = shift_finder.result.shift
+
+        return {"shift": measured_shift.n, "shift_unc": measured_shift.s}
     
     def calc_dealias_factor(self, obs_phase_shift, obs_length, obs_interval=1):
         return (obs_interval / obs_length) * obs_phase_shift

@@ -41,6 +41,7 @@ parser.add_argument("--smoothing", type=int, help="Smoothing factor for alias fa
 parser.add_argument("--max-n-psrs", type=int, help="Maximum number of pulsars to process.", default=None, required=False)
 parser.add_argument("--max-execution-time", type=int, help="Maximum execution time in seconds. If the execution time exceeds this value, the process will be terminated after the current pulsar is processed.", default=None, required=False)
 parser.add_argument("--mjd-range", type=str, help="MJD range to use for alias factor calculation (e.g., 59000:60000, inclusive).", default=None, required=False)
+parser.add_argument("--backend", type=str, help="Use the data from the specified backend.", default=None, required=False)
 parser.add_argument("--show-dealias-history", action="store_true", help="Show dealias history and skip processing.", required=False, default=False)
 parser.add_argument("--no-commit", action="store_true", help="Do not commit changes to the psrdir and database.", required=False, default=False)
 parser.add_argument("--no-beep", action="store_true", help="Do not beep when the process is finished.", required=False, default=False)
@@ -235,16 +236,36 @@ for i, psr in enumerate(psrs):
 
         # Get the list of time to process
         ar_list = []
+        backend_stats = {}
         for f_info in mdb_hdl.get_raw_data_by_mjd_range(psr, mjd_range=mjd_range):
             if f_info["status"] != "good":
                 logger.info(f"Skipping archive {f_info['location']} due to bad status.")
                 continue
+
+            # Append to backend stats
+            if f_info["backend"] not in backend_stats:
+                backend_stats[f_info["backend"]] = 0
+            backend_stats[f_info["backend"]] += 1
 
             logger.debug(f"Using: {f_info['location']} (backend: {f_info['backend']})")
             ar_list.append({
                 "location": f_info["location"],
                 "backend": f_info["backend"]
             })
+
+        # Determine backend to use
+        if args.backend is None: 
+            # Use the backend that has the most observations
+            if len(backend_stats) == 0:
+                raise ValueError(f"No good archives found for pulsar {psr} in the specified MJD range.")
+            args.backend = max(backend_stats, key=backend_stats.get)
+            logger.info(f"Auto-detected backend: {args.backend}")
+        else:
+            logger.info(f"Using user specified backend: {args.backend}")
+
+        # Select archives from the specified backend
+        ar_list = [ar for ar in ar_list if ar["backend"] == args.backend]
+        logger.info(f"Number of archives from backend {args.backend}: {len(ar_list)}", layer=1)
 
         # Check if there are archives to process
         if len(ar_list) == 0:
