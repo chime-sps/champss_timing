@@ -21,6 +21,7 @@ from astropy.table import Table
 from ..utils.utils import utils
 from ..utils.exec import exec
 from ..utils.logger import logger
+from ..tools.template_utils import StackTemplate
 from ..tools.shift_finder import ShiftFinder
 from ..pipecore.psrchive import psrchive_handler
 from ..tools.stack_utils import stack_utils
@@ -266,8 +267,6 @@ class alias_utils():
         return (obs_interval / obs_length) * obs_phase_shift
 
     def get_stacked_powers_and_duration(self):
-        import json
-        # open("test.json", "w").write(json.dumps(self.su.get_data().tolist(), indent=4))
         return self.su.get_data()[:, 0, 0, :], np.mean(self.su.durations), np.mean(self.su.snrs)
 
     def cf_get_alias_factor(self, af_min=-30, af_max=30, smooth_sigma=5, subint_range=[]):
@@ -280,7 +279,15 @@ class alias_utils():
         # duration = duration_
         self.logger.info(f"Duration: {duration_} days, Corrected duration: {duration} days, Number of subints: {n_subints}, Number of subints: {n_subints}")
         
-        # create std profile
+        # cross-correlating subints to minimize the possible shifts (from unknown aliasing)
+        self.logger.debug("Generating standard profile by stacking subints...")
+        stpl = StackTemplate(data_stacked, size=self.n_bins, shift_meth="fourier", logger=self.logger.copy())
+        stpl.optimize()
+
+        # sum subints to a std profile
+        std_profile = stpl.get_template()
+
+        # smooth the std profile if required
         std_profile = gaussian_filter(np.array(data_stacked).sum(axis=0), sigma=smooth_sigma)
 
         # get shifts
@@ -309,60 +316,70 @@ class alias_utils():
             shifts = shifts[shifts_i_range[0]:shifts_i_range[1]]
             shifts_unc = shifts_unc[shifts_i_range[0]:shifts_i_range[1]]
 
-        # remove bad shifts
-        good_i = np.where(np.array(shifts_unc) < np.quantile(shifts_unc, 0.996))[0]
-        shifts = np.array(shifts)[good_i]
-        shifts_unc = np.array(shifts_unc)[good_i]
-        shifts_x = np.arange(0, n_subints)[good_i]
+        # find outlier indices based on shifts_unc
+        good_i = np.where(np.array(shifts_unc) < np.quantile(shifts_unc, 0.997))[0]
+        # shifts = np.array(shifts)[good_i]
+        # shifts_unc = np.array(shifts_unc)[good_i]
 
         # get shift in phase
         shifts = np.array(shifts) / len(std_profile)
         shifts_unc = np.array(shifts_unc) / len(std_profile)
 
-        # calculate weight
-        weight = 1 / np.array(shifts_unc)**2
+        # prepare data for alias factor searching
+        shifts_actual, shifts_actual_unc = np.array(shifts)[good_i], np.array(shifts_unc)[good_i] # apply masks
+        weight = 1 / np.array(shifts_actual_unc)**2 # calculate weight
 
         # search for alias factor
         trials = np.arange(af_min, af_max)
         rms = []
         shifts_expected = []
-        # shifts_actual = np.array(shifts) - np.mean(shifts) # normalized phase shift
-        shifts_actual = np.array(shifts) - self.weighted_mean(shifts, shifts_unc) # normalized phase shift
-        # shifts_actual_unc = np.sqrt(np.array(shifts_unc)**2 + shifts_unc[np.argmin(shifts)]**2) # error propagation
-        shifts_actual_unc = np.array(shifts_unc)
+        # shifts_actual = np.array(shifts[good_i]) - self.weighted_mean(shifts[good_i], shifts_unc[good_i]) # normalized phase shift
         for trial in tqdm.tqdm(trials):
             # get expected shifts
             this_slope = (trial * duration) / (self.sidereal_day * len(shifts))
             this_shifts_expected = np.arange(len(shifts)) * this_slope
-            this_shifts_expected = np.array(this_shifts_expected) - np.mean(this_shifts_expected)
+            this_shifts_expected = this_shifts_expected[good_i] # apply mask
+
+            # get residuals
+            this_residuals = shifts_actual - this_shifts_expected
+            this_offset = np.mean(this_residuals)
+            this_residuals = this_residuals - this_offset # remove mean to avoid bias
 
             # get rms
-            # this_rms = (np.sum((shifts_actual - this_shifts_expected)**2) / len(shifts_actual))**0.5
-            this_rms = np.sum(weight * (shifts_actual - this_shifts_expected)**2) / np.sum(weight)
+            # this_rms = np.sum(weight * (shifts_actual - this_shifts_expected)**2) / np.sum(weight)
+            this_rms = np.sqrt(np.sum(weight * (this_residuals)**2) / np.sum(weight))
 
             rms.append(this_rms)
-            shifts_expected.append(this_shifts_expected)
+            shifts_expected.append(this_shifts_expected + this_offset) # add offset back for diagnostic plot
 
         # find where rms is minimum
         best_i = np.where(rms == np.min(rms))[0][0]
         best_alias_factor = trials[best_i]
         best_expected_shifts = shifts_expected[best_i]
 
+        # get expected shifts for nearby alias factors for diagnostic plot
+        nearby_expected_shifts = []
+        if best_alias_factor > af_min:
+            nearby_expected_shifts.append(shifts_expected[best_i - 1])
+        if best_alias_factor < af_max:
+            nearby_expected_shifts.append(shifts_expected[best_i + 1])
+
         # plot diagnostic
         self.cf_plot_diagnostic(
             trials = trials,
             rms = rms,
             # shifts_x = np.arange(0, n_subints, bin_size),
-            shifts_x = shifts_x,
+            shifts_x = good_i,
             shifts_actual = shifts_actual,
             shifts_actual_unc = shifts_actual_unc,
             shifts_expected = best_expected_shifts,
+            nearby_expected_shifts = nearby_expected_shifts,
             best_af = best_alias_factor,
             std_profile = std_profile,
             power1 = data_stacked[0],
             power2 = data_stacked[-1],
             data_stacked = data_stacked, 
-            n_stacked = n_subints
+            n_stacked = self.su.n_stacked
         )
 
         # print summary
@@ -378,7 +395,7 @@ class alias_utils():
 
         return best_alias_factor
 
-    def cf_plot_diagnostic(self, trials, rms, shifts_x, shifts_actual, shifts_actual_unc, shifts_expected, best_af, std_profile, power1, power2, data_stacked, n_stacked):
+    def cf_plot_diagnostic(self, trials, rms, shifts_x, shifts_actual, shifts_actual_unc, shifts_expected, nearby_expected_shifts, best_af, std_profile, power1, power2, data_stacked, n_stacked):
         fig, axs = plt.subplots(3, 2, figsize=(12, 8),  gridspec_kw={'width_ratios': [3, 1]})
 
         # plot rms
@@ -392,7 +409,9 @@ class alias_utils():
 
         # plot shifts
         axs[1, 0].errorbar(shifts_x, np.array(shifts_actual), shifts_actual_unc, c="k", lw=1, label="Actual", marker="x", capsize=2, fmt="x")
-        axs[1, 0].errorbar(shifts_x, np.array(shifts_expected), c="r", lw=1, linestyle="--", label=f"Expected (AF = {best_af})")
+        axs[1, 0].errorbar(shifts_x, np.array(shifts_expected), c="r", lw=1, linestyle="-", label=f"Fitted Drift (AF = {best_af})")
+        for i, nearby_shifts in enumerate(nearby_expected_shifts):
+            axs[1, 0].errorbar(shifts_x, nearby_shifts, shifts_actual_unc, c="k", lw=1, linestyle="--", label=f"Fitted Drift +/- 1 AF" if i == 0 else None, alpha=0.5)
         axs[1, 0].set_title("Shifts")
         axs[1, 0].set_xlabel("Subints")
         axs[1, 0].set_ylabel("Shift (phase)")

@@ -67,7 +67,7 @@ class ShiftFinder:
         shift, amplitude = params
         N = len(self.arr1)
 
-        if shift < (self.shift - 1) or shift > (self.shift + 1):
+        if shift < (self.shift - 0.01 * N) or shift > (self.shift + 0.01 * N):
             return -np.inf
         
         if amplitude <= 0:
