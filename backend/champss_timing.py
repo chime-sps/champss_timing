@@ -746,6 +746,14 @@ class champss_timing:
                         if this_p.replace("GLF2", "GLF1") in fit_params and this_p.replace("GLF2", "GLF0") in fit_params:
                             potential_fit_params.append(this_p)
 
+        # Binary parameters
+        __allowed_binary_params = ["PB", "A1", "T0", "ECC", "OM", "PBDOT", "OMDOT", "EDOT", "GAMMA"]
+        for this_p in self.timing_config["settings"]["fit_params"]:
+            if this_p not in fit_params:
+                if n_days_to_fit >= 30: # at least 3 months of data to fit binary parameters robustly
+                    if this_p in __allowed_binary_params:
+                        potential_fit_params.append(this_p)
+
         # Remove fit parameters that are not in the config file
         for this_param in fit_params:
             if this_param not in self.timing_config["settings"]["fit_params"]:
