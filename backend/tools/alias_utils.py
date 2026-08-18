@@ -165,6 +165,12 @@ class dealias_utils():
         if np.abs(p0_postfit - p_dealiased) > np.abs(dp_alias):
             self.logger.error("Dealiasing failed, postfit period is too far from dealiased period", "p0_postfit", p0_postfit, "p_dealiased", p_dealiased, "dp_alias", dp_alias)
             return False
+        
+        # write out new parfile
+        if parfile_out is None:
+            parfile_out = parfile + ".dealiased"
+        f.model.write_parfile(parfile_out)
+        self.logger.success(f"Dealiased parfile written to {parfile_out}")
 
         # check chi2r
         chi2r_prefit = m.CHI2R.value
@@ -174,12 +180,6 @@ class dealias_utils():
             return False
         elif chi2r_postfit > chi2r_prefit:
             self.logger.warning("Dealiasing failed, postfit chi2r is higher than prefit chi2r. This alias factor may not be correct.")
-        
-        # write out new parfile
-        if parfile_out is None:
-            parfile_out = parfile + ".dealiased"
-        f.model.write_parfile(parfile_out)
-        self.logger.success(f"Dealiased parfile written to {parfile_out}")
 
         return True
 
