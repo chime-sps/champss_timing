@@ -348,7 +348,7 @@ class pint_handler():
         for param in additional_params:
             self_additional.unfreeze(param)
         try:
-            self_additional.dropout_chi2r_filter()
+            self_additional.filter()
             self_additional.fit(fitter="ls")
         except:
             self.logger.warning("F-test failed. ")
