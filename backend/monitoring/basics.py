@@ -291,9 +291,7 @@ class Main:
                 
             # Distribution check
             bckr_low_conf, bckr_high_conf = bckr.test_low_high(n_samples=30, low_threshold=self.thresholds["low"], high_threshold=self.thresholds["high"])
-            if bckr_high_conf == "too_high" and self.metric_chi2rs["vals"][-1] > 10:
-                if self.metric_chi2rs["vals"][-1] > 100:
-                    return {"level": 3, "id": "chi2r_extremely_high", "message": f"Chi2r is extremely high ({self.metric_chi2rs['vals'][-1]}).", "attachments": ["%DIAGNOSTIC_PLOT%", verbose_savefig]}
+            if bckr_high_conf == "too_high" and self.metric_chi2rs["vals"][-1] > 100:
                 return {"level": 2, "id": "chi2r_very_sudden_increase", "message": f"Chi2r is out of {self.thresholds['high']}-sigma range of all chi2rs in the last 30 samples ({bckr_high_conf}).", "attachments": ["%DIAGNOSTIC_PLOT%", verbose_savefig]}
             elif bckr_low_conf == "too_high":
                 return {"level": 1, "id": "chi2r_sudden_increase", "message": f"Chi2r is out of {self.thresholds['low']}-sigma range of all chi2rs in the last 30 samples ({bckr_low_conf}).", "attachments": ["%DIAGNOSTIC_PLOT%", verbose_savefig]}
