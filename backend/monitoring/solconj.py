@@ -53,15 +53,16 @@ class SolarConjunctionDetector:
             bad_residual_errs, 
             savefig=None
         ):
+
         # Setup the range of the plot
-        plot_x_lim = [np.max(self.mjds) - 90, np.max(self.mjds)]
+        plot_x_lim = [np.max(self.mjds) - 60, np.max(self.mjds)]
         plot_mjds = np.arange(plot_x_lim[0], plot_x_lim[1], 1)
 
         # Calculate separation
         separation = self.calc_separation(plot_mjds)
 
         # Plotting
-        fig, ax = plt.subplots(3, 1, figsize=(10, 5), sharex=True)
+        fig, ax = plt.subplots(3, 1, figsize=(10, 5), sharex=True, gridspec_kw={'hspace': 0})
         ax[0].errorbar(residual_mjds, residual_vals, yerr=residual_errs, fmt='kx', capsize=3)
         ax[0].errorbar(bad_residual_mjds, bad_residual_vals, yerr=bad_residual_errs, fmt='rx', capsize=3)
         ax[0].set_ylabel('Residuals (μs)')
