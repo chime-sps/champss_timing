@@ -169,7 +169,7 @@ class Main:
 
             # Update results
             results["solconj"]["level"] = 1
-            results["solconj"]["id"] = "solar_conjunction_detected"
+            results["solconj"]["id"] = "near_solar_conjunction"
             results["solconj"]["message"] = f"The source is in solar conjunction with the Sun (separation = {separation:.2f} deg). "
             
             # Attach the diagnostic plot if it exists

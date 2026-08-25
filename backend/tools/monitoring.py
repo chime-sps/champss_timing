@@ -121,6 +121,7 @@ class MonitoringReport:
                 tex += f"\\addcontentsline{{toc}}{{subsection}}{{{self.latex_text(ckr.upper())}.{self.latex_text(item.upper())}: {self.latex_text(id.upper())}}}\n"
 
                 # Get and remove duplicate attachments
+                tex += "\\vspace{-1.3em}\n"
                 attachments = list(set(result["attachments"] + result["attachments_report_only"]))
                 for attachment in attachments:
                     if "champss_diagnostic.pdf" in attachment:
@@ -128,6 +129,7 @@ class MonitoringReport:
                     tex += self.latex_figure(attachment)
 
                 # Add item text
+                tex += "\\vspace{-0.75em}\n"
                 if level  == 1:  # Only include warnings
                     tex += "\\textcolor{black}{"
                 if level  == 2:  # Only include warnings
@@ -137,6 +139,7 @@ class MonitoringReport:
                 # tex += f"\\textbf{{[{self.latex_text(ckr)}.{self.latex_text(item)}]}} "
                 tex += "\\texttt{" + f"{self.latex_text(message)} (Level: {level})" + "}\n" 
                 tex += "}\n\n"
+                tex += "\\vspace{1.25em}\n"
 
                 # End minipage
                 tex += "\\end{minipage}\n"
