@@ -147,9 +147,11 @@
             Source Coincidences
             <div style="float: right; font-size: 0.5em; transform: scale(0.75, 0.75); transform-origin: right; ">
                 <div class="btn-group" role="group">
-                    <button type="button" id="show_dss" class="btn btn-light btn-sm">DSS/Optical</button>
-                    <button type="button" id="show_wise" class="btn btn-light btn-sm">WISE/HII</button>
-                    <button type="button" id="show_fermi" class="btn btn-light btn-sm">Fermi/𝛾-ray</button>
+                    <button type="button" id="show_dss" class="btn btn-light btn-sm aladin-lite-control">DSS/Optical</button>
+                    <button type="button" id="show_wise" class="btn btn-light btn-sm aladin-lite-control">WISE/HII</button>
+                    <button type="button" id="show_fermi" class="btn btn-light btn-sm aladin-lite-control">Fermi/𝛾-ray</button>
+                    <button type="button" id="show_lotss" class="btn btn-light btn-sm aladin-lite-control">LoTSS/Radio (144 MHz)</button>
+                    <button type="button" id="show_nvss" class="btn btn-light btn-sm aladin-lite-control">NVSS/Radio (1.4 GHz)</button>
                 </div>
             </div>
         </h4>
@@ -157,32 +159,8 @@
             <div class="col-md-4" style="border-radius: 0.5rem; " id="atlas_view">
                 <div class="card" style="height: 400px; ">
                     <div class="card-body">
-                        <div id="aladin_lite_dss_card" style="height: 100%; display: none;">
-                            <div id='aladin_lite_dss_content' style='width: 100%; height: 100%; display: none; z-index: 999; '></div>
-                            <!-- <div id="aladin_lite_dss_placeholder" style="position: absolute; bottom: 10px; right: 0px; ">
-                                <button class="btn btn-dark btn-sm" type="button" style="scale: 0.75; border-radius: 5em;" disabled>
-                                    <span class="spinner-grow spinner-grow-sm" aria-hidden="true"></span>
-                                    <span role="status">Loading DSS data...</span>
-                                </button>
-                            </div> -->
-                        </div>
-                        <div id="aladin_lite_halpha_card" style="height: 100%; display: none;">
-                            <div id='aladin_lite_halpha_content' style='width: 100%; height: 100%; display: none; z-index: 999; '></div>
-                            <!-- <div id="aladin_lite_halpha_placeholder" style="position: absolute; bottom: 10px; right: 0px; ">
-                                <button class="btn btn-dark btn-sm" type="button" style="scale: 0.75; border-radius: 5em;" disabled>
-                                    <span class="spinner-grow spinner-grow-sm" aria-hidden="true"></span>
-                                    <span role="status">Loading Hɑ data...</span>
-                                </button>
-                            </div> -->
-                        </div>
-                        <div id="aladin_lite_fermi_card" style="height: 100%; display: none;">
-                            <div id='aladin_lite_fermi_content' style='width: 100%; height: 100%; display: none; z-index: 999; '></div>
-                            <!-- <div id="aladin_lite_fermi_placeholder" style="position: absolute; bottom: 10px; right: 0px; ">
-                                <button class="btn btn-dark btn-sm" type="button" style="scale: 0.75; border-radius: 5em;" disabled>
-                                    <span class="spinner-grow spinner-grow-sm" aria-hidden="true"></span>
-                                    <span role="status">Loading Fermi data...</span>
-                                </button>
-                            </div> -->
+                        <div id="aladin_lite_card" style="height: 100%; display: none;">
+                            <div id='aladin_lite_content' style='width: 100%; height: 100%; display: none; z-index: 999; '></div>
                         </div>
                     </div>
                     <div id="aladin_lite_placeholder" style="position: absolute; bottom: 10px; right: 0px; ">
@@ -1092,14 +1070,10 @@
         var wise_loaded = false;
         var fermi_loaded = false;
 
-        function load_dss() {
-            if (dss_loaded) {
-                return;
-            }
-
+        function load_aladin_lite(aladin_survey="P/DSS2/color", table_survey="any") {
             A.init.then(() => {
                 // initialize Aladin Lite
-                aladin = A.aladin('#aladin_lite_dss_content', {fov:0.75, target: `${source_ra} ${source_dec}`, survey: 'P/DSS2/color'});
+                aladin = A.aladin('#aladin_lite_content', {fov:0.75, target: `${source_ra} ${source_dec}`, survey: aladin_survey});
 
                 // mark pulsar with plus
                 var cat_source = A.catalog({name: "Timing Position", shape: "cross", color: '#5d5', sourceSize: 10});
@@ -1127,7 +1101,7 @@
                 var cat_coincidence = A.catalog({name: 'Source Coincidences', sourceSize: 10, shape: 'x', color: 'red'});
                 aladin.addCatalog(cat_coincidence);
                 for (var i = 0; i < source_coincidences.length; i++) {
-                    if (source_coincidences[i]["catalog"] != "SIMBAD Query") {
+                    if (table_survey != "any" && source_coincidences[i]["survey"] != table_survey) {
                         continue;
                     }
 
@@ -1146,129 +1120,9 @@
                 // show the content
                 // $("#aladin_lite_dss_placeholder").hide();
                 $("#aladin_lite_placeholder").hide();
-                $("#aladin_lite_dss_content").fadeIn();
+                $("#aladin_lite_content").fadeIn();
                 
                 dss_loaded = true;
-            });
-        }
-        
-        function load_wise() {
-            if (wise_loaded) {
-                return;
-            }
-
-            A.init.then(() => {
-                // initialize Aladin Lite
-                aladin = A.aladin('#aladin_lite_halpha_content', {fov:0.75, target: `${source_ra} ${source_dec}`, survey: 'CDS/P/allWISE/color'});
-
-                // mark pulsar with plus
-                var cat_source = A.catalog({name: "Timing Position", shape: "cross", color: '#5d5', sourceSize: 10});
-                aladin.addCatalog(cat_source);
-                cat_source.addSources([
-                    A.source(
-                        source_ra,
-                        source_dec,
-                        {
-                            popupTitle: psr_id,
-                            popupDesc: "Timing Position"
-                        }
-                    )
-                ]);
-
-                // create error ellipse
-                var beam_overlay = A.graphicOverlay({name: "CHIME Beam Size / Query Region", color: '#5d5', lineWidth: 0.1});
-                aladin.addOverlay(beam_overlay);
-                beam_overlay.add(A.ellipse(source_ra, source_dec, 0.25, 0.25, 0, {lineWidth: 0.75}));
-                var pos_overlay = A.graphicOverlay({name: "Timing Position Uncertainty", color: '#5d5', lineWidth: 1});
-                aladin.addOverlay(pos_overlay);
-                pos_overlay.add(A.ellipse(source_ra, source_dec, source_pos_unc["DECJ"], source_pos_unc["RAJ"], 0));
-
-                // show coincidences
-                var cat_coincidence = A.catalog({name: 'Source Coincidences', sourceSize: 10, shape: 'x', color: 'red'});
-                aladin.addCatalog(cat_coincidence);
-                for (var i = 0; i < source_coincidences.length; i++) {
-                    if (source_coincidences[i]["catalog"] != "WISE") {
-                        continue;
-                    }
-                    
-                    cat_coincidence.addSources([
-                    A.source(
-                        source_coincidences[i]["ra"],
-                        source_coincidences[i]["dec"],
-                        {
-                            popupTitle: source_coincidences[i]["catalog"] + ": " + source_coincidences[i]["name"],
-                            popupDesc: source_coincidences[i]["notes"]
-                        }
-                    )
-                    ]);
-                }
-
-                // show the content
-                // $("#aladin_lite_halpha_placeholder").hide();
-                $("#aladin_lite_placeholder").hide();
-                $("#aladin_lite_halpha_content").fadeIn();
-
-                wise_loaded = true;
-            });
-        }
-        
-        function load_fermi() {
-            if (fermi_loaded) {
-                return;
-            }
-
-            A.init.then(() => {
-                // initialize Aladin Lite
-                aladin = A.aladin('#aladin_lite_fermi_content', {fov:0.75, target: `${source_ra} ${source_dec}`, survey: 'P/Fermi/color'});
-
-                // mark pulsar with plus
-                var cat_source = A.catalog({name: "Timing Position", shape: "cross", color: '#5d5', sourceSize: 10});
-                aladin.addCatalog(cat_source);
-                cat_source.addSources([
-                    A.source(
-                        source_ra,
-                        source_dec,
-                        {
-                            popupTitle: psr_id,
-                            popupDesc: "Timing Position"
-                        }
-                    )
-                ]);
-
-                // create error ellipse
-                var beam_overlay = A.graphicOverlay({name: "CHIME Beam Size / Query Region", color: '#5d5', lineWidth: 0.1});
-                aladin.addOverlay(beam_overlay);
-                beam_overlay.add(A.ellipse(source_ra, source_dec, 0.25, 0.25, 0, {lineWidth: 0.75}));
-                var pos_overlay = A.graphicOverlay({name: "Timing Position Uncertainty", color: '#5d5', lineWidth: 1});
-                aladin.addOverlay(pos_overlay);
-                pos_overlay.add(A.ellipse(source_ra, source_dec, source_pos_unc["DECJ"], source_pos_unc["RAJ"], 0));
-
-                // show coincidences
-                var cat_coincidence = A.catalog({name: 'Source Coincidences', sourceSize: 10, shape: 'x', color: 'red'});
-                aladin.addCatalog(cat_coincidence);
-                for (var i = 0; i < source_coincidences.length; i++) {
-                    if (source_coincidences[i]["catalog"] != "Fermi") {
-                        continue;
-                    }
-
-                    cat_coincidence.addSources([
-                    A.source(
-                        source_coincidences[i]["ra"],
-                        source_coincidences[i]["dec"],
-                        {
-                            popupTitle: source_coincidences[i]["catalog"] + ": " + source_coincidences[i]["name"],
-                            popupDesc: source_coincidences[i]["notes"]
-                        }
-                    )
-                    ]);
-                }
-
-                // show the content
-                // $("#aladin_lite_fermi_placeholder").hide();
-                $("#aladin_lite_placeholder").hide();
-                $("#aladin_lite_fermi_content").fadeIn();
-
-                fermi_loaded = true;
             });
         }
     </script>
@@ -1276,29 +1130,25 @@
     <script>
         function reset_atlas_view() {
             // hide all cards
-            $("#aladin_lite_dss_card").hide();
-            $("#aladin_lite_halpha_card").hide();
-            $("#aladin_lite_fermi_card").hide();
+            $("#aladin_lite_card").hide();
 
             // reset button style
-            $("#show_dss").removeClass("btn-dark");
-            $("#show_dss").addClass("btn-light");
-            $("#show_wise").removeClass("btn-dark");
-            $("#show_wise").addClass("btn-light");
-            $("#show_fermi").removeClass("btn-dark");
-            $("#show_fermi").addClass("btn-light");
+            $(".aladin-lite-control").removeClass("btn-dark");
+            $(".aladin-lite-control").addClass("btn-light");
 
             // reset table style
             $(".table__SIMBAD_Query").css("font-weight", "unset");
             $(".table__WISE").css("font-weight", "unset");
             $(".table__Fermi").css("font-weight", "unset");
         }
+
         $("#show_dss,.table__SIMBAD_Query").on("click", function() {
             // reset view
             reset_atlas_view();
 
             // show panel
-            $("#aladin_lite_dss_card").fadeIn();
+            $("#aladin_lite_card").hide();
+            $("#aladin_lite_card").fadeIn();
 
             // update button style
             $("#show_dss").removeClass("btn-light");
@@ -1307,14 +1157,15 @@
             // highlight the DSS data in the table
             $(".table__SIMBAD_Query").css("font-weight", "bold");
             
-            load_dss();
+            load_aladin_lite(aladin_survey="P/DSS2/color", table_survey="SIMBAD Query");
         });
         $("#show_wise,.table__WISE").on("click", function() {
             // reset view
             reset_atlas_view();
 
             // show panel
-            $("#aladin_lite_halpha_card").fadeIn();
+            $("#aladin_lite_card").hide();
+            $("#aladin_lite_card").fadeIn();
 
             // update button style
             $("#show_wise").removeClass("btn-light");
@@ -1323,14 +1174,15 @@
             // highlight the WISE data in the table
             $(".table__WISE").css("font-weight", "bold");
 
-            load_wise();
+            load_aladin_lite(aladin_survey="CDS/P/allWISE/color", table_survey="WISE");
         });
         $("#show_fermi,.table__Fermi").on("click", function() {
             // reset view
             reset_atlas_view();
 
             // show panel
-            $("#aladin_lite_fermi_card").fadeIn();
+            $("#aladin_lite_card").hide();
+            $("#aladin_lite_card").fadeIn();
 
             // update button style
             $("#show_fermi").removeClass("btn-light");
@@ -1339,7 +1191,37 @@
             // highlight the Fermi data in the table
             $(".table__Fermi").css("font-weight", "bold");
 
-            load_fermi();
+            load_aladin_lite(aladin_survey="P/Fermi/color", table_survey="Fermi");
+        });
+
+        $("#show_lotss").on("click", function() {
+            // reset view
+            reset_atlas_view();
+
+            // show panel
+            $("#aladin_lite_card").hide();
+            $("#aladin_lite_card").fadeIn();
+
+            // update button style
+            $("#show_lotss").removeClass("btn-light");
+            $("#show_lotss").addClass("btn-dark");
+
+            load_aladin_lite(aladin_survey="P/lotss_dr3_high", table_survey="any");
+        });
+        
+        $("#show_nvss").on("click", function() {
+            // reset view
+            reset_atlas_view();
+
+            // show panel
+            $("#aladin_lite_card").hide();
+            $("#aladin_lite_card").fadeIn();
+
+            // update button style
+            $("#show_nvss").removeClass("btn-light");
+            $("#show_nvss").addClass("btn-dark");
+
+            load_aladin_lite(aladin_survey="P/NVSS", table_survey="any");
         });
 
 
