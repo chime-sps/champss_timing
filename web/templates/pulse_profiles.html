@@ -18,9 +18,11 @@
                     <section style="display: flex; flex-wrap: wrap; " id="mjds_{{ month.replace('.', '_') }}">
                     {% for day in obs_mjds[month] %}
                         <input type="checkbox" class="btn-check" name="mjds" data-month="{{ month }}" data-monthesc="{{ month.replace('.', '_') }}" id="btn_mjd_{{ day['mjd'] }}" value="{{ day['filename'] }}" autocomplete="off">
-                        <label class="btn btn-outline-secondary btn-sm" for="btn_mjd_{{ day['mjd'] }}" id="btn_mjd_{{ day['mjd'] }}_lab"
+                        <label class="btn btn-outline-secondary btn-sm btn-days" for="btn_mjd_{{ day['mjd'] }}" id="btn_mjd_{{ day['mjd'] }}_lab"
                             style="margin-bottom: 0.25em; width: 3em; scale: 0.8; transform-origin: left; "
-                        >{{ day["day"] }}</label><br>
+                        >{{ day["day"] }}<span class="btn-text-mjd" style="
+                        font-size: 0.6em; font-weight: bolder;
+                        display: none;">&nbsp;({{ day["mjd"] | int }})</span></label><br>
                     {% endfor %}
                     </section>
                     <hr>
@@ -31,6 +33,9 @@
     <div class="col-md-9">
         <div class="card" style="position: relative; height: 95vh;">
             <div class="card-body">
+                <div id="list_of_filenames" style="position: absolute; top: 10px; right: 10px; z-index: 999; text-align: right; overflow-x: auto; overflow-y: auto; max-height: 90%; max-width: 90%; line-height: 0.8em; display: none; ">
+                    <code style="font-size: 0.75em; opacity: 0.5; color: #000; line-height: 0.1em; white-space: pre-line;" id="list_of_filenames_content"></code>
+                </div>
                 <div id="pulse_profiles_placeholder" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; ">
                     <p style="font-size: 1em; font-weight: bolder; opacity: 0.5; ">
                         Select one or more days to view pulse profiles.
@@ -48,6 +53,18 @@
     </div>
     <div class="col-md-12" style="position: relative; width: 100%; margin-left: 5px; margin-top: -2px; ">
         <div style="float: right; scale: 0.75; transform-origin: right; margin-right: calc(var(--bs-gutter-x)* .25); ">
+            <span class="badge text-bg-light"> 
+                <div class="form-check form-switch" style="min-height: 1.5em; display: inline-block; "
+                data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Showing MJDs will display the Modified Julian Dates for each day.">
+                    <input class="form-check-input" type="checkbox" role="switch" id="show_mjds_checkbox" name="show_mjds_checkbox">
+                    <label class="form-check-label" for="show_mjds_checkbox" style="transform: translateY(2.5px)">Show MJDs</label>
+                </div>
+                <div class="form-check form-switch" style="min-height: 1.5em; display: inline-block; "
+                data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Showing ObsIDs will display the observation identifiers for each day.">
+                    <input class="form-check-input" type="checkbox" role="switch" id="show_obsids_checkbox" name="show_obsids_checkbox">
+                    <label class="form-check-label" for="show_obsids_checkbox" style="transform: translateY(2.5px)">Show ObsIDs</label>
+                </div>
+            </span>
             <span class="badge text-bg-light"> 
                 <div class="form-check form-switch" style="min-height: 1.5em; display: inline-block; "
                 data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Stacking will sum all selected pulse profiles.">
@@ -122,6 +139,38 @@
             }
         }
 
+        ////////////////////////////////
+        // Show MJDs Checkbox         //
+        ////////////////////////////////
+        $('#show_mjds_checkbox').change(function() {
+            if (!$(this).prop('checked')) {
+                $('.btn-text-mjd').hide();
+                $('.btn-text-day').show();
+
+                var current_width = $('.btn-days').css('width');
+                $('.btn-days').css('width', `calc(${current_width} - 2.5em)`);
+                $('.btn-days').css('margin-right', `unset`);
+            } else {
+                $('.btn-text-mjd').show();
+                $('.btn-text-day').hide();
+
+                var current_width = $('.btn-days').css('width');
+                $('.btn-days').css('width', `calc(${current_width} + 2.5em)`);
+                $('.btn-days').css('margin-right', `-0.5em`);
+            }
+        });
+
+        ////////////////////////////////
+        // Show ObsIDs Checkbox       //
+        ////////////////////////////////
+        $('#show_obsids_checkbox').change(function() {
+            if (!$(this).prop('checked')) {
+                $('#list_of_filenames').hide();
+            } else {
+                $('#list_of_filenames').show();
+            }
+        });
+        
         ////////////////////////////////
         // Stacking Checkbox          //
         ////////////////////////////////
@@ -301,6 +350,9 @@
                     return $(this).val();
                 }).get();
 
+                // render the list of filenames
+                $('#list_of_filenames_content').html(filenames.join('<br>'));
+
                 // filenames is empty
                 if (filenames.length == 0) {
                     $('#pulse_profiles_placeholder').show();
@@ -420,9 +472,8 @@
                 var mean = math.mean(profile_data_stacked);
                 var max = math.max(profile_data_stacked);
                 var min = math.min(profile_data_stacked);
-                var snr = max / std;
                 var n_files = filenames.length;
-                $("#status").html("Mean: " + mean.toFixed(2) + ", Std: " + std.toFixed(2) + ", Max: " + max.toFixed(2) + ", Min: " + min.toFixed(2) + ", SNR: " + snr.toFixed(2) + ", N_files: " + n_files + ". ");
+                $("#status").html("Mean: " + mean.toFixed(2) + ", Std: " + std.toFixed(2) + ", Max: " + max.toFixed(2) + ", Min: " + min.toFixed(2) + ", N_files: " + n_files + ". ");
                 
                 $('#pulse_profiles_spinner').fadeOut();
             }, 0);
