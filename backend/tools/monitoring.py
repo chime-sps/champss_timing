@@ -121,15 +121,16 @@ class MonitoringReport:
                 tex += f"\\addcontentsline{{toc}}{{subsection}}{{{self.latex_text(ckr.upper())}.{self.latex_text(item.upper())}: {self.latex_text(id.upper())}}}\n"
 
                 # Get and remove duplicate attachments
-                tex += "\\vspace{-1.3em}\n"
                 attachments = list(set(result["attachments"] + result["attachments_report_only"]))
                 for attachment in attachments:
                     if "champss_diagnostic.pdf" in attachment:
                         continue
+                    tex += "\\vspace{-1.3em}\n"
                     tex += self.latex_figure(attachment)
+                    tex += "\\vspace{-0.5em}\n"
 
                 # Add item text
-                tex += "\\vspace{-0.75em}\n"
+                tex += "\\vspace{-0.25em}\n"
                 if level  == 1:  # Only include warnings
                     tex += "\\textcolor{black}{"
                 if level  == 2:  # Only include warnings
