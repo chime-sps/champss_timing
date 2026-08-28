@@ -29,9 +29,9 @@ parser.add_argument(
 parser.add_argument(
     "--nwalkers",
     dest="nwalkers",
-    default=250,
+    default=80,
     type=int,
-    help="Number of walkers for MCMC (default=250). "
+    help="Number of walkers for MCMC (default=80). "
 )
 parser.add_argument(
     "--nsteps",

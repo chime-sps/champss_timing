@@ -1,9 +1,13 @@
 import os
 from pint.models import get_model_and_toas
+from pint import logging
 
 from backend.datastores.database import database
 from backend.utils.utils import utils
 from backend.fitters.mcmc import MCMCFitter
+
+# Mute logging from PINT to avoid flushing the terminal with too many messages
+logging.setup(level="ERROR")
 
 class CLIMCMCFitter:
     """
