@@ -276,6 +276,9 @@ class archive_cache:
             snr = mf_snr.compute()
             normaltest_p = mf_snr.normaltest()[1]
 
+        # Get the coordinate of the observations
+        obs_coords = archive_hdl.get_obs_coordinates()
+
         self.db_hdl.insert_archive_info(
             filename = self.utils.get_archive_id(filename), 
             psr_amps = archive_hdl.get_amps(), 
@@ -286,6 +289,8 @@ class archive_cache:
                 "rcvr": rcvr, 
                 "freq": archive_hdl.get_freq(), 
                 "site": archive_hdl.get_telescope(), 
+                "ra_deg": obs_coords[0],
+                "dec_deg": obs_coords[1],
                 "init_epoch": archive_hdl.get_epoch(), 
                 "init_amps": archive_hdl.get_amps(), 
                 "normaltest_p": normaltest_p

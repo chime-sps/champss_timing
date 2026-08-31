@@ -55,6 +55,22 @@ class ArchiveReader:
     def get_dm(self):
         return self.archive.get_dispersion_measure()
 
+    def get_obs_coordinates(self):
+        try:
+            # Preferably read hmsdms directly from the get_coordinates() method.
+            # For some reason the coordinates read from get_coordinates().ra().getDegrees() is wrong for some psrchive versions :(
+            import astropy.units as u
+            from astropy.coordinates import SkyCoord
+            
+            c = SkyCoord(self.subint.get_coordinates().getHMSDMS(), unit=(u.hourangle, u.deg))
+            ra_deg, dec_deg = c.ra.deg, c.dec.deg
+        except Exception as e:
+            print(f"Failed to get coordinates from archive: {e}. Using fallback method.")
+            ra_deg = self.subint.get_coordinates().ra().getDegrees()
+            dec_deg = self.subint.get_coordinates().dec().getDegrees()
+
+        return ra_deg, dec_deg
+
     def get_bad_channels(self, output_format="list"):  # works similar to get_bad_channel_list.py on Cedar, but without aquiring data on site.
         bad_chans = []
 
@@ -76,6 +92,10 @@ class ArchiveReader:
         return bad_chans, bad_percentage
     
     def get_metadata(self):
+        # Use internal method to get RA and Dec in degrees 
+        # (which handles the case where coordinates read from a specific psrchive version might be wrong)
+        ra_deg, dec_deg = self.get_obs_coordinates()
+
         return {
             "source_name": self.archive.get_source(),
             "receiver_name": self.archive.get_receiver_name(),
@@ -91,8 +111,8 @@ class ArchiveReader:
                 "end_time": self.subint.get_end_time().in_days(), 
                 "duration": self.subint.get_duration(),
                 "telescope": self.subint.get_telescope(),
-                "ra_deg": self.subint.get_coordinates().ra().getDegrees(), 
-                "dec_deg": self.subint.get_coordinates().dec().getDegrees(),
+                "ra_deg": ra_deg, 
+                "dec_deg": dec_deg,
                 "centre_frequency": self.subint.get_centre_frequency(),
                 "bandwidth": self.subint.get_bandwidth(),
                 "dispersion_measure": self.subint.get_dispersion_measure(),
