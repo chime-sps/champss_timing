@@ -1,15 +1,16 @@
 import numpy as np
 import os
 import matplotlib.pyplot as plt
+import numpy as np
+import astropy.units as u
+import datetime
+
+from astropy.coordinates import SkyCoord, get_sun
+from astropy.time import Time
 
 from ..utils.logger import logger
 from ..utils.utils import utils
 
-from astropy.coordinates import SkyCoord, get_sun
-from astropy.time import Time
-import matplotlib.pyplot as plt
-import numpy as np
-import astropy.units as u
 
 class SolarConjunctionDetector:
     def __init__(self, ra_deg, dec_deg, mjds, threshold_deg=4, logger=logger()):
@@ -75,6 +76,10 @@ class SolarConjunctionDetector:
         ax[2].set_xlabel('MJD')
         ax[2].set_xlim(plot_x_lim)
         ax[2].set_yscale('log')
+
+        # plot pipeline info
+        fig.text(0.001, 0, f"CHAMPSS Timing Pipeline ({utils.get_version_hash()}) solconj.SolarConjunctionDetector | {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", fontsize=9, ha="left", va="bottom", family="monospace")
+
         fig.suptitle('Solar Conjunction Diagnostics')
         fig.tight_layout()
 
