@@ -24,6 +24,7 @@ app.login = None
 app.api_public = None
 app.api_private = None
 app.update = None
+app.proxied_apps = {}
 app.last_request = 0
 app.pipeline_version = utils.get_version_hash()
 app.secret_key = utils.get_rand_string()
@@ -335,7 +336,36 @@ class URLFormatter:
 
         return endpoint
 
-def run(psr_dir, port, host="127.0.0.1", root="/", authenticator="default", query_simbad=True, debug=False, update_hdl=None, slack_token=None, notebook_path="./runnotes.db"):
+@app.route("/proxy/<proxied_app>/", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"])
+@app.route("/proxy/<proxied_app>/<path:path>", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"])
+def proxied_app(proxied_app, path=""):
+    # Check if the app is registered for proxying
+    if proxied_app not in app.proxied_apps:
+        abort(404)
+
+    # Forward the request to the proxy app and get the response
+    upstream_resp = requests.request(
+        method=request.method,
+        url=app.proxied_apps[proxied_app]["url"] + "/" + path,
+        headers={k: v for k, v in request.headers if k.lower() != "host"},
+        params=request.args,
+        data=request.get_data(),
+        cookies={k: v for k, v in request.cookies.items() if k != "session"}, # forward only non-session cookies
+        allow_redirects=False,  # let the client handle redirects
+        stream=True,
+    )
+
+    # Relay the upstream response back to the client
+    headers = [
+        (k, v) for k, v in upstream_resp.raw.headers.items()
+        if k.lower() not in {
+            "content-encoding", "content-length",
+            "transfer-encoding", "connection",
+        }
+    ]
+    return Response(upstream_resp.content, upstream_resp.status_code, headers)
+
+def run(psr_dir, port, host="127.0.0.1", root="/", authenticator="default", proxied_apps={}, query_simbad=True, debug=False, update_hdl=None, slack_token=None, notebook_path="./runnotes.db"):
     global app
 
     app.login = login_hdl.login(session, authenticator=authenticator)
@@ -345,6 +375,7 @@ def run(psr_dir, port, host="127.0.0.1", root="/", authenticator="default", quer
     app.notes = notes_loader.notes_loader(notebook_path, app)
     app.config['APPLICATION_ROOT'] = root
     app._url_for = URLFormatter(app)
+    app.proxied_apps = proxied_apps
 
     if debug:
         app.debug = True

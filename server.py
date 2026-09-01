@@ -26,6 +26,7 @@ parser.add_argument("--slack", type=str, help="Slack token for the run notes ser
 parser.add_argument("--authenticator", type=str, default="default", help="Authenticator to use for the web server (default: default)")
 parser.add_argument("--host", type=str, default="127.0.0.1", help="Host address for the web server (default: 127.0.0.1)")
 parser.add_argument("--root", type=str, default="/", help="Root path for the web server (default: /)")
+parser.add_argument("--proxy", action="append", dest="proxy", help="Proxy another service through this web server. Format: id::name::url", default=[])
 parser.add_argument("--no-simbad", action="store_false", dest="query_simbad", help="Disable querying Simbad for pulsar information (i.e., faster debug)", default=True)
 parser.add_argument("--debug", action="store_true", help="Enable debug mode", default=False)
 args = parser.parse_args()
@@ -78,7 +79,22 @@ if args.slack is not None:
             "SLACK_APP_TOKEN": cli_config.config["slack_token"][args.slack]["SLACK_APP_TOKEN"]
         }
     else:
-        raise ValueError("Known slack token name.")
+        raise ValueError("Unknown slack token name.")
+
+# Parse proxied applications
+proxied_apps = {}
+if args.proxy:
+    for app in args.proxy:
+        try:
+            app_id, app_name, app_url = app.split("::", 2)
+            proxied_apps[app_id] = {
+                "id": app_id,
+                "name": app_name,
+                "url": app_url
+            }
+            print(f"Added proxied application: {app_id} - {app_name} ({app_url})")
+        except ValueError:
+            raise ValueError(f"Invalid format for proxied application: {app}. Expected format is 'id::name::url'.")
 
 # Start the web server
 server.run(
@@ -90,5 +106,6 @@ server.run(
     query_simbad=args.query_simbad, 
     debug=args.debug,
     authenticator=args.authenticator,
-    slack_token=slack_token
+    slack_token=slack_token,
+    proxied_apps=proxied_apps
 )

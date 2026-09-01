@@ -183,6 +183,13 @@
                         <i class="bi bi-journal-text"></i>
                     </a>
                 </li>
+                {% if app.proxied_apps %}
+                <li class="nav-item" style="margin-bottom: 1.5em; ">
+                    <a id="proxiedAppsToggle" style="color: white; cursor: pointer; ">
+                        <i class="bi bi-box-arrow-up-right"></i>
+                    </a>
+                </li>
+                {% endif %}
             </ul>
         </div>
         <!-- <div class="offcanvas-body" style="position: absolute; bottom: 0; left: 50%; width: 20em; transform: translate(-50%, -220%) rotate(-90deg); line-height: 0.9em; text-overflow: ellipsis; " onclick="show_version()">
@@ -196,6 +203,35 @@
         </div>
     </div>
     <br>
+    <ul class="dropdown-menu" id="proxiedAppsMenu">
+        {% for proxied_app_id, proxied_app in app.proxied_apps.items() %}
+        <li><a class="dropdown-item" href="{{ url_for('proxied_app', proxied_app=proxied_app_id) }}" target="_blank">{{ proxied_app.name }}</a></li>
+        {% endfor %}
+    </ul>
+    <script>
+    (function () {
+        const toggle = document.getElementById('proxiedAppsToggle');
+        const menu = document.getElementById('proxiedAppsMenu');
+        if (!toggle || !menu) return;
+
+        function open() {
+            const r = toggle.getBoundingClientRect();
+            menu.style.position = 'fixed';
+            menu.style.top = r.top + 'px';
+            menu.style.left = (r.right + 6) + 'px';   // pop out to the right of the rail
+            menu.classList.add('show');
+        }
+        function close() { menu.classList.remove('show'); }
+
+        toggle.addEventListener('click', function (e) {
+            e.stopPropagation();
+            menu.classList.contains('show') ? close() : open();
+        });
+        document.addEventListener('click', function (e) {
+            if (!menu.contains(e.target) && !toggle.contains(e.target)) close();
+        });
+    })();
+    </script>
     {% endif %}
     {% if show_sidebar: %}
     <div style="margin-left: 4.5em; padding-left: 5px; padding-right: 20px; ">
