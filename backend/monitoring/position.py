@@ -98,10 +98,10 @@ class TelescopePointingOffsetChecker:
         # Get latest telescope pointing
         latest_ra, latest_dec = self.telescope_pointing
 
-        # # Check if the latest pointing is the default value (3.33, 3.33)
-        # if latest_ra == 3.33 and latest_dec == 3.33:
-        #     self.logger.warning("Telescope pointing information is not available in the database.")
-        #     return True, 0
+        # Check if the latest pointing is the default value (3.33, 3.33)
+        if latest_ra == 3.33 and latest_dec == 3.33:
+            self.logger.warning("Telescope pointing information is not available in the database.")
+            return True, 0
 
         # Generate the ellipse representing the uncertainty region around the timing position
         timing_ellipse_x, timing_ellipse_y = self.generate_ellipse(
@@ -367,7 +367,7 @@ class Main:
         # Initialize the telescope pointing offset checker
         pointing_checker = TelescopePointingOffsetChecker(
             db_hdl=self.db_hdl,
-            threshold_deg=0.75,
+            threshold_deg=0.5,
             logger=self.logger.copy()
         )
 
