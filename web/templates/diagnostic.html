@@ -1064,13 +1064,13 @@
         var psr_id = "{{ source_id }}";
         var source_ra = {{ sources[source_id].last_timing_info["fitted_params"]["RAJ"] }} / 24 * 360;
         var source_dec = {{ sources[source_id].last_timing_info["fitted_params"]["DECJ"] }};
-        var pointing_ra = {{ sources[source_id].get_telescope_pointing()[0] }};
-        var pointing_dec = {{ sources[source_id].get_telescope_pointing()[1] }};
+        var pointing_positions = {{ sources[source_id].get_pointing_positions() | safe }};
         var source_pos_unc = {{sources[source_id].get_source_position_error() | safe }};
         var source_coincidences = {{ sources[source_id].source_coincidences | safe }};
         var dss_loaded = false;
         var wise_loaded = false;
         var fermi_loaded = false;
+        var pointing_position_colors = ["#fff", "#c6d314", "#c6d314", "#c6d314", "#c6d314", "#d9bba9"];
 
         function load_aladin_lite(aladin_survey="P/DSS2/color", table_survey="any") {
             A.init.then(() => {
@@ -1092,10 +1092,17 @@
                 ]);
 
                 // create error ellipse
-                var beam_overlay = A.graphicOverlay({name: "CHIME Pointing Position", color: '#fff', lineWidth: 0.5});
-                aladin.addOverlay(beam_overlay);
-                beam_overlay.add(A.ellipse(pointing_ra, pointing_dec, 0.25, 0.25, 0, {lineWidth: 0.75}));
-                var pos_overlay = A.graphicOverlay({name: "Timing and Known Source Query Position", color: '#5d5', lineWidth: 1});
+                // var beam_overlay = A.graphicOverlay({name: "CHIME Pointing Position", color: '#fff', lineWidth: 0.5});
+                // aladin.addOverlay(beam_overlay);
+                // beam_overlay.add(A.ellipse(pointing_ra, pointing_dec, 0.25, 0.25, 0, {lineWidth: 0.75}));
+                for (var i = 0; i < pointing_positions.length; i++) {
+                    var this_color = pointing_position_colors[i % pointing_position_colors.length];
+                    var beam_overlay = A.graphicOverlay({name: "CHIME Pointing Position (" + pointing_positions[i]["rcvr"] + ")", color: this_color, lineWidth: 0.5});
+                    aladin.addOverlay(beam_overlay);
+                    beam_overlay.add(A.ellipse(pointing_positions[i]["ra_deg"], pointing_positions[i]["dec_deg"], 0.25, 0.25, 0, {lineWidth: 0.75}));
+                }
+
+                var pos_overlay = A.graphicOverlay({name: "Timing Uncertainty", color: '#5d5', lineWidth: 1});
                 aladin.addOverlay(pos_overlay);
                 pos_overlay.add(A.ellipse(source_ra, source_dec, source_pos_unc["DECJ"], source_pos_unc["RAJ"], 0));
 

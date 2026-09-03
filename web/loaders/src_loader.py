@@ -33,6 +33,7 @@ class src_loader():
 
         self.last_timing_info = {}
         self.last_archive_info = {}
+        self.pointing_positions = []
         self.last_updated = None
         self.stats = {}
         self.parameter_info = {}
@@ -447,37 +448,60 @@ class src_loader():
             return {"x": x.tolist(), "y": template}
         
         return template
+
+    def cache_stacked_profile_and_pointing_positions(self, prof_length=1024):
+        # Get profiles from database
+        archive_info = self.db.get_all_archive_info()
+
+        # Resize profiles
+        stacked_profile = []
+        pointing_positions = {}
+        for archive in archive_info:
+            this_amps = archive["psr_amps"]
+            
+            # Resize if needed
+            if len(this_amps) != prof_length:
+                this_amps = self.resize_1d_array(this_amps, prof_length)
+
+            # Normalize
+            this_amps = np.array(this_amps)
+            this_amps -= np.mean(this_amps)
+            this_amps /= np.std(this_amps) if np.std(this_amps) != 0 else 1
+
+            stacked_profile.append(this_amps)
+
+            # Get pointing position
+            this_rcvr = archive["notes"]["rcvr"]
+            this_epoch = archive["notes"]["init_epoch"]
+            this_ra_deg = archive["notes"]["ra_deg"]
+            this_dec_deg = archive["notes"]["dec_deg"]
+            if this_rcvr not in pointing_positions:
+                pointing_positions[this_rcvr] = {"ra_deg": 3.33, "dec_deg": 3.33, "epoch": 0}
+            if this_epoch > pointing_positions[this_rcvr]["epoch"]:
+                pointing_positions[this_rcvr]["ra_deg"] = this_ra_deg
+                pointing_positions[this_rcvr]["dec_deg"] = this_dec_deg
+                pointing_positions[this_rcvr]["epoch"] = this_epoch
+                pointing_positions[this_rcvr]["rcvr"] = this_rcvr
+
+        # Stack profiles
+        if len(stacked_profile) > 0:
+            stacked_profile = np.mean(np.array(stacked_profile), axis=0).tolist()
+        else:
+            stacked_profile = [0] * prof_length
+
+        # Format pointing positions into a list of dicts
+        pointing_positions = [pointing_positions[rcvr] for rcvr in pointing_positions]
+
+        # Cache stacked profile and pointing positions
+        self.stacked_profile = stacked_profile
+        self.pointing_positions = pointing_positions
+
+        return stacked_profile, pointing_positions
     
-    def get_stacked_profile(self, length=1024, xy=False, centered=True):
+    def get_stacked_profile(self, xy=False, centered=True):
         # Get stacked profile if not already loaded
         if self.stacked_profile == [] or self.stacked_profile is None:
-            # Get profiles from database
-            archive_info = self.db.get_all_archive_info()
-
-            # Resize profiles
-            stacked_profile = []
-            for archive in archive_info:
-                this_amps = archive["psr_amps"]
-                
-                # Resize if needed
-                if len(this_amps) != length:
-                    this_amps = self.resize_1d_array(this_amps, length)
-
-                # Normalize
-                this_amps = np.array(this_amps)
-                this_amps -= np.mean(this_amps)
-                this_amps /= np.std(this_amps) if np.std(this_amps) != 0 else 1
-
-                stacked_profile.append(this_amps)
-
-            # Stack profiles
-            if len(stacked_profile) > 0:
-                stacked_profile = np.mean(np.array(stacked_profile), axis=0).tolist()
-            else:
-                stacked_profile = [0] * length
-
-            # Cache stacked profile
-            self.stacked_profile = stacked_profile
+            self.cache_stacked_profile_and_pointing_positions()
 
         # Center stacked profile if needed
         if centered and len(self.stacked_profile) > 0:
@@ -490,20 +514,12 @@ class src_loader():
 
         return self.stacked_profile
 
-    def get_telescope_pointing(self):
-        # Get last archive info
-        last_archive_info = self.last_archive_info
+    def get_pointing_positions(self):
+        # Get pointing positions if not already loaded
+        if self.pointing_positions == [] or self.pointing_positions is None:
+            self.cache_stacked_profile_and_pointing_positions()
 
-        # Get telescope pointing from last archive info
-        pointing_ra = last_archive_info["notes"]["ra_deg"]
-        pointing_dec = last_archive_info["notes"]["dec_deg"]
-
-        # Sanity check if they are dummy values
-        if pointing_ra == 3.33 and pointing_dec == 3.33:
-            pointing_ra = self.last_timing_info["fitted_params"]["RAJ"] / 24 * 360
-            pointing_dec = self.last_timing_info["fitted_params"]["DECJ"]
-
-        return pointing_ra, pointing_dec
+        return self.pointing_positions
 
     def get_source_position_error(self):
         raj_err = 0.5
