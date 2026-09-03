@@ -1044,7 +1044,7 @@
                 "{{ url_for("diagnostic", source_id=source_id) }}/dbfile"
             ];
             var filenames = [
-                "{{ source_id }}/timing_diagnostics.pdf",
+                "{{ source_id }}/champss_diagnostics.pdf",
                 "{{ source_id }}/pulsar.par",
                 "{{ source_id }}/pulsar.tim",
                 "{{ source_id }}/champss_timing.sqlite3.db"
@@ -1064,6 +1064,8 @@
         var psr_id = "{{ source_id }}";
         var source_ra = {{ sources[source_id].last_timing_info["fitted_params"]["RAJ"] }} / 24 * 360;
         var source_dec = {{ sources[source_id].last_timing_info["fitted_params"]["DECJ"] }};
+        var pointing_ra = {{ sources[source_id].get_telescope_pointing()[0] }};
+        var pointing_dec = {{ sources[source_id].get_telescope_pointing()[1] }};
         var source_pos_unc = {{sources[source_id].get_source_position_error() | safe }};
         var source_coincidences = {{ sources[source_id].source_coincidences | safe }};
         var dss_loaded = false;
@@ -1090,10 +1092,10 @@
                 ]);
 
                 // create error ellipse
-                var beam_overlay = A.graphicOverlay({name: "CHIME Beam Size / Query Region", color: '#5d5', lineWidth: 0.1});
+                var beam_overlay = A.graphicOverlay({name: "CHIME Pointing Position", color: '#fff', lineWidth: 0.5});
                 aladin.addOverlay(beam_overlay);
-                beam_overlay.add(A.ellipse(source_ra, source_dec, 0.25, 0.25, 0, {lineWidth: 0.75}));
-                var pos_overlay = A.graphicOverlay({name: "Timing Position Uncertainty", color: '#5d5', lineWidth: 1});
+                beam_overlay.add(A.ellipse(pointing_ra, pointing_dec, 0.25, 0.25, 0, {lineWidth: 0.75}));
+                var pos_overlay = A.graphicOverlay({name: "Timing and Known Source Query Position", color: '#5d5', lineWidth: 1});
                 aladin.addOverlay(pos_overlay);
                 pos_overlay.add(A.ellipse(source_ra, source_dec, source_pos_unc["DECJ"], source_pos_unc["RAJ"], 0));
 

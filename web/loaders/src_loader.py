@@ -32,6 +32,7 @@ class src_loader():
         self.initialized = False
 
         self.last_timing_info = {}
+        self.last_archive_info = {}
         self.last_updated = None
         self.stats = {}
         self.parameter_info = {}
@@ -61,6 +62,9 @@ class src_loader():
 
         # Get last_timing_info
         self.last_timing_info = self.db.get_last_timing_info()
+
+        # Get last_archive_info
+        self.last_archive_info = self.db.get_last_archive_info()
 
         # Get last updated
         self.last_updated = self.get_last_updated()
@@ -404,7 +408,7 @@ class src_loader():
     
     def get_latest_profile(self, xy=False, centered=True):
         # Last archive info
-        last_archive_info = self.db.get_last_archive_info()
+        last_archive_info = self.last_archive_info
 
         # Sanity check
         if last_archive_info is None or "psr_amps" not in last_archive_info:
@@ -485,6 +489,21 @@ class src_loader():
             return {"x": x.tolist(), "y": self.stacked_profile}
 
         return self.stacked_profile
+
+    def get_telescope_pointing(self):
+        # Get last archive info
+        last_archive_info = self.last_archive_info
+
+        # Get telescope pointing from last archive info
+        pointing_ra = last_archive_info["notes"]["ra_deg"]
+        pointing_dec = last_archive_info["notes"]["dec_deg"]
+
+        # Sanity check if they are dummy values
+        if pointing_ra == 3.33 and pointing_dec == 3.33:
+            pointing_ra = self.last_timing_info["fitted_params"]["RAJ"] / 24 * 360
+            pointing_dec = self.last_timing_info["fitted_params"]["DECJ"]
+
+        return pointing_ra, pointing_dec
 
     def get_source_position_error(self):
         raj_err = 0.5
