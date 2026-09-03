@@ -637,6 +637,12 @@ class src_loader():
 
         # return sources, most_frequent_catalog
 
+        # Make sure values are not nan
+        for source in sources:
+            for key in source.keys():
+                if source[key] is None or (isinstance(source[key], float) and np.isnan(source[key])):
+                    source[key] = "N/A"
+
         # get nearest source
         nearest_source_catalog = "SIMBAD Query"
         if len(sources) > 0:
