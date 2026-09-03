@@ -14,7 +14,7 @@ from ..utils.utils import utils
 
 
 class TelescopePointingOffsetChecker:
-    def __init__(self, db_hdl, threshold_deg=1, logger=logger()):
+    def __init__(self, db_hdl, threshold_deg, logger=logger()):
         self.db_hdl = db_hdl
         self.threshold_deg = threshold_deg
         self.logger = logger
@@ -367,7 +367,7 @@ class Main:
         # Initialize the telescope pointing offset checker
         pointing_checker = TelescopePointingOffsetChecker(
             db_hdl=self.db_hdl,
-            threshold_deg=1,
+            threshold_deg=0.75,
             logger=self.logger.copy()
         )
 
@@ -383,7 +383,7 @@ class Main:
             # Update results
             results["telescope_pointing"]["level"] = 1
             results["telescope_pointing"]["id"] = "large_pointing_offset"
-            results["telescope_pointing"]["message"] = f"Telescope pointing is off by {separation:.2f} degrees."
+            results["telescope_pointing"]["message"] = f"Telescope pointing is off by {separation:.2f} degrees from the timing position."
 
             # Generate diagnostics plot
             diagnostic_path = f"/tmp/telescope_pointing_diagnostic__{self.psr_id}__{utils.get_time_string()}.pdf"
