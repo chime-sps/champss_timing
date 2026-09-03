@@ -421,10 +421,10 @@ class database:
         if "rcvr" not in formatted_info["notes"]:
             formatted_info["notes"]["rcvr"] = "unknown"
 
-        # Compatibility with old database versions: if ra_deg and dec_deg are not present in the notes, set them to 0.0
+        # Compatibility with old database versions: if ra_deg and dec_deg are not present in the notes, set them to a dummy value as a placeholder
         if "ra_deg" not in formatted_info["notes"] or "dec_deg" not in formatted_info["notes"]:
-            formatted_info["notes"]["ra_deg"] = 0.0
-            formatted_info["notes"]["dec_deg"] = 0.0
+            formatted_info["notes"]["ra_deg"] = 3.33
+            formatted_info["notes"]["dec_deg"] = 3.33
 
         return formatted_info
 
