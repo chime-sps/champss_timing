@@ -489,6 +489,9 @@ class src_loader():
         else:
             stacked_profile = [0] * prof_length
 
+        # Sort pointing positions by receiver name alphabetically
+        pointing_positions = dict(sorted(pointing_positions.items(), key=lambda item: item[0]))
+
         # Format pointing positions into a list of dicts
         pointing_positions = [pointing_positions[rcvr] for rcvr in pointing_positions]
 
