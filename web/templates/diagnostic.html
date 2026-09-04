@@ -1165,23 +1165,24 @@
                 pos_overlay.add(A.ellipse(source_ra, source_dec, source_pos_unc["DECJ"], source_pos_unc["RAJ"], 0));
 
                 // show coincidences
-                var cat_coincidence = A.catalog({name: 'Source Coincidences', sourceSize: 10, shape: 'x', color: 'red'});
-                aladin.addCatalog(cat_coincidence);
                 for (var i = 0; i < source_coincidences.length; i++) {
-                    if (table_survey != "any" && source_coincidences[i]["survey"] != table_survey) {
-                        continue;
+                    var color = "#ff0000";
+                    if (source_coincidences[i]["catalog"] != table_survey) {
+                        color = "#a10000";
                     }
 
+                    var cat_coincidence = A.catalog({name: 'Source Coincidences', sourceSize: 10, shape: 'x', color: color});
                     cat_coincidence.addSources([
-                    A.source(
-                        source_coincidences[i]["ra"],
-                        source_coincidences[i]["dec"],
-                        {
-                            popupTitle: source_coincidences[i]["catalog"] + ": " + source_coincidences[i]["name"],
-                            popupDesc: source_coincidences[i]["notes"]
-                        }
-                    )
+                        A.source(
+                            source_coincidences[i]["ra"],
+                            source_coincidences[i]["dec"],
+                            {
+                                popupTitle: source_coincidences[i]["catalog"] + ": " + source_coincidences[i]["name"],
+                                popupDesc: source_coincidences[i]["notes"]
+                            }
+                        )
                     ]);
+                    aladin.addCatalog(cat_coincidence);
                 }
 
                 // show the content
