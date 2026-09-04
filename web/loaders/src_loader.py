@@ -483,6 +483,10 @@ class src_loader():
                 pointing_positions[this_rcvr]["epoch"] = this_epoch
                 pointing_positions[this_rcvr]["rcvr"] = this_rcvr
 
+            # Remove placeholder values (3.33, 3.33)
+            if pointing_positions[this_rcvr]["ra_deg"] == 3.33 and pointing_positions[this_rcvr]["dec_deg"] == 3.33:
+                del pointing_positions[this_rcvr]
+
         # Stack profiles
         if len(stacked_profile) > 0:
             stacked_profile = np.mean(np.array(stacked_profile), axis=0).tolist()

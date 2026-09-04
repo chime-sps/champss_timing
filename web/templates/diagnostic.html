@@ -1067,15 +1067,74 @@
         var pointing_positions = {{ sources[source_id].get_pointing_positions() | safe }};
         var source_pos_unc = {{sources[source_id].get_source_position_error() | safe }};
         var source_coincidences = {{ sources[source_id].source_coincidences | safe }};
-        var dss_loaded = false;
-        var wise_loaded = false;
-        var fermi_loaded = false;
         var pointing_position_colors = ["#fff", "#c6d314", "#dd0dd3", "#aef4f0", "#531bba", "#d9bba9"];
+
+        function init_legend(aladin) {
+            // Create legend container
+            var container = document.querySelector('#aladin_lite_content');
+            var legend = document.createElement('div');
+
+            // Fill in content
+            legend.id = 'aladin_lite_legend';
+            legend.style.cssText =
+                // 'position: absolute; left: 4px; top: 37.5px; z-index: 30;' +
+                'position: absolute; right: 4px; bottom: 4px; z-index: 30;' +
+                'color: #fff; padding: 6px 8px; font: 12px/1.4 monospace; ' +
+                'border-radius: 4px; user-select: none; opacity: 0.5; transition: opacity 0.2s ease-in-out;';
+            container.appendChild(legend); 
+
+            // Initialize hover events
+            $(legend).on('mouseenter', function() {
+                legend.style.opacity = 1;
+            });
+            $(legend).on('mouseleave', function() {
+                legend.style.opacity = 0.5;
+            });
+
+            return legend;
+        }
+
+        function remove_legend(aladin) {
+            var legend = document.querySelector('#aladin_lite_legend');
+            if (legend) {
+                legend.remove();
+            }
+        }
+
+        function add_legend_item(legend, aladin, e) {
+            // Create a row for the legend item
+            var row = document.createElement('div');
+            row.style.cssText = 'cursor:pointer; white-space:nowrap; padding:1px 0; ';
+            row.innerHTML =
+                '<span style="color:' + e.color + '; display:inline-block; width:1em; ' +
+                ' text-align:center;">' + e.symbol + '</span> ' + e.label;
+            row.title = 'Center on ' + e.label;
+
+            // Bind events to the row
+            row.onmouseenter = function(){ row.style.textDecoration = 'underline'; };
+            row.onmouseleave = function(){ row.style.textDecoration = 'none'; };
+            row.onclick = function() {
+                aladin.gotoRaDec(e.ra, e.dec);
+                // if (e.fov) aladin.setFov(e.fov);
+            };
+            
+            legend.appendChild(row);
+        }
 
         function load_aladin_lite(aladin_survey="P/DSS2/color", table_survey="any") {
             A.init.then(() => {
                 // initialize Aladin Lite
-                aladin = A.aladin('#aladin_lite_content', {fov:0.75, target: `${source_ra} ${source_dec}`, survey: aladin_survey});
+                aladin = A.aladin(
+                    '#aladin_lite_content', 
+                    {
+                        fov:0.75, 
+                        target: `${source_ra} ${source_dec}`, 
+                        survey: aladin_survey, 
+                        showLayersControl: false, 
+                        showZoomControl: false, 
+                        showReticle: false
+                    }
+                );
 
                 // mark pulsar with plus
                 var cat_source = A.catalog({name: "Timing Position", shape: "cross", color: '#5d5', sourceSize: 10});
@@ -1130,8 +1189,39 @@
                 // $("#aladin_lite_dss_placeholder").hide();
                 $("#aladin_lite_placeholder").hide();
                 $("#aladin_lite_content").fadeIn();
-                
-                dss_loaded = true;
+
+                // Initialize legend
+                var legend = init_legend(aladin);
+
+                // // Legend - timing position
+                // add_legend_item(legend, aladin, {
+                //     label: "Timing Position", color: "#5d5", symbol: "✚",
+                //     ra: source_ra, dec: source_dec, fov: 0.1
+                // });
+
+                // Legend - timing position
+                add_legend_item(legend, aladin, {
+                    label: "Timing Position", color: "#5d5", symbol: "◯",
+                    ra: source_ra, dec: source_dec,
+                    fov: Math.max(source_pos_unc["RAJ"], source_pos_unc["DECJ"]) * 4
+                });
+
+                // Legend - CHIME Pointing Positions
+                for (var i = 0; i < pointing_positions.length; i++) {
+                    add_legend_item(legend, aladin, {
+                        label: "Pointing Position (" + pointing_positions[i]["rcvr"] + ")",
+                        color: pointing_position_colors[i % pointing_position_colors.length],
+                        symbol: "◯",
+                        ra: pointing_positions[i]["ra_deg"], dec: pointing_positions[i]["dec_deg"],
+                        fov: 0.75
+                    });
+                }
+
+                // Legend - source coincidences
+                add_legend_item(legend, aladin, {
+                    label: "Source Coincidences", color: "red", symbol: "✕",
+                    ra: source_ra, dec: source_dec, fov: 0.75
+                });
             });
         }
     </script>
@@ -1149,6 +1239,12 @@
             $(".table__SIMBAD_Query").css("font-weight", "unset");
             $(".table__WISE").css("font-weight", "unset");
             $(".table__Fermi").css("font-weight", "unset");
+
+            // remove legend
+            remove_legend(aladin);
+
+            // remove aladin-fov
+            $(".aladin-fov").empty();
         }
 
         $("#show_dss,.table__SIMBAD_Query").on("click", function() {
