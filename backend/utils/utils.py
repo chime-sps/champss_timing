@@ -3,8 +3,10 @@ import random
 import datetime
 import traceback
 import subprocess
-from hashlib import md5
 import os
+from hashlib import md5
+from astropy.coordinates import SkyCoord
+from astropy.time import Time
 
 class utils:
     @staticmethod
@@ -100,6 +102,36 @@ class utils:
     @staticmethod
     def mjd_now():
         return utils.timestamp_to_mjd(time.time())
+
+    @staticmethod
+    def create_parfile(ra, dec, f0, f1, dm, psrname=None, pepoch=None):
+        # Parse coordinate
+        coord = SkyCoord(ra=ra, dec=dec, unit="deg")
+        ra_str = coord.ra.to_string(unit="hour", sep=":", pad=True)
+        dec_str = coord.dec.to_string(unit="deg", sep=":", alwayssign=True, pad=True)
+
+        # Parse psrname
+        if psrname is None:
+            psrname = "J" + "".join(ra_str.split(":")[0:2]) + "".join(dec_str.split(":")[0:2])
+
+        # Parse pepoch
+        if pepoch is None:
+            pepoch = Time.now().mjd
+
+        # Create the parfile content as a string
+        parfile = ""
+        parfile += f"PSRJ {psrname}\n"
+        parfile += f"RAJ {ra_str}\n"
+        parfile += f"DECJ {dec_str}\n"
+        parfile += f"DM {dm}\n"
+        parfile += f"F0 {f0}\n"
+        parfile += f"F1 {f1}\n"
+        parfile += f"PEPOCH {pepoch}\n"
+        parfile += f"DMEPOCH {pepoch}\n"
+        parfile += f"EPHVER 2\n"
+        parfile += f"UNITS TDB\n"
+
+        return parfile
 
     @staticmethod
     def read_f0_from_parfile(parfile, raise_exception=True):

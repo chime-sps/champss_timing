@@ -3,7 +3,7 @@ import traceback
 import numpy as np
 
 class ArchiveReader:
-    def __init__(self, archive, dedisperse=True, retries=3):
+    def __init__(self, archive, dedisperse=True, remove_baseline=False, retries=3):
         # Initialize archive object
         while retries > 0: 
             # retry 3 times to avoid loading error of network file system issue (sometimes it fails to load on Narval)
@@ -20,6 +20,15 @@ class ArchiveReader:
         # Dedisperse
         if dedisperse:
             self.archive.dedisperse()
+        
+        # Remove baseline
+        if remove_baseline:
+            self.archive.remove_baseline()
+
+        # Scrunch frequency, time, and polarisation
+        self.archive.fscrunch()
+        self.archive.tscrunch()
+        self.archive.pscrunch()
 
         # Get data, subint, and profile objects
         self.subint = self.archive.get_Integration(0)
