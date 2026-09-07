@@ -119,11 +119,14 @@ class PulseProfilesState:
             
             # SNR grid values
             ax[1, 1].pcolormesh(
-                self.grid_search_results["df1_vals"],
-                self.grid_search_results["df0_vals"],
-                self.grid_search_results["snrs"].reshape(
-                    len(self.grid_search_results["df0_vals"]), 
-                    len(self.grid_search_results["df1_vals"])
+                np.asarray(self.grid_search_results["df1_vals"], dtype=np.float64),
+                np.asarray(self.grid_search_results["df0_vals"], dtype=np.float64),
+                np.asarray(
+                    self.grid_search_results["snrs"].reshape(
+                        len(self.grid_search_results["df0_vals"]), 
+                        len(self.grid_search_results["df1_vals"])
+                    ),
+                    dtype=np.float64
                 ),
                 shading='auto',
                 cmap='gray_r'

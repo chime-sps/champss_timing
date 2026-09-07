@@ -5,14 +5,19 @@ from backend.tools.initial_guess import InitialTimingSolutionOptimizer
 from backend.utils.utils import utils
 from backend.utils.logger import logger
 
+# Mute logging from PINT to avoid flushing the terminal with too many messages
+from pint import logging
+logging.setup(level="ERROR")
+
 class CLIInitialTimingSolutionSearch:
-    def __init__(self, archive_files, parfile=None, params=None, ncpus=1, logger=logger()):
+    def __init__(self, archive_files, parfile=None, params=None, max_n_obs=60, ncpus=1, logger=logger()):
         if parfile is None and params is None:
             raise ValueError("Either parfile or model parameters must be provided.")
             
         self.archive_files = archive_files
         self.logger = logger
         self.ncpus = ncpus
+        self.max_n_obs = max_n_obs
 
         # Create parfile if it is not provided but model parameters are given
         if parfile is None:
@@ -24,6 +29,7 @@ class CLIInitialTimingSolutionSearch:
         self.optimizer = InitialTimingSolutionOptimizer(
             StringIO(self.parfile), 
             self.archive_files, 
+            max_n_obs=self.max_n_obs,
             logger=logger.copy()
         )
 

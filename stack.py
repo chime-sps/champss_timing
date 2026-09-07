@@ -16,7 +16,7 @@ parser = argparse.ArgumentParser(description="Stack data from multiple observati
 parser.add_argument("--psr", type=str, required=True, help="Pulsar name to stack data for.")
 parser.add_argument("--output", type=str, required=True, help="Output file for stacked data.")
 parser.add_argument("--nobs", type=int, required=False, default=32, help="Number of observations to stack (default: all).")
-parser.add_argument("--mjd-range", type=int, required=False, help="MJD range to stack (START:FINISH).")
+parser.add_argument("--mjd-range", type=str, required=False, help="MJD range to stack (START:FINISH).")
 parser.add_argument("--npols", type=int, required=False, default=4, help="Number of polarizations to scrunch (default: 4).")
 parser.add_argument("--nsubs", type=int, required=False, default=16, help="Number of frequency channels to scrunch (default: 16).")
 parser.add_argument("--nfreqs", type=int, required=False, default=1024, help="Number of frequency bins to stack into (default: 1024).")

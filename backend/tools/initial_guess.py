@@ -49,13 +49,20 @@ class InitialTimingSolution:
             writer.unload()
 
 class InitialTimingSolutionOptimizer:
-    def __init__(self, parfile, archive_files, logger=logger()):
+    def __init__(self, parfile, archive_files, max_n_obs=None, logger=logger()):
         self.model = get_model(parfile)
         self.logger = logger
-        self.profiles, self.epochs = self.__load_archives(archive_files, self.model)
+        self.max_n_obs = max_n_obs
 
-    def __load_archives(self, archive_files, model):
+        # Load archives
+        self.logger.debug("Loading archives...")
+        if len(archive_files) > 30:
+            self.logger.debug(f"It may take a while to load {len(archive_files)} archives...", layer=1)
+        self.archive_files, self.profiles, self.epochs = self.__load_archives(archive_files, self.model, self.max_n_obs)
+
+    def __load_archives(self, archive_files, model, max_n_obs):
         """Helper function to load multiple archives."""
+        files = []
         profiles = []
         epochs = []
         for archive_file in archive_files:
@@ -82,10 +89,23 @@ class InitialTimingSolutionOptimizer:
                 site=site
             ).install_model(model)
 
+            files.append(archive_file)
             profiles.append(profile)
             epochs.append(epoch)
 
-        return profiles, epochs
+        # Sort the profiles and epochs by epochs
+        sorted_indices = sorted(range(len(epochs)), key=lambda i: epochs[i])
+        files = [files[i] for i in sorted_indices]
+        profiles = [profiles[i] for i in sorted_indices]
+        epochs = [epochs[i] for i in sorted_indices]
+
+        # Limit the number of observations if max_n_obs is specified
+        if max_n_obs is not None:
+            files = files[:max_n_obs]
+            profiles = profiles[:max_n_obs]
+            epochs = epochs[:max_n_obs]
+
+        return files, profiles, epochs
 
     def optimize(self, n_df0_trials=512, n_df1_trials=256, ncpus=1):
         """

@@ -20,8 +20,13 @@ parser.add_argument("--pepoch", required=False, default=None, help="Reference ep
 parser.add_argument("--psr", required=False, default=None, help="Pulsar name (e.g., J1234+5678) (optional)")
 parser.add_argument("--parfile", required=False, default=None, help="Parfile containing pulsar parameters (optional; ignore parameter inputs if provided)")
 parser.add_argument("--output", required=False, default=None, help=f"Output directory for generated diagnostics, parfile, and stacked profile (default: ./{TIMING_SOURCES_PATH}/<psrname>)")
+parser.add_argument("--max-n-obs", "-N", required=False, default=60, type=int, help=f"Maximum number of observations to use in the search (default: 60)")
 parser.add_argument("--ncpus", required=False, default=1, help="Number of CPU cores to use for the search (default: 1)")
 args = parser.parse_args()
+
+# Check if archives is provided
+if not args.archives:
+    raise ValueError("No archive files provided. Please specify at least one archive file.")
 
 # Initialize the CLI search
 cli_search = CLIInitialTimingSolutionSearch(
@@ -35,7 +40,8 @@ cli_search = CLIInitialTimingSolutionSearch(
         "f1": args.f1,
         "pepoch": args.pepoch,
         "psrname": args.psr
-    }
+    }, 
+    max_n_obs=args.max_n_obs,
 )
 
 # Determine the output directory
@@ -65,7 +71,7 @@ print(f" Parfile: {args.parfile if args.parfile is not None else '(not provided)
 print(f" Output: {args.output}")
 print(f" Number of CPU cores: {args.ncpus}")
 print(f" Archives: ")
-for archive in args.archives:
+for archive in cli_search.optimizer.archive_files:
     print(f"  {archive}")
 
 # Optimize the initial timing solution and save the results
