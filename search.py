@@ -45,18 +45,16 @@ cli_search = CLIInitialTimingSolutionSearch(
 )
 
 # Determine the output directory
-make_directory = False
-generated_psrname = False
 if args.output is None:
     if args.psr is None:
         args.psr = cli_search.optimizer.model.PSR.value
 
-        # Set flag for generated pulsar name
-        if args.parfile is None:
-                generated_psrname = True
-
-    make_directory = True
     args.output = f"{TIMING_SOURCES_PATH}/{args.psr}"
+
+# Set flag for generated pulsar name
+generated_psrname = False
+if args.psr is None and args.ra is not None:
+        generated_psrname = True
 
 # Print the parsed arguments
 print("Parsed arguments:")
@@ -75,4 +73,4 @@ for archive in cli_search.optimizer.archive_files:
     print(f"  {archive}")
 
 # Optimize the initial timing solution and save the results
-cli_search.optimize(output_dir=args.output, make_directory=make_directory)
+cli_search.optimize(output_dir=args.output, make_directory=True)

@@ -2,6 +2,8 @@ import psrchive
 import traceback
 import numpy as np
 
+from ..utils.tempfile import TempFile
+
 class ArchiveReader:
     def __init__(self, archive, dedisperse=True, remove_baseline=False, retries=3):
         # Initialize archive object
@@ -63,6 +65,18 @@ class ArchiveReader:
 
     def get_dm(self):
         return self.archive.get_dispersion_measure()
+
+    def get_ephem(self):
+        # Use TempFile context manager to handle temporary file
+        with TempFile() as tmp_filename:
+            # Unload the ephemeris to a temporary file
+            self.archive.get_ephemeris().unload(tmp_filename)
+            
+            # Read the contents of the temporary file
+            with open(tmp_filename, 'r') as f:
+                ephem = f.read()
+
+        return ephem
 
     def get_obs_coordinates(self):
         try:

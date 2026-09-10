@@ -50,22 +50,44 @@ class InitialTimingSolution:
 
 class InitialTimingSolutionOptimizer:
     def __init__(self, parfile, archive_files, max_n_obs=None, logger=logger()):
-        self.model = get_model(parfile)
         self.logger = logger
         self.max_n_obs = max_n_obs
 
+        # Load model
+        self.logger.debug(f"Loading model...")
+        self.model = self.__get_model(parfile)
+
         # Load archives
-        self.logger.debug("Loading archives...")
-        if len(archive_files) > 30:
-            self.logger.debug(f"It may take a while to load {len(archive_files)} archives...", layer=1)
+        self.logger.debug(f"Loading {len(archive_files)} archive files...")
         self.archive_files, self.profiles, self.epochs = self.__load_archives(archive_files, self.model, self.max_n_obs)
+
+    def __get_model(self, parfile):
+        """Helper function to get model and ensure the model is valid."""
+        m = get_model(parfile)
+
+        if "Spindown" not in m.components:
+            raise ValueError("Model must have a Spindown component.")
+        
+        c = m.components["Spindown"]
+        if not hasattr(m, "F1"):
+            self.logger.debug("F1 attribute not found in the model. Adding F1...", layer=1)
+            c.add_param(m.F0.new_param(1), setup=True)
+            p = getattr(m, "F1")
+            p.quantity = 0.0 * p.units
+            p.frozen = True
+
+        return m
+
 
     def __load_archives(self, archive_files, model, max_n_obs):
         """Helper function to load multiple archives."""
         files = []
         profiles = []
         epochs = []
-        for archive_file in archive_files:
+        for i, archive_file in enumerate(archive_files):
+            if i > 14: # Show progress when too many archives to be loaded
+                self.logger.debug(f"It may take a while to load {len(archive_files)} archives ({len(archive_files) - i} left)... ", layer=1, end="\r")
+
             # Load archive
             archive = ArchiveReader(
                 archive_file, 
@@ -92,6 +114,10 @@ class InitialTimingSolutionOptimizer:
             files.append(archive_file)
             profiles.append(profile)
             epochs.append(epoch)
+        
+
+        if i > 14:
+            self.logger.debug(f"\nFinished loading {len(archive_files)} archives.", layer=1)
 
         # Sort the profiles and epochs by epochs
         sorted_indices = sorted(range(len(epochs)), key=lambda i: epochs[i])
