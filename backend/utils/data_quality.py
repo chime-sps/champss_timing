@@ -1,6 +1,21 @@
 import numpy as np
 from scipy.stats import normaltest
+from scipy.ndimage import uniform_filter1d
 from .correlation import fourier_shifts, discrete_shifts, subsample_shifts
+
+class data_quality_utils:
+    @staticmethod
+    def boxcar_snr(profile, max_width=None):
+        """Helper function to compute the boxcar SNR of a profile"""
+        x = np.asarray(profile, dtype=float)
+        n = x.size
+        baseline = np.median(x)
+        sigma = np.std(np.sort(x)[: 3 * n // 4])
+        widths = 2 ** np.arange(int(np.log2((max_width or n // 4))) + 1)
+        return max(
+            (uniform_filter1d(x, w, mode="wrap").max() - baseline) / (sigma / np.sqrt(w))
+            for w in widths
+        )
 
 class MatchedFilterSNR:
     def __init__(self, profile, template, shift_meth="discrete"):

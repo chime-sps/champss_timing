@@ -5,6 +5,7 @@ import datetime
 import traceback
 import pandas as pd
 import tqdm
+import sys
 import argparse
 from multiprocessing import Pool
 from backend import champss_timing
@@ -26,6 +27,7 @@ parser.add_argument("--slack-token", type=str, help="Slack token.")
 parser.add_argument("--no-beep", action="store_true", help="Disable beep sound at the end of the script.")
 parser.add_argument("--no-cleanup", action="store_true", default=False, help="Disable cleaning up temporary files after pipeline run.")
 parser.add_argument("--skip-checkers", action="store_true", default=False, help="Skip running checkers after timing.")
+parser.add_argument("--skip-dealiasing", action="store_true", default=False, help="Skip running dealiasing pipeline after timing.")
 args = parser.parse_args()
 
 # Get run_checkers
@@ -34,10 +36,16 @@ if args.skip_checkers:
     run_checkers = False
     print("Skipping checkers after timing.")
 
+run_dealiasing = True
+if args.skip_dealiasing:
+    run_dealiasing = False
+    print("Skipping dealiasing after timing.")
+
 print(f"Number of CPUs: {args.ncpus}")
 print(f"Pulsar: {args.psr}")
 print(f"Slack token: {args.slack_token}")
 print(f"Run checkers: {run_checkers}")
+print(f"Run dealiasing: {run_dealiasing}")
 print(f"Clean up temporary files: {not args.no_cleanup}")
 print(f"Start timing... (press Ctrl+C to cancel)")
 time.sleep(3)
@@ -147,6 +155,7 @@ for d in pulsar_data:
                 data_archives=d["data"],
                 toa_jumps=JUMPS, 
                 run_checkers=run_checkers,
+                run_dealiasing=run_dealiasing,
                 logger=logger.copy(),
                 slack_token=SLACK_TOKEN,
                 workspace_cleanup=not args.no_cleanup,
@@ -190,3 +199,7 @@ with open(f"{TIMING_SOURCES_PATH}/timing_summary.txt", "w") as f:
 # Send alert when finished
 if not args.no_beep:
     logger.cli_alert()
+
+# If any timing failed, end with a non-zero exit code
+if not timing_results["success"].all():
+    sys.exit(1)

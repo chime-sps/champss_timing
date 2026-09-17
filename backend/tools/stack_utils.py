@@ -10,11 +10,12 @@ from multiprocessing import Pool
 
 from ..utils.utils import utils
 from ..utils.logger import logger
+from ..utils.data_quality import data_quality_utils
 from ..processing.dspsr_shutils import dspsr_shutils
 from ..processing.archive_shutils import archive_shutils
 
 class stack_utils():
-    def __init__(self, files, parfile, n_subs=16, n_pols=3, n_freqs=1024, n_bins=1024, n_pools=4, jumps={}, workspace="/tmp", logger=logger()):
+    def __init__(self, files, parfile, n_subs=16, n_pols=3, n_freqs=1024, n_bins=1024, n_pools=4, jumps={}, remove_baseline=False, workspace="/tmp", logger=logger()):
         self.n_subs = n_subs
         self.n_pols = n_pols
         self.n_freqs = n_freqs
@@ -24,6 +25,7 @@ class stack_utils():
         self.logger = logger
         self.n_pools = n_pools
         self.jumps = jumps
+        self.remove_baseline = remove_baseline
         self.tempdir = workspace + f"/champss_timing__stack_utils/{utils.get_time_string()}__{utils.get_rand_string()}"
 
         # Some data necessary for alias_utils
@@ -153,6 +155,10 @@ class stack_utils():
     
             # dedisperse
             this_arch.dedisperse()
+
+            # remove baseline if needed
+            if self.remove_baseline:
+                this_arch.remove_baseline()
     
             # downsample using PSRCHIVE scrunch
             self.resize_psrchive(this_arch, (self.n_subs, self.n_pols, self.n_freqs, self.n_bins))
@@ -171,7 +177,7 @@ class stack_utils():
 
             # get_snr
             this_profile = np.sum(this_data, axis=(0, 1, 2))
-            this_snr = np.nanmax(this_profile) / np.nanstd(this_profile)
+            this_snr = data_quality_utils.boxcar_snr(this_profile)
 
             # get duration
             this_duration = (this_arch.end_time() - this_arch.start_time()).in_days()
@@ -303,3 +309,10 @@ class stack_utils():
             
         return self.resize_array(data_copy, data_shape)
 
+    def get_stacked_snr(self):
+        if self.n_bins <= 1:
+            return 0.0
+
+        return data_quality_utils.boxcar_snr(
+            self.get_data().sum(axis=(0, 1, 2))
+        )

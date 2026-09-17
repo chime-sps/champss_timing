@@ -11,6 +11,7 @@ from .pipecore.timing import timing
 from .pipecore.plot import plot
 from .pipecore.config import config
 from .pipecore.checker import checker
+from .pipecore.dealias import dealias
 from .datastores.database import database
 from .datastores.archive_cache import archive_cache
 from .utils.logger import logger
@@ -18,7 +19,7 @@ from .utils.utils import utils
 from .utils.notification import notification
 
 class champss_timing:
-    def __init__(self, psr_dir, data_archives, toa_jumps={}, run_checkers=True, slack_token=False, timing_mode="opd", n_pools=4, workspace_cleanup=True, logger=logger()):
+    def __init__(self, psr_dir, data_archives, toa_jumps={}, run_checkers=True, run_dealiasing=True, slack_token=False, timing_mode="opd", n_pools=4, workspace_cleanup=True, logger=logger()):
         """
         CHAMPSS timing pipeline
 
@@ -50,6 +51,7 @@ class champss_timing:
         self.psr_id = None
         self.toa_jumps = toa_jumps
         self.run_checkers = run_checkers
+        self.run_dealiasing = run_dealiasing
         self.path_psr_dir = psr_dir
         self.path_data_archives = data_archives
         self.path_db = f"{self.path_psr_dir}/champss_timing.sqlite3.db"
@@ -78,14 +80,14 @@ class champss_timing:
             if os.environ["SLURM_TMPDIR"] != "" and os.path.isdir(os.environ["SLURM_TMPDIR"]):
 
                 # Set workspace and tempfolder
-                self.workspace = os.environ["SLURM_TMPDIR"] + "/champss_timing_workspace"
+                self.workspace_root = os.environ["SLURM_TMPDIR"] + "/champss_timing_workspace"
                 self.tempfolder = os.environ["SLURM_TMPDIR"] + "/champss_timing_tempfiles"
                 self.workspace_cleanup = False
-                logger.info(f"SLURM detected. Setting workspace to {self.workspace} and tempfolder to {self.tempfolder}")
+                logger.info(f"SLURM detected. Setting workspace to {self.workspace_root} and tempfolder to {self.tempfolder}")
 
                 # Create the directory if not exists
-                if not os.path.isdir(self.workspace):
-                    os.makedirs(self.workspace, exist_ok=True)
+                if not os.path.isdir(self.workspace_root):
+                    os.makedirs(self.workspace_root, exist_ok=True)
                 if not os.path.isdir(self.tempfolder):
                     os.makedirs(self.tempfolder, exist_ok=True)
 
@@ -158,15 +160,25 @@ class champss_timing:
             os.makedirs(self.path_timing_model_bakdir)
             self.logger.debug(f"Created timing model backup directory {self.path_timing_model_bakdir}")
 
-        # Check files exist
+        # Check model and template exist
         if not os.path.isfile(self.path_pulse_template):
             raise FileNotFoundError(f"File {self.path_pulse_template} not found for pulse template")
         if not os.path.isfile(self.path_timing_model):
             raise FileNotFoundError(f"File {self.path_timing_model} not found for timing model")
+
+        # Remove non-existent data archives
+        path_data_archives_ = {}
         for mjd in self.path_data_archives:
             for this_archive_info in self.path_data_archives[mjd]:
+                # Skip non-existent files
                 if not os.path.isfile(this_archive_info["path"]):
-                    raise FileNotFoundError(f"File {this_archive_info['path']} not found for data archive")
+                    self.logger.warning(f"File {this_archive_info['path']} not found for data archive. Skipping.")
+                    continue
+                # Add existing file to the new dictionary
+                if mjd not in path_data_archives_:
+                    path_data_archives_[mjd] = []
+                path_data_archives_[mjd].append(this_archive_info)
+        self.path_data_archives = path_data_archives_
 
     def run(self):
         n_timed = 0
@@ -200,9 +212,35 @@ class champss_timing:
             self.logger.info(f"Creating diagnostic plot")
             plot(db_hdl=self.db_hdl).diagnostic(savefig=self.path_diagnostic_plot)
 
+            # Create diagnostics for sidereal day aliasing
+            if self.run_dealiasing:
+                dealias(
+                    psr_dir=self.path_psr_dir, 
+                    db_hdl=self.db_hdl, 
+                    archive_files=self.path_data_archives, 
+                    jumps=self.toa_jumps, 
+                    potential_fit_params=self.timing_config["settings"]["fit_params"],
+                    n_subints=self.timing_config["dealiasing"]["n_subints"], 
+                    min_snr_per_subint=self.timing_config["dealiasing"]["min_snr_per_subint"], 
+                    max_n_files=self.timing_config["dealiasing"]["max_n_files"], 
+                    n_bins=self.timing_config["dealiasing"]["n_bins"], 
+                    smooth=self.timing_config["dealiasing"]["smooth"], 
+                    recent_threshold=self.timing_config["dealiasing"]["recent_threshold"], 
+                    workspace=self.workspace_root, 
+                    cleanup=self.workspace_cleanup, 
+                    n_pools=self.n_pools, 
+                    logger=self.logger.copy()
+                ).run()
+
             # Run checker
             if self.run_checkers:
-                checker(psr_dir=self.path_psr_dir, db_hdl=self.db_hdl, noti_hdl=self.noti_hdl, psr_id=self.psr_id, logger=self.logger.copy()).check(save=True)
+                checker(
+                    psr_dir=self.path_psr_dir, 
+                    db_hdl=self.db_hdl, 
+                    noti_hdl=self.noti_hdl, 
+                    psr_id=self.psr_id, 
+                    logger=self.logger.copy()
+                ).check(save=True)
 
             # End of the script
             self.logger.success("Script finished. ")

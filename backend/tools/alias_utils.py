@@ -21,10 +21,11 @@ from astropy.table import Table
 from ..utils.utils import utils
 from ..utils.exec import exec
 from ..utils.logger import logger
+from ..utils.data_quality import data_quality_utils
 from ..tools.template_utils import StackTemplate
 from ..tools.shift_finder import ShiftFinder
-from ..pipecore.psrchive import psrchive_handler
 from ..tools.stack_utils import stack_utils
+from ..pipecore.psrchive import psrchive_handler
 from ..datastores.database import database
 from ..datastores.archive_cache import archive_cache
 
@@ -203,7 +204,9 @@ class alias_utils():
         self.sidereal_day = 0.99727 # day
         self.cleanup_workspace = cleanup
         self.alias_factor = None
-        self.avg_snr = 0
+        self.snr_stacked = 0.0
+        self.avg_snr_per_obs = 0.0
+        self.avg_snr_per_subints = 0.0
         self.data_stacked = []
         self.su = None
         self.summary = None
@@ -241,6 +244,7 @@ class alias_utils():
             n_subs=self.n_subints, n_pols=1, n_freqs=1, n_bins=self.n_bins, 
             n_pools=self.n_pools, 
             jumps=self.jumps, 
+            remove_baseline=True, 
             logger=self.logger.copy()
         )
 
@@ -261,7 +265,10 @@ class alias_utils():
         # Get shift result
         measured_shift = shift_finder.result.shift
 
-        return {"shift": measured_shift.n, "shift_unc": measured_shift.s}
+        # Measure subint SNR
+        subint_snr = data_quality_utils.boxcar_snr(power)
+
+        return {"shift": measured_shift.n, "shift_unc": measured_shift.s, "subint_snr": subint_snr}
     
     def calc_dealias_factor(self, obs_phase_shift, obs_length, obs_interval=1):
         return (obs_interval / obs_length) * obs_phase_shift
@@ -304,9 +311,15 @@ class alias_utils():
             # unpack results
             shifts = []
             shifts_unc = []
+            subint_snrs = []
             for i, res in enumerate(get_shift_res):
                 shifts.append(res["shift"])
                 shifts_unc.append(res["shift_unc"])
+                subint_snrs.append(res["subint_snr"])
+
+        # calculate snrs
+        stacked_snr = self.su.get_stacked_snr()
+        avg_snr_per_subints = np.mean(subint_snrs)
 
         # apply subint_range
         if len(subint_range) == 2:
@@ -385,13 +398,17 @@ class alias_utils():
         # print summary
         self.logger.success(
             pd.DataFrame({
-                "Stacked S/N": [avg_snr],
-                "Alias Factor": [best_alias_factor]
+                "Alias Factor": [best_alias_factor], 
+                "Stacked S/N": [stacked_snr],
+                "Avg S/N Per Obs": [avg_snr],
+                "Avg S/N Per Subints": [avg_snr_per_subints]
             })
         )
 
         self.alias_factor = best_alias_factor
-        self.avg_snr = avg_snr
+        self.snr_stacked = stacked_snr
+        self.avg_snr_per_obs = avg_snr
+        self.avg_snr_per_subints = avg_snr_per_subints
 
         return best_alias_factor
 
@@ -478,22 +495,15 @@ class alias_utils():
             shutil.move(self.workspace + "/diagnostic.pdf", f"{du.psrdir_dealias}/diagnostic.pdf")
 
         # Generate summary
-        if du_res:
-            self.summary = {
-                "psr_id": self.psrdir.split("/")[-1],
-                "n_stacked": self.su.n_stacked, 
-                "alias_factor": float(self.alias_factor), 
-                "snr_stacked": float(self.avg_snr),
-                "notes": {"remark": "DEALIAS_FITTING_OK"}
-            }
-        else:
-            self.summary = {
-                "psr_id": self.psrdir.split("/")[-1],
-                "n_stacked": self.su.n_stacked, 
-                "alias_factor": float(self.alias_factor), 
-                "snr_stacked": float(self.avg_snr),
-                "notes": {"remark": "DEALIAS_FITTING_FAILED"}
-            }
+        self.summary = {
+            "psr_id": self.psrdir.split("/")[-1],
+            "n_stacked": self.su.n_stacked, 
+            "alias_factor": float(self.alias_factor), 
+            "snr_stacked": self.snr_stacked,
+            "avg_snr_per_obs": self.avg_snr_per_obs,
+            "avg_snr_per_subints": self.avg_snr_per_subints,
+            "notes": {"remark": "DEALIAS_FITTING_OK" if du_res else "DEALIAS_FITTING_FAILED"}
+        }
 
         return self.summary
 
@@ -551,23 +561,35 @@ class alias_utils():
         
         # self.cleanup_workspace = False
 
-    def write_db(self, db_path="auto"):
+    def write_db(self, db_path="auto", db_hdl=None):
         # Check if summary is available
         if not self.summary:
             raise ValueError("No summary available. Please run dealias() first.")
 
-        # Get db_path
-        if db_path == "auto":
-            db_path = f"{self.psrdir}/champss_timing.sqlite3.db"
+        # Check if a database handle is provided
+        if db_hdl is None:
+            # Get db_path
+            if db_path == "auto":
+                db_path = f"{self.psrdir}/champss_timing.sqlite3.db"
+            
+            # Create a new database
+            self.logger.debug(f"Creating new database at {db_path}")
+            loaded_db_hdl = database(db_path)
+        else: 
+            loaded_db_hdl = db_hdl
 
         # Write database
-        with database(db_path) as db_hdl:
-            db_hdl.insert_dealias_history(
-                n_stacked=self.summary["n_stacked"], 
-                alias_factor=self.summary["alias_factor"],
-                snr_stacked=self.summary["snr_stacked"],
-                notes=self.summary["notes"]
-            )
+        loaded_db_hdl.insert_dealias_history(
+            n_stacked=self.summary["n_stacked"], 
+            alias_factor=self.summary["alias_factor"],
+            snr_stacked=self.summary["snr_stacked"],
+            notes=self.summary["notes"]
+        )
+
+        # Close db_hdl
+        if db_hdl is None:
+            self.logger.debug(f"Closing database at {db_path}")
+            loaded_db_hdl.close()
 
         self.logger.success(f"Database updated: {db_path}")
 
@@ -578,9 +600,12 @@ class alias_utils():
         else:
             self.logger.debug(f"Workspace will NOT be removed at {self.workspace} due to cleanup=False")
 
-    def commit(self):
+    def commit(self, db_hdl=None):
         '''
         Commit the changes to the psrdir and database
+
+        Parameters:
+        - db_hdl: Optional database handle. If not provided, a new database connection will be created and closed within the method.
         '''
 
         # Commit changes to psrdir
@@ -592,7 +617,7 @@ class alias_utils():
         # Commit changes to database
         self.logger.debug(f"Committing changes to database: {self.psrdir}")
         self.logger.level_up()
-        self.write_db()
+        self.write_db(db_hdl=db_hdl)
         self.logger.level_down()
 
     def __enter__(self):

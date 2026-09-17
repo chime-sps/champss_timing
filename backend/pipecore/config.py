@@ -25,6 +25,14 @@ class config():
             }, 
             "metadata": {
                 "tag": "untagged"
+            }, 
+            "dealiasing": {
+                "n_subints": 8, 
+                "min_snr_per_subint": 15.0, 
+                "max_n_files": 120,
+                "n_bins": 128, 
+                "smooth": 0, 
+                "recent_threshold": 90 * 24 * 3600, 
             }
         }
 

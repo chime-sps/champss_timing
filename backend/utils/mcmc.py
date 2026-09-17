@@ -11,8 +11,8 @@ class PosteriorSamples:
         self.burn_in = burn_in
         self.thin = thin
 
-    def plot_chain(self):
-        fig, ax = plt.subplots(len(self.labels), 1, figsize=(10, 6), sharex=True, squeeze=False)
+    def plot_chain(self, savefig=None):
+        fig, ax = plt.subplots(len(self.labels), 1, figsize=(10, 6), sharex=True)
             
         # Get samples without burn-in and thinning
         samples = self.sampler.get_chain(discard=0, thin=1)
@@ -24,13 +24,22 @@ class PosteriorSamples:
             ax[i].legend(loc='upper right')
         ax[-1].set_xlabel("Step")   
 
-    def plot_corner(self):
+        if savefig is not None:
+            plt.savefig(savefig)
+        else:
+            plt.show()
+
+    def plot_corner(self, savefig=None):
         fig = corner.corner(
             self.sampler.get_chain(flat=True, discard=self.burn_in, thin=self.thin), 
             labels=self.labels, 
             show_titles=True
         )
-        plt.show()
+
+        if savefig is not None:
+            plt.savefig(savefig)
+        else:
+            plt.show()
 
     def get_posterior_statistics(self, uncertainty_percentile=(0.16, 0.84)):
         samples = self.sampler.get_chain(flat=True, discard=self.burn_in, thin=self.thin)

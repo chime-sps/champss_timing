@@ -27,8 +27,8 @@ class ShiftFinder:
 
     def compute_initial_guess(self):
         # Estimate shift
-        # shift = fourier_shifts.find_shift(self.arr1, self.arr2)
-        shift = discrete_shifts.find_shift(self.arr1, self.arr2)
+        shift = fourier_shifts.find_shift(self.arr1, self.arr2)
+        # shift = discrete_shifts.find_shift(self.arr1, self.arr2)
 
         # Estimate amplitude
         amplitude = np.std(self.arr1) / np.std(self.arr2) if np.std(self.arr2) > 0 else 1.0
@@ -67,7 +67,7 @@ class ShiftFinder:
         shift, amplitude = params
         N = len(self.arr1)
 
-        if shift < (self.shift - 0.01 * N) or shift > (self.shift + 0.01 * N):
+        if shift < (self.shift - 0.1 * N) or shift > (self.shift + 0.1 * N):
             return -np.inf
         
         if amplitude <= 0:

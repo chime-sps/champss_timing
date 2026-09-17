@@ -1,4 +1,5 @@
 from .correlation import fourier_shifts
+from .data_quality import data_quality_utils
 
 import numpy as np
 import tqdm
@@ -19,18 +20,6 @@ class PulseProfilesState:
     def __normalize(self, profile):
         """Helper function to normalize to zero mean, unit variance"""
         return (profile - np.median(profile)) / np.std(profile)
-
-    def __boxcar_snr(self, profile, max_width=None):
-        """Helper function to compute the boxcar SNR of a profile"""
-        x = np.asarray(profile, dtype=float)
-        n = x.size
-        baseline = np.median(x)
-        sigma = np.std(np.sort(x)[: 3 * n // 4])
-        widths = 2 ** np.arange(int(np.log2((max_width or n // 4))) + 1)
-        return max(
-            (uniform_filter1d(x, w, mode="wrap").max() - baseline) / (sigma / np.sqrt(w))
-            for w in widths
-        )
 
     def get_profiles(self):
         return self.shifted_profiles
@@ -80,7 +69,7 @@ class PulseProfilesState:
         # Get stacked profile
         stacked_profile = self.get_stacked_profile()
 
-        return self.__boxcar_snr(stacked_profile)
+        return data_quality_utils.boxcar_snr(stacked_profile)
 
     def plot(self, savefig=None):
         if self.grid_search_results is None:
