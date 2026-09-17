@@ -26,7 +26,7 @@ parser.add_argument("--no-normalize", action="store_true", default=False, help="
 parser.add_argument("--backend", type=str, required=False, default="all", help="Backend to use for stacking (default: all).")
 parser.add_argument("--parfile", type=str, required=False, help="Parfile to use for stacking (default: pipeline output parfile).")
 parser.add_argument("--output-format", type=str, required=False, default="npy", help="Output file format (npy, pkl; default: npy).")
-parser.add_argument("--tmpdir", type=str, required=False, default="/tmp", help="Temporary directory to use during stacking (default: /tmp).")
+parser.add_argument("--tmpdir", type=str, required=False, default="./__champss_timing__workspace/__stack_utils_workspaces", help="Temporary directory to use during stacking (default: ./__champss_timing__workspace/__stack_utils_workspaces).")
 args = parser.parse_args()
 
 # Sanity check

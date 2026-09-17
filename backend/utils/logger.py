@@ -20,6 +20,7 @@ class logger():
         self.level = level
         self.default_layer = 0
         self.log_cache = LoggerCache()
+        self.start_time = time.time()
     
     def copy(self, level_up=True):
         # Deep copy the logger
@@ -40,8 +41,18 @@ class logger():
     def level_down(self):
         self.default_layer -= 1
 
-    def get_time_string(self):
-        return time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())
+    def get_time_string(self, length=9):
+        current_time = time.time()
+        elapsed_time = current_time - self.start_time
+
+        # Round elapsed time to three decimal places
+        elapsed_time_str = f"{elapsed_time:0.{3}f}"
+
+        if len(elapsed_time_str) < length - 1:
+            elapsed_time_str = " " * (length - 1 - len(elapsed_time_str)) + elapsed_time_str
+        
+        return elapsed_time_str + "s"
+
     
     def get_stack_info(self, max_len=30):
         stack = inspect.stack()

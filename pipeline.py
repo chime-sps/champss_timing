@@ -19,6 +19,9 @@ ssl._create_default_https_context = ssl._create_unverified_context  # To avoid S
 # Load configuration
 cli_config = CLIConfig(load_error=False)
 
+# Initialize logger
+logger = logger.logger()
+
 # Parse arg
 parser = argparse.ArgumentParser(description="CHAMPSS Timing Main Pipeline.")
 parser.add_argument("--ncpus", type=int, default=1, help="Number of CPUs to use.")
@@ -82,8 +85,7 @@ for bknd in BACKENDS:
     JUMPS[bknd] = BACKENDS[bknd]["jump"]
     LABELS[bknd] = BACKENDS[bknd]["label"]
 
-# Initialize hamdlers
-logger = logger.logger()
+# Initialize handlers
 noti = notification.notification(SLACK_TOKEN)
 
 # Fetch master db

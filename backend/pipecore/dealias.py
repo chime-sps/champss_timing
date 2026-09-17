@@ -23,14 +23,11 @@ class dealias:
         self.logger = logger
         self.n_pools = n_pools
 
-        # Read archive info
-        self.archive_info = self.db_hdl.get_all_archive_info()
-
         # Determine the rcvr to use
         rcvr_counts = {}
         self.rcvr = None
-        for info in self.archive_info:
-            rcvr = info["notes"]["rcvr"]
+        for mjd in archive_files:
+            rcvr = archive_files[mjd][0]["rcvr"]
             if rcvr not in rcvr_counts:
                 rcvr_counts[rcvr] = 0
             rcvr_counts[rcvr] += 1

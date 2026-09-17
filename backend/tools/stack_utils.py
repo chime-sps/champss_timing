@@ -156,18 +156,19 @@ def _stack_worker(file_info, normalize, config, logger):
             # remove the filterbank data
             os.remove(this_fil)
             del this_fil
+        
+        # Note: there's a weird bug that psrchive.Archive_load never release its memory 
+        # until the end of the subprocess, even after gc.collect(). Here we use 
+        # archive_shutils instead since it uses the cli interface that immediately releases
+        # memory after the operation is completed. We want to use psrchive.Archive_load 
+        # as later as we can to avoid it consuming too much memory early.
+
+        # initialize archive shutils
+        ashu = archive_shutils(this_ar)
 
         # scrunch polarization before clfd if required to save memory
         if config["n_pols"] == 1:
-            this_arch = psrchive.Archive_load(this_ar) # load the archive
-            this_arch.dedisperse() # dedisperse
-            this_arch.pscrunch() # scrunch polarization
-            this_arch.unload(this_ar) # overwrite the archive
-            del this_arch # remove archive object
-            gc.collect() # clean up memory
-        
-        # initialize archive shutils
-        ashu = archive_shutils(this_ar)
+            ashu.scrunch(pol=True)
 
         # zap rfi
         ashu.clfd()
