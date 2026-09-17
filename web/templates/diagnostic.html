@@ -76,7 +76,7 @@
                             <li><h6 class="dropdown-header">Diagnostic</h6></li>
                             <li><a class="dropdown-item" href="#" id="show_pint_editor">PINT Model Editor</a></li>
                             <li><a class="dropdown-item" href="#" id="show_pulse_profiles">Pulse Profiles Browser</a></li>
-                            <li><a class="dropdown-item" href="#" id="show_dealias_info" data-bs-toggle="modal" data-bs-target="#dealias_diagnostics_modal">Dealias Solution Diagnostics </a></li>
+                            <li><a class="dropdown-item" href="#" id="show_dealias_info" data-bs-toggle="modal" data-bs-target="#dealias_diagnostics_modal">De-aliasing Pipeline Diagnostics </a></li>
                             <li><hr class="dropdown-divider"></li>
                             <li><h6 class="dropdown-header">Debug</h6></li>
                             <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#processing_log_modal">Processing Log Viewer</a></li>
@@ -840,11 +840,11 @@
                                     </div>
                                      <script>
                                         function load_dealias_diagnostics() {
+                                            var diagnostics_url = "{{ url_for("diagnostic", source_id=source_id) }}/dealias/diagnostics";
                                             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://mozilla.github.io/pdf.js/build/pdf.worker.mjs';
 
-                                            // pdfjsLib.getDocument({data: pdf_data}).promise.then(function(pdf) {
-                                            var loadingTask = pdfjsLib.getDocument("{{ url_for("diagnostic", source_id=source_id) }}/dealias/diagnostics");
-                                            loadingTask.promise.then(function(pdf) {
+                                            console.log("Loading dealias diagnostics PDF from URL:", diagnostics_url);
+                                            pdfjsLib.getDocument({url: diagnostics_url}).promise.then(function(pdf) {
                                                 pdf.getPage(1).then(function(page) {
                                                     var scale = 2;
                                                     var viewport = page.getViewport({ scale: scale });
@@ -1006,9 +1006,12 @@
 
     <script type="module" type="text/javascript">
     import { AnsiUp } from 'https://cdn.jsdelivr.net/npm/ansi_up@6.0.2/ansi_up.min.js'
+    
     var ansi_up = new AnsiUp();
+    
     var processing_log = `{{ sources[source_id].get_processing_log(to_json=False).replace("\n", "\\n") | safe }}`;
     $("#processing_log_div").html(ansi_up.ansi_to_html(processing_log));
+    
     var dealias_log = `{{ sources[source_id].get_dealias_log(to_json=False).replace("\n", "\\n") | safe }}`;
     $("#dealias_log_div").html(ansi_up.ansi_to_html(dealias_log));
     </script>
