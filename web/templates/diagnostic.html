@@ -838,41 +838,6 @@
                                             </button>
                                         </div>
                                     </div>
-                                     <script>
-                                        function load_dealias_diagnostics() {
-                                            var diagnostics_url = "{{ url_for("diagnostic", source_id=source_id) }}/dealias/diagnostics";
-                                            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://mozilla.github.io/pdf.js/build/pdf.worker.mjs';
-
-                                            console.log("Loading dealias diagnostics PDF from URL:", diagnostics_url);
-                                            pdfjsLib.getDocument({url: diagnostics_url}).promise.then(function(pdf) {
-                                                pdf.getPage(1).then(function(page) {
-                                                    var scale = 2;
-                                                    var viewport = page.getViewport({ scale: scale });
-                                                    var canvas = document.createElement('canvas');
-                                                    var context = canvas.getContext('2d');
-                                                    canvas.height = viewport.height;
-                                                    canvas.width = viewport.width;
-                                                    canvas.style.width = '100%';
-                                                    var renderContext = {
-                                                        canvasContext: context,
-                                                        viewport: viewport
-                                                    };
-                                                    page.render(renderContext).promise.then(function() {
-                                                        $("#dealias_diagnostics_pdf").empty();
-                                                        document.getElementById('dealias_diagnostics_pdf').appendChild(canvas);
-                                                        $("#dealias_diagnostics_pdf_placeholder").hide();
-                                                        setTimeout(() => {
-                                                            $("#dealias_diagnostics_pdf").fadeIn();
-                                                        }, 0);
-                                                    });
-                                                });
-                                            });
-                                        }
-
-                                        $("#show_dealias_info").on("click", function() {
-                                            load_dealias_diagnostics();
-                                        });
-                                     </script>
                                 </div>
                             </div>
                         </div>
@@ -885,6 +850,48 @@
                         </div>
                     </div>
                     <small style="top: 1em; left: 1em; color: #fff; opacity: 75%; font-weight: 600; font-size: 12px; cursor: pointer; position: fixed; height: 100%; width: 100%; z-index: 998;" onclick="$('#dealias_diagnostics_modal').modal('hide'); "></small>
+                    <script>
+                        function load_dealias_diagnostics() {
+                            var url_diagnostics = "{{ url_for("diagnostic", source_id=source_id) }}/dealias/diagnostics";
+                            var url_info = "{{ url_for("diagnostic", source_id=source_id) }}/dealias/info";
+                            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://mozilla.github.io/pdf.js/build/pdf.worker.mjs';
+
+                            // Fetech diagnostics PDF and render it
+                            console.log("Loading dealias diagnostics PDF from URL:", url_diagnostics);
+                            pdfjsLib.getDocument({url: url_diagnostics}).promise.then(function(pdf) {
+                                pdf.getPage(1).then(function(page) {
+                                    var scale = 2;
+                                    var viewport = page.getViewport({ scale: scale });
+                                    var canvas = document.createElement('canvas');
+                                    var context = canvas.getContext('2d');
+                                    canvas.height = viewport.height;
+                                    canvas.width = viewport.width;
+                                    canvas.style.width = '100%';
+                                    var renderContext = {
+                                        canvasContext: context,
+                                        viewport: viewport
+                                    };
+                                    page.render(renderContext).promise.then(function() {
+                                        $("#dealias_diagnostics_pdf").empty();
+                                        document.getElementById('dealias_diagnostics_pdf').appendChild(canvas);
+                                        $("#dealias_diagnostics_pdf_placeholder").hide();
+                                        setTimeout(() => {
+                                            $("#dealias_diagnostics_pdf").fadeIn();
+                                        }, 0);
+                                    });
+                                });
+                            });
+
+                            // Fetch dealias info text and display it
+                            $.get(url_info, function(data) {
+                                $("#dealias_log_div").text(data);
+                            });
+                        }
+
+                        $("#show_dealias_info").on("click", function() {
+                            load_dealias_diagnostics();
+                        });
+                    </script>
                 </div>
             </div>
         </div>
@@ -1011,9 +1018,6 @@
     
     var processing_log = `{{ sources[source_id].get_processing_log(to_json=False).replace("\n", "\\n") | safe }}`;
     $("#processing_log_div").html(ansi_up.ansi_to_html(processing_log));
-    
-    var dealias_log = `{{ sources[source_id].get_dealias_log(to_json=False).replace("\n", "\\n") | safe }}`;
-    $("#dealias_log_div").html(ansi_up.ansi_to_html(dealias_log));
     </script>
 
     <script>

@@ -26,7 +26,6 @@ class src_loader():
         self.checker_warnings_length = 0
         self.pdf = source_dir + "/champss_diagnostic.pdf"
         self.logfile = source_dir + "/champss_timing.log"
-        self.dealias_logfile = source_dir + "/dealias/champss_timing.log"
         self.psr_id = source_dir.split("/")[-1]
         self.psr_id_esc = self.psr_id.replace("+", "p").replace("-", "m")
         self.initialized = False
@@ -362,17 +361,6 @@ class src_loader():
             return "No log file available."
         
         with open(self.logfile, "r") as f:
-            if to_json:
-                return json.dumps(f.readlines())
-            return f.read()
-        
-    def get_dealias_log(self, to_json=True):
-        if not os.path.exists(self.dealias_logfile):
-            if to_json:
-                return '["No log file available."]'
-            return "No log file available."
-        
-        with open(self.dealias_logfile, "r") as f:
             if to_json:
                 return json.dumps(f.readlines())
             return f.read()

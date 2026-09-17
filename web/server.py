@@ -253,6 +253,7 @@ def sqlite3_(source_id):
     return sqlite3(source_id)
 
 @app.route('/diagnostic/<source_id>/dealias/diagnostics')
+@app.route('/diagnostic/<source_id>/dealias/diagnostics/')
 def dealias_diagnostics(source_id):
     if source_id not in app.sources:
         abort(404)
@@ -262,12 +263,16 @@ def dealias_diagnostics(source_id):
     res.headers['Content-Disposition'] = f'attachment; filename="champss_timing_{source_id}_dealias_diagnostic.pdf"'
     return res
 
-@app.route('/diagnostic/<source_id>/dealias/diagnostics/')
-def dealias_diagnostics_(source_id):
+@app.route('/diagnostic/<source_id>/dealias/info')
+@app.route('/diagnostic/<source_id>/dealias/info/')
+def dealias_info(source_id):
     if source_id not in app.sources:
         abort(404)
 
-    return dealias_diagnostics(source_id)
+    res = Response(open(app.sources[source_id].source_dir + "/dealias/dealias_info.ecsv", 'rb').read())
+    res.headers['Content-Type'] = 'text/plain'
+    res.headers['Content-Disposition'] = f'attachment; filename="champss_timing_{source_id}_dealias_info.ecsv"'
+    return res
 
 @app.route('/pint')
 def pint():
