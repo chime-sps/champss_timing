@@ -76,7 +76,7 @@
                             <li><h6 class="dropdown-header">Diagnostic</h6></li>
                             <li><a class="dropdown-item" href="#" id="show_pint_editor">PINT Model Editor</a></li>
                             <li><a class="dropdown-item" href="#" id="show_pulse_profiles">Pulse Profiles Browser</a></li>
-                            <li><a class="dropdown-item" href="#" id="show_dealias_info" data-bs-toggle="modal" data-bs-target="#dealias_diagnostics_modal">De-aliasing Pipeline Diagnostics </a></li>
+                            <li><a class="dropdown-item" href="#" id="show_dealias_info">De-aliasing Pipeline Diagnostics </a></li>
                             <li><hr class="dropdown-divider"></li>
                             <li><h6 class="dropdown-header">Debug</h6></li>
                             <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#processing_log_modal">Processing Log Viewer</a></li>
@@ -166,7 +166,7 @@
                     <div id="aladin_lite_placeholder" style="position: absolute; bottom: 10px; right: 0px; ">
                         <button class="btn btn-dark btn-sm" type="button" style="scale: 0.75; border-radius: 5em;" disabled>
                             <span class="spinner-grow spinner-grow-sm" aria-hidden="true"></span>
-                            <span role="status">Loading atlas data...</span>
+                            <span role="status" id="aladin_progress_value">Loading atlas data...</span>
                         </button>
                     </div>
                 </div>
@@ -361,6 +361,19 @@
             <div style="float: right; font-size: 0.5em; transform: scale(0.75, 0.75); transform-origin: right; ">
                 <div class="btn-group" role="group">
                     <button type="button" class="btn btn-light btn-sm" id="show_pint_editor_inline">PINT Model Editor</button>
+                    {% if sources[source_id].is_timing_solution_aliased() is none: %}
+                    <button type="button" class="btn btn-light btn-sm" id="show_dealias_info_inline">Timing Solution Aliasing -  
+                        unavailable
+                    </button>
+                    {% elif sources[source_id].is_timing_solution_aliased(): %}
+                    <button type="button" class="btn btn-danger btn-sm" id="show_dealias_info_inline">Timing Solution Aliasing - 
+                        <b>likely aliased</b>
+                    </button>
+                    {% else %}
+                    <button type="button" class="btn btn-success btn-sm" id="show_dealias_info_inline">Timing Solution Aliasing - 
+                        OK
+                    </button>
+                    {% endif %}
                 </div>
             </div>
             <!-- <div style="float: right; font-size: 0.5em; transform: scale(0.75, 0.75); transform-origin: right; ">
@@ -825,6 +838,19 @@
             <div class="modal-content" style="cursor: default; height: 100%; background-color: unset; border: none; ">
                 <div class="modal-body" style="height: 100%; padding: 6px; background-color: unset; border: none; z-index: 999; ">
                     <div class="row" style="height: 100%; ">
+                        {% if sources[source_id].is_timing_solution_aliased() is none: %}
+                        <div class="col-md-10" style="position: relative; left: 50%; transform: translateX(-50%); margin-top: 1em; ">
+                            <div class="card" style="height: 100%; ">
+                                <div class="card-body" style="height: 100%; ">
+                                    <div style="text-align: center; color: #888; top: 50%; transform: translateY(-50%); position: relative; ">
+                                        <h1 style="font-size: 4em;">🧐</h1>
+                                        <h2>De-aliasing pipeline diagnostics are currently unavailable</h2>
+                                        <h4>Has the de-aliasing pipeline been run on this source?</h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% else: %}
                         <div class="col-md-10" style="position: relative; left: 50%; transform: translateX(-50%); ">
                             <div class="card">
                                 <div class="card-body">
@@ -848,6 +874,7 @@
                                 </div>
                             </div>
                         </div>
+                        {% endif %}
                     </div>
                     <small style="top: 1em; left: 1em; color: #fff; opacity: 75%; font-weight: 600; font-size: 12px; cursor: pointer; position: fixed; height: 100%; width: 100%; z-index: 998;" onclick="$('#dealias_diagnostics_modal').modal('hide'); "></small>
                     <script>
@@ -888,8 +915,14 @@
                             });
                         }
 
-                        $("#show_dealias_info").on("click", function() {
-                            load_dealias_diagnostics();
+                        $("#show_dealias_info, #show_dealias_info_inline").on("click", function() {
+                            {% if sources[source_id].is_timing_solution_aliased() is not none: %}
+                                // Load and display the de-aliasing diagnostics
+                                load_dealias_diagnostics();
+                            {% endif %}
+
+                            // Show modal
+                             $('#dealias_diagnostics_modal').modal('show');
                         });
                     </script>
                 </div>
@@ -1065,7 +1098,6 @@
     </script>
 
 
-    <script src='https://aladin.cds.unistra.fr/AladinLite/api/v3/latest/aladin.js' charset='utf-8'></script>
     <script>
         var aladin;
         var psr_id = "{{ source_id }}";
@@ -1336,18 +1368,98 @@
             load_aladin_lite(aladin_survey="P/NVSS", table_survey="any");
         });
 
+        // $(document).ready(function() {
+        //     // Load aladin script
+        //     var aladinScript = document.createElement("script");
+        //     aladinScript.src = "https://aladin.cds.unistra.fr/AladinLite/api/v3/latest/aladin.js";
+        //     aladinScript.charset = "utf-8";
+        //     aladinScript.defer = true;
+        //     document.head.appendChild(aladinScript);
 
-        setTimeout(() => {
-            {% if sources[source_id].source_coincidences_map_default == 'SIMBAD Query' %}
-            $("#show_dss").click();
-            {% endif %}
-            {% if sources[source_id].source_coincidences_map_default == 'WISE' %}
-                $("#show_wise").click();
-            {% endif %}
-            {% if sources[source_id].source_coincidences_map_default == 'Fermi' %}
-                $("#show_fermi").click();
-            {% endif %}
-        }, 500);
+        //     // Wait until the aladin script loaded
+        //     var checkAladinLoaded = setInterval(function() {
+        //         if (typeof A === "object" && typeof A.aladin === "function") {
+        //             clearInterval(checkAladinLoaded);
+        //             // Trigger the default view click
+        //             {% if sources[source_id].source_coincidences_map_default == 'SIMBAD Query' %}
+        //             $("#show_dss").click();
+        //             {% endif %}
+        //             {% if sources[source_id].source_coincidences_map_default == 'WISE' %}
+        //                 $("#show_wise").click();
+        //             {% endif %}
+        //             {% if sources[source_id].source_coincidences_map_default == 'Fermi' %}
+        //                 $("#show_fermi").click();
+        //             {% endif %}
+        //         }
+        //     }, 100);
+        // });
+
+        $(document).ready(function() {
+            var aladinUrl = "https://aladin.cds.unistra.fr/AladinLite/api/v3/latest/aladin.js";
+            var $progress = $("#aladin_progress_value");
+
+            function setProgress(pct) {
+                $progress.text("Loading atlas data..." + pct + "%");
+            }
+
+            // Original loading method, used as a fallback if the AJAX download fails (e.g. CORS)
+            function loadWithScriptTag() {
+                $progress.text("Loading atlas data...");   // indeterminate (striped/animated)
+                var aladinScript = document.createElement("script");
+                aladinScript.src = aladinUrl;
+                aladinScript.charset = "utf-8";
+                document.head.appendChild(aladinScript);
+            }
+
+            // Load aladin script with progress reporting
+            $.ajax({
+                url: aladinUrl,
+                dataType: "text",   // use text instead of script to bypass XHR (no progress)
+                cache: true,
+                xhr: function() {
+                    var xhr = $.ajaxSettings.xhr();
+                    xhr.addEventListener("progress", function(e) {
+                        if (!e.lengthComputable) {
+                            total = 1.8 * 1048576; // size for the aladin script
+                        } else {
+                            total = e.total;
+                        }
+
+                        progress = Math.round(e.loaded / total * 100); 
+                        if (progress > 99) {
+                            progress = 99; // cap the progress at 99% until fully loaded
+                        }
+                        
+                        setProgress(progress);
+                    });
+                    return xhr;
+                }
+            }).done(function(code) {
+                setProgress(100);
+                var aladinScript = document.createElement("script");
+                aladinScript.charset = "utf-8";
+                aladinScript.text = code;
+                document.head.appendChild(aladinScript);
+            }).fail(loadWithScriptTag);
+
+            // Wait until the aladin script loaded (unchanged, except hiding the bar)
+            var checkAladinLoaded = setInterval(function() {
+                if (typeof A === "object" && typeof A.aladin === "function") {
+                    clearInterval(checkAladinLoaded);
+                    $progress.fadeOut();
+                    // Trigger the default view click
+                    {% if sources[source_id].source_coincidences_map_default == 'SIMBAD Query' %}
+                    $("#show_dss").click();
+                    {% endif %}
+                    {% if sources[source_id].source_coincidences_map_default == 'WISE' %}
+                    $("#show_wise").click();
+                    {% endif %}
+                    {% if sources[source_id].source_coincidences_map_default == 'Fermi' %}
+                    $("#show_fermi").click();
+                    {% endif %}
+                }
+            }, 100);
+        });
     </script>
 
     <script src="{{ url_for('static', filename='transits.js') }}"></script>

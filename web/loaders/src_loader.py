@@ -32,6 +32,7 @@ class src_loader():
 
         self.last_timing_info = {}
         self.last_archive_info = {}
+        self.last_aliasing_info = {}
         self.pointing_positions = []
         self.last_updated = None
         self.stats = {}
@@ -62,6 +63,9 @@ class src_loader():
 
         # Get last_timing_info
         self.last_timing_info = self.db.get_last_timing_info()
+
+        # Get last dealiasing info
+        self.last_aliasing_info = self.db.get_last_dealias_history()
 
         # Get last_archive_info
         self.last_archive_info = self.db.get_last_archive_info()
@@ -436,6 +440,16 @@ class src_loader():
             return {"x": x.tolist(), "y": template}
         
         return template
+
+    def is_timing_solution_aliased(self):
+        # Return None if there is no aliasing information
+        if self.last_aliasing_info["timestamp"] == 0:
+            return None
+        
+        return self.last_aliasing_info["alias_factor"] != 0
+
+    def is_recently_dealiased(self):
+        return time.time() - self.last_aliasing_info["timestamp"] < 7 * 24 * 60 * 60  # 7 days in seconds
 
     def cache_stacked_profile_and_pointing_positions(self, prof_length=1024):
         # Get profiles from database
