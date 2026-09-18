@@ -95,15 +95,23 @@ class dealias:
         return True
 
     def is_dealiased_recently(self):
-        # Fetech the last dealias information
+        # Fetch the last dealias information
         last_dealias_info = self.db_hdl.get_last_dealias_history()
         if last_dealias_info is None:
+            return False
+
+        # Check if dealiasing directory exists
+        dealias_dir = f"{self.psr_dir}/dealias"
+        if not os.path.exists(dealias_dir):
             return False
 
         # Check if the last dealias was recent enough
         last_dealias_time = last_dealias_info["timestamp"]
         time_since_last_dealias = time.time() - last_dealias_time
-        return time_since_last_dealias < self.recent_threshold
+        if time_since_last_dealias > self.recent_threshold: 
+            return False
+            
+        return True
 
     def run(self):
         # Check if the timing model is robust

@@ -1,4 +1,5 @@
 import os
+import json
 import glob
 import psrchive
 import pickle
@@ -15,7 +16,6 @@ from pint import models
 from pint.fitter import WLSFitter
 from scipy.ndimage import gaussian_filter
 from pint.residuals import Residuals
-from astropy.io import ascii
 from astropy.table import Table
 
 from ..utils.utils import utils
@@ -34,7 +34,6 @@ class dealias_utils():
     def __init__(self, psrdir, parfile, workspace, outdir, logger=logger()):
         self.logger = logger
         self.psrdir = psrdir
-        self.psrdir_dealias = psrdir + "/dealias"
         self.parfile = parfile
         self.workspace = workspace
         self.outdir = outdir
@@ -47,18 +46,15 @@ class dealias_utils():
         if not os.path.exists(self.workspace):
             raise FileNotFoundError(f"Directory not found: {self.workspace}")
 
-        if not os.path.exists(self.psrdir_dealias):
-            os.makedirs(self.psrdir_dealias)
-
-    def write_dealias_info(self, filename):
-        if self.info == {}:
-            raise ValueError("No dealias information available. Please run dealias_utils.dealias() first.")
+    # def write_dealias_info(self, filename):
+    #     if self.info == {}:
+    #         raise ValueError("No dealias information available. Please run dealias_utils.dealias() first.")
         
-        # add timestamp
-        self.info["timestamp"] = utils.get_time_string()
+    #     # add timestamp
+    #     self.info["timestamp"] = utils.get_time_string()
 
-        # write to file
-        ascii.write(Table([self.info]), format='ecsv', output=filename, overwrite=True)
+    #     # write to file
+    #     ascii.write(Table([self.info]), format='ecsv', output=filename, overwrite=True)
 
     def dealias(self, alias_factor):
         self.info["alias_factor"] = alias_factor
@@ -104,7 +100,9 @@ class dealias_utils():
             #     self.logger.debug(f"Removing {self.psrdir_dealias}/pulsar.dealias.pdf") # remove diagnostic plot to avoid confusion
             #     os.remove(f"{self.psrdir_dealias}/pulsar.dealiased.par")
 
-        self.write_dealias_info(f"{self.outdir}/dealias_info.ecsv")
+        # update timestamp
+        self.info["timestamp"] = datetime.datetime.now().isoformat()
+
         self.logger.success(f"Dealiased information saved to outdir. ")
 
         return dealias_res
@@ -149,14 +147,15 @@ class dealias_utils():
             return False
 
         # plot residuals
-        plt.figure(figsize=(12, 8))
+        plt.figure(figsize=(12, 4))
         rs = Residuals(t, m).phase_resids
-        plt.errorbar(t.get_mjds(), rs_aliased, yerr=t.get_errors().to(u.s).value * f.model.F0.value, fmt='x', label='prefit (p_aliased)', color='black', zorder=0, alpha=0.25)
-        plt.plot(t.get_mjds(), rs, "x", label='prefit (p_unaliased)', color='blue')
-        plt.plot(t.get_mjds(), f.resids.phase_resids * f.model.F0.value, "x", label='postfit (p_unaliased)', color='green')
+        yerr = t.get_errors().to(u.s).value * f.model.F0.value
+        plt.errorbar(t.get_mjds(), rs_aliased, yerr=yerr, fmt='x', label='prefit (p_aliased)', color='black', zorder=0, alpha=0.25)
+        plt.errorbar(t.get_mjds(), rs, yerr=yerr, fmt='x', label='prefit (p_unaliased)', color='blue')
+        plt.errorbar(t.get_mjds(), f.resids.phase_resids * f.model.F0.value, yerr=yerr, fmt='x', label='postfit (p_unaliased)', color='green')
         plt.xlabel('MJD')
         plt.ylabel('Residual (phase)')
-        plt.legend()
+        plt.legend(frameon=False, fontsize=8)
         plt.tight_layout()
         plt.savefig(self.outdir + "/pulsar.dealias.pdf")
         self.logger.success(f"Dealiasing plot saved to {self.outdir}/pulsar.dealias.pdf")
@@ -338,29 +337,26 @@ class alias_utils():
         shifts = np.array(shifts) / len(std_profile)
         shifts_unc = np.array(shifts_unc) / len(std_profile)
 
-        # prepare data for alias factor searching
-        shifts_actual, shifts_actual_unc = np.array(shifts)[good_i], np.array(shifts_unc)[good_i] # apply masks
-        weight = 1 / np.array(shifts_actual_unc)**2 # calculate weight
+        # calcualte weights
+        weight = 1 / shifts_unc**2 # calculate weight
 
         # search for alias factor
         trials = np.arange(af_min, af_max)
         rms = []
         shifts_expected = []
-        # shifts_actual = np.array(shifts[good_i]) - self.weighted_mean(shifts[good_i], shifts_unc[good_i]) # normalized phase shift
+        subint_idxes = np.arange(len(shifts))
         for trial in tqdm.tqdm(trials):
             # get expected shifts
             this_slope = (trial * duration) / (self.sidereal_day * len(shifts))
-            this_shifts_expected = np.arange(len(shifts)) * this_slope
-            this_shifts_expected = this_shifts_expected[good_i] # apply mask
+            this_shifts_expected = subint_idxes * this_slope
 
             # get residuals
-            this_residuals = shifts_actual - this_shifts_expected
+            this_residuals = shifts[good_i] - this_shifts_expected[good_i]
             this_offset = np.mean(this_residuals)
-            this_residuals = this_residuals - this_offset # remove mean to avoid bias
+            this_residuals = this_residuals - this_offset # remove mean to normalise
 
             # get rms
-            # this_rms = np.sum(weight * (shifts_actual - this_shifts_expected)**2) / np.sum(weight)
-            this_rms = np.sqrt(np.sum(weight * (this_residuals)**2) / np.sum(weight))
+            this_rms = np.sqrt(np.sum(weight[good_i] * (this_residuals)**2) / np.sum(weight[good_i]))
 
             rms.append(this_rms)
             shifts_expected.append(this_shifts_expected + this_offset) # add offset back for diagnostic plot
@@ -381,16 +377,14 @@ class alias_utils():
         self.cf_plot_diagnostic(
             trials = trials,
             rms = rms,
-            # shifts_x = np.arange(0, n_subints, bin_size),
-            shifts_x = good_i,
-            shifts_actual = shifts_actual,
-            shifts_actual_unc = shifts_actual_unc,
+            good_i = good_i,
+            shifts_x = subint_idxes,
+            shifts = shifts,
+            shifts_unc = shifts_unc, 
             shifts_expected = best_expected_shifts,
             nearby_expected_shifts = nearby_expected_shifts,
             best_af = best_alias_factor,
             std_profile = std_profile,
-            power1 = data_stacked[0],
-            power2 = data_stacked[-1],
             data_stacked = data_stacked, 
             n_stacked = self.su.n_stacked
         )
@@ -412,41 +406,54 @@ class alias_utils():
 
         return best_alias_factor
 
-    def cf_plot_diagnostic(self, trials, rms, shifts_x, shifts_actual, shifts_actual_unc, shifts_expected, nearby_expected_shifts, best_af, std_profile, power1, power2, data_stacked, n_stacked):
+    def cf_plot_diagnostic(self, trials, rms, good_i, shifts_x, shifts, shifts_unc, shifts_expected, nearby_expected_shifts, best_af, std_profile, data_stacked, n_stacked):
         fig, axs = plt.subplots(3, 2, figsize=(12, 8),  gridspec_kw={'width_ratios': [3, 1]})
 
         # plot rms
         axs[0, 0].plot(trials, rms, c="k", lw=1)
-        axs[0, 0].axvline(best_af, label=f"Best AF = {best_af}", c="r", lw=1)
+        axs[0, 0].axvline(best_af, label=f"Best fit: aliasing by {best_af} phase(s) per day", c="r", lw=1)
         axs[0, 0].set_title(f"RMS vs Alias Factor")
         axs[0, 0].set_xlabel("Alias Factor")
         axs[0, 0].set_ylabel("RMS")
         axs[0, 0].set_yscale("log")
-        axs[0, 0].legend()
+        axs[0, 0].legend(frameon=False, fontsize=8)
 
         # plot shifts
-        axs[1, 0].errorbar(shifts_x, np.array(shifts_actual), shifts_actual_unc, c="k", lw=1, label="Actual", marker="x", capsize=2, fmt="x")
-        axs[1, 0].errorbar(shifts_x, np.array(shifts_expected), c="r", lw=1, linestyle="-", label=f"Fitted Drift (AF = {best_af})")
+        axs[1, 0].errorbar(shifts_x[good_i], np.array(shifts)[good_i], shifts_unc[good_i], c="k", lw=1, label="Measured TOAs", marker="x", capsize=2, fmt="x")
+        axs[1, 0].errorbar(shifts_x[good_i], np.array(shifts_expected)[good_i], c="r", lw=1, linestyle="-", label=f"Best fit: aliasing by {best_af} phase(s) per day")
         for i, nearby_shifts in enumerate(nearby_expected_shifts):
-            axs[1, 0].errorbar(shifts_x, nearby_shifts, shifts_actual_unc, c="k", lw=1, linestyle="--", label=f"Fitted Drift +/- 1 AF" if i == 0 else None, alpha=0.5)
+            axs[1, 0].errorbar(shifts_x[good_i], nearby_shifts[good_i], shifts_unc[good_i], c="k", lw=1, linestyle="--", label=f"Best fit +/- 1 phase per day" if i == 0 else None, alpha=0.5)
         axs[1, 0].set_title("Shifts")
         axs[1, 0].set_xlabel("Subints")
         axs[1, 0].set_ylabel("Shift (phase)")
-        axs[1, 0].legend()
+        axs[1, 0].legend(frameon=False, fontsize=8)
 
         # plot powers
         axs[2, 0].plot(self.normalize_power(std_profile), c="k", lw=1, label="Std Profile")
-        axs[2, 0].plot(self.normalize_power(power1), c="r", lw=1, label="First Subint", alpha=0.75)
-        axs[2, 0].plot(self.normalize_power(power2), c="b", lw=1, label="Last Subint", alpha=0.75)
+        axs[2, 0].plot(self.normalize_power(np.sum(data_stacked[:int(len(data_stacked)/2)], axis=0)), c="r", lw=1, label=f"Sum of subints 0-{int((len(data_stacked))/2)-1}", alpha=0.75)
+        axs[2, 0].plot(self.normalize_power(np.sum(data_stacked[int(len(data_stacked)/2):], axis=0)), c="b", lw=1, label=f"Sum of subints {int((len(data_stacked))/2)}-{len(data_stacked)-1}", alpha=0.75)
         axs[2, 0].set_title(f"Powers")
         axs[2, 0].set_xlabel("Samples")
         axs[2, 0].set_ylabel("Power")
-        axs[2, 0].legend()
+        axs[2, 0].legend(frameon=False, fontsize=8)
 
         # normalize stacked data
         for i, _ in enumerate(data_stacked):
             data_stacked[i] = np.array(data_stacked[i]) - min(data_stacked[i])
             data_stacked[i] = np.array(data_stacked[i]) / max(data_stacked[i])
+
+        # find the peack of the stacked profiles
+        peak_index = np.argmax(np.sum(data_stacked, axis=0))
+
+        # calculate the shifts in phase
+        shifts_phase = []
+        for shift in shifts_expected:
+            this_shift = peak_index - 0.05 * len(data_stacked[0]) + (shift / 1) * len(data_stacked[0])
+            if this_shift > len(data_stacked[0]):
+                this_shift -= len(data_stacked[0])
+            elif this_shift < 0:
+                this_shift += len(data_stacked[0])
+            shifts_phase.append(this_shift)
 
         # plot stacked profile
         axs[0, 1].plot(np.sum(data_stacked, axis=0), lw=0.5, c="k")
@@ -460,7 +467,10 @@ class alias_utils():
         n_params_gs = axs[0, 1].get_gridspec()
         axs_subints = fig.add_subplot(n_params_gs[1:3, 1])
         axs_subints.matshow(data_stacked, cmap="gray_r", aspect="auto")
+        axs_subints.plot(shifts_phase, shifts_x, "r-", label="Best fit", lw=0.5)
+        axs_subints.plot([peak_index] * len(shifts_x), shifts_x, color="r", lw=1, ls=":", label="No aliasing")
         axs_subints.set_title("Subint Profiles")
+        axs_subints.legend(frameon=False, fontsize=8)
         axs_subints.set_xlabel("Phase")
         axs_subints.set_ylabel("Sample")
         axs_subints.set_xticks(np.arange(0, len(data_stacked[0]) + 1, len(data_stacked[0]) / 2))
@@ -469,7 +479,7 @@ class alias_utils():
         axs_subints2.set_xlim(axs_subints.get_xlim())
         
         # plot info
-        fig.text(0.001, 0.000, f"CHAMPSS Timing Pipeline alias_utils ({utils.get_version_hash()}) | {self.psrdir.split('/')[-1]} | {n_stacked} files | {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", fontsize=9, ha="left", va="bottom", family="monospace")
+        fig.text(0.001, 0.000, f"CHAMPSS Timing Pipeline alias_utils ({utils.get_version_hash()}) | {self.psrdir.split('/')[-1]} | {n_stacked} observations stacked | {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", fontsize=9, ha="left", va="bottom", family="monospace")
 
         fig.tight_layout()
         plt.savefig(self.outdir + "/diagnostic.pdf")
@@ -478,6 +488,7 @@ class alias_utils():
         if self.alias_factor is None:
             raise ValueError("Alias factor not available. Run tp_get_alias_factor or cf_get_alias_factor first.")
 
+        # Initialize dealias_utils instance
         self.logger.debug(f"Initializing dealias_utils...")
         du = dealias_utils(
             psrdir=self.psrdir,
@@ -487,12 +498,14 @@ class alias_utils():
             logger=self.logger.copy()
         )
 
+        # Try to dealias
         self.logger.debug(f"Dealiasing with alias_factor={self.alias_factor}...")
         du_res = du.dealias(self.alias_factor)
 
-        if os.path.exists(f"{self.workspace}/diagnostic.pdf"):
-            self.logger.info(f"Find alias diagnostic plot > {du.psrdir_dealias}")
-            shutil.move(self.workspace + "/diagnostic.pdf", f"{du.psrdir_dealias}/diagnostic.pdf")
+        # # Save diagnostic plots
+        # if os.path.exists(f"{self.workspace}/diagnostic.pdf"):
+        #     self.logger.info(f"Find alias diagnostic plot > {du.psrdir_dealias}")
+        #     shutil.move(self.workspace + "/diagnostic.pdf", f"{du.psrdir_dealias}/diagnostic.pdf")
 
         # Generate summary
         self.summary = {
@@ -504,6 +517,10 @@ class alias_utils():
             "avg_snr_per_subints": self.avg_snr_per_subints,
             "notes": {"remark": "DEALIAS_FITTING_OK" if du_res else "DEALIAS_FITTING_FAILED"}
         }
+
+        # Include dealias result in the summary
+        for key, value in du.info.items():
+            self.summary[key] = value
 
         return self.summary
 
@@ -521,13 +538,7 @@ class alias_utils():
         # Get filename
         if filename == "auto":
             filename = self.psrdir + "/dealias"
-            if not os.path.isdir(filename):
-                if not os.path.exists(filename):
-                    os.makedir(filename)
-                    self.logger.success(f"Directory created: {filename}")
-                else:
-                    raise Exception(f"Directory already exists and is not writable: {filename}. Is there a file with the same name?")
-
+            
         # Check if outdir exists
         if (not os.path.exists(self.outdir) or glob.glob(self.outdir) == []) and not pickle_only:
             raise Exception(f"Directory does not exist / empty: {self.outdir}. Was the alias_utils initialized or loaded from a pickle file?")
@@ -539,6 +550,20 @@ class alias_utils():
             if pickle_only:
                 return
 
+        # Save summary to json 
+        with open(os.path.join(self.outdir, "summary.json"), "w") as f:
+            # Make sure everything is serializable
+            summary_json = {}
+            for key, value in self.summary.items():
+                # np float 
+                if isinstance(value, np.floating):
+                    value = float(value)
+                elif isinstance(value, np.integer):
+                    value = int(value)
+
+                summary_json[key] = value
+            json.dump(summary_json, f, indent=4)
+            
         # Copy everything in outdir to filename
         if not os.path.isdir(filename):
             if os.path.exists(filename):
