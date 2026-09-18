@@ -6,9 +6,16 @@ class PintkUtils:
         self.psrdir = psrdir
         self.sourcedb = sourcedb
 
-    def create_parfile(self, path, initial=False):
+    def create_parfile(self, path, initial=False, dealiased=False):
+        if initial and dealiased:
+            raise ValueError("Cannot use both initial and dealiased parfiles at the same time.")
+
         if initial:
             with open(f"{self.psrdir}/parfile_bak/initial_parfile.bak", 'r') as f:
+                return f.read()
+
+        if dealiased:
+            with open(f"{self.psrdir}/dealias/pulsar.dealiased.par", 'r') as f:
                 return f.read()
 
         return self.sourcedb.get_all_timing_info()[-1]["notes"]["fitted_parfile"]
@@ -42,8 +49,9 @@ class PintkUtils:
 
         return timfiles.strip()
 
-    def write_parfile(self, path, use_initial=False):
-        parfile_content = self.create_parfile(path, initial=use_initial)
+    def write_parfile(self, path, use_initial=False, use_dealiased=False):
+
+        parfile_content = self.create_parfile(path, initial=use_initial, dealiased=use_dealiased)
         with open(path, 'w') as parfile:
             parfile.write(parfile_content)
 

@@ -29,7 +29,7 @@ t_start = time.time()
 mdb_hdl = tmg_master(MASTER_DB_PATH)
 
 # Initialize parser
-parser = argparse.ArgumentParser(description="Find alias factor of a pulsar.")
+parser = argparse.ArgumentParser(description=f"Run the de-aliasing pipeline for a timing source. The pipeline will also automatically run after the main pipeline processing regularly once the signal-to-noise ratio of the stacked data reaches a certain threshold. \nThe pipeline will generate dealiasing diagnostics under {TIMING_SOURCES_PATH}/<psr_id>/dealias. If the pulsar's timing solution is likely aliased, the pipeline will attempt to create an unaliased timing solution and write it as pulsar.dealiased.par. \nTo accept the new unaliased timing solution, replace {TIMING_SOURCES_PATH}/<psr_id>/pulsar.par with {TIMING_SOURCES_PATH}/<psr_id>/dealias/pulsar.dealiased.par. \nTo trigger the dealiasing pipeline run automatically after the next main pipeline process (so you don't have to manually re-run the de-aliasing pipeline), remove the {TIMING_SOURCES_PATH}/<psr_id>/dealias directory. \nTo refit the new timing solution, run `python champss_timing pintk --psr <psr_id> --dealiased-par`.")
 parser.add_argument("-p", "--psr", type=str, help="Pulsar name.", default=None, required=True)
 parser.add_argument("-n", "--ncpus", type=int, help="Number of pools.", default=1)
 parser.add_argument("-o", "--pickle-output", type=str, help="Output directory of pickle for debug purpose.", default=None, required=False)
