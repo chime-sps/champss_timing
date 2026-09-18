@@ -5,6 +5,7 @@ from flask import request
 from flask import session
 from flask import redirect
 
+import os
 import copy
 import time
 import requests
@@ -269,9 +270,13 @@ def dealias_info(source_id):
     if source_id not in app.sources:
         abort(404)
 
-    res = Response(open(app.sources[source_id].source_dir + "/dealias/dealias_info.ecsv", 'rb').read())
+    path = app.sources[source_id].source_dir + "/dealias/summary.json"
+    if not os.path.exists(path):
+        return '{"not_available": "No summary from the de-aliasing pipeline, or the summary may have been generated from an older version of the pipeline."}'
+
+    res = Response(open(path, 'rb').read())
     res.headers['Content-Type'] = 'text/plain'
-    res.headers['Content-Disposition'] = f'attachment; filename="champss_timing_{source_id}_dealias_info.ecsv"'
+    res.headers['Content-Disposition'] = f'attachment; filename="champss_timing_{source_id}_dealias_summary.json"'
     return res
 
 @app.route('/pint')
