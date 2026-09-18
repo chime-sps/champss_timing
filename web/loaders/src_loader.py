@@ -26,6 +26,8 @@ class src_loader():
         self.checker_warnings_length = 0
         self.pdf = source_dir + "/champss_diagnostic.pdf"
         self.logfile = source_dir + "/champss_timing.log"
+        self.dealias_diagnostic = source_dir + "/dealias/diagnostic.pdf"
+        self.dealias_summary = source_dir + "/dealias/summary.json"
         self.psr_id = source_dir.split("/")[-1]
         self.psr_id_esc = self.psr_id.replace("+", "p").replace("-", "m")
         self.initialized = False
@@ -452,6 +454,10 @@ class src_loader():
     def is_timing_solution_aliased(self):
         # Return None if there is no aliasing information
         if self.last_aliasing_info["timestamp"] == 0:
+            return None
+
+        # Return None if no aliasing diagnostics had been created
+        if not os.path.exists(self.dealias_diagnostic):
             return None
         
         return self.last_aliasing_info["alias_factor"] != 0

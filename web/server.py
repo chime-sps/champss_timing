@@ -259,7 +259,10 @@ def dealias_diagnostics(source_id):
     if source_id not in app.sources:
         abort(404)
 
-    res = Response(open(app.sources[source_id].source_dir + "/dealias/diagnostic.pdf", 'rb').read())
+    if not os.path.exists(app.sources[source_id].dealias_diagnostic):
+        abort(404)
+
+    res = Response(open(app.sources[source_id].dealias_diagnostic, 'rb').read())
     res.headers['Content-Type'] = 'application/pdf'
     res.headers['Content-Disposition'] = f'attachment; filename="champss_timing_{source_id}_dealias_diagnostic.pdf"'
     return res
@@ -270,11 +273,10 @@ def dealias_info(source_id):
     if source_id not in app.sources:
         abort(404)
 
-    path = app.sources[source_id].source_dir + "/dealias/summary.json"
-    if not os.path.exists(path):
+    if not os.path.exists(app.sources[source_id].dealias_summary):
         return '{"not_available": "No summary from the de-aliasing pipeline, or the summary may have been generated from an older version of the pipeline."}'
 
-    res = Response(open(path, 'rb').read())
+    res = Response(open(app.sources[source_id].dealias_summary, 'rb').read())
     res.headers['Content-Type'] = 'text/plain'
     res.headers['Content-Disposition'] = f'attachment; filename="champss_timing_{source_id}_dealias_summary.json"'
     return res
