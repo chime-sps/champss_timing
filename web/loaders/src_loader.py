@@ -261,6 +261,10 @@ class src_loader():
         if self.checker_warnings_length > 0:
             tags.append("__checker_warning")
 
+        # Check for aliasing tags
+        if self.is_timing_solution_aliased() is not None and self.is_timing_solution_aliased():
+            tags.append("__aliasing")
+
         return tags
     
     def get_preview_residual_data(self, min_height=3):
@@ -440,6 +444,10 @@ class src_loader():
             return {"x": x.tolist(), "y": template}
         
         return template
+
+    def get_aliasing_factor(self, absolute_value=False):
+        factor = self.last_aliasing_info["alias_factor"]
+        return int(abs(factor)) if absolute_value else int(factor)
 
     def is_timing_solution_aliased(self):
         # Return None if there is no aliasing information

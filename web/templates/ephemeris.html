@@ -80,6 +80,8 @@
                                         <span class="badge text-bg-primary rounded-pill index-tag" id="tag_today_{{this_source.psr_id_esc}}">&nbsp; </span>
                                         {% elif tag == "__checker_warning" %}
                                         <span class="badge text-bg-warning rounded-pill index-tag" id="tag_warnings_{{this_source.psr_id_esc}}">&nbsp; </span>
+                                        {% elif tag == "__aliasing" %}
+                                        <span class="badge text-bg-likely rounded-pill index-tag" id="tag_aliasing_{{this_source.psr_id_esc}}">&nbsp; </span>
                                         {% else %}
                                         <span class="badge text-bg-dark rounded-pill index-tag">#{{ tag }}</span>
                                         {% endif %}
