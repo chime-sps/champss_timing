@@ -399,10 +399,10 @@ class alias_utils():
             })
         )
 
-        self.alias_factor = best_alias_factor
-        self.snr_stacked = stacked_snr
-        self.avg_snr_per_obs = avg_snr
-        self.avg_snr_per_subints = avg_snr_per_subints
+        self.alias_factor = float(best_alias_factor) # ensure it is stored as a float instead of np.float64
+        self.snr_stacked = float(stacked_snr)
+        self.avg_snr_per_obs = float(avg_snr)
+        self.avg_snr_per_subints = float(avg_snr_per_subints)
 
         return best_alias_factor
 
@@ -511,7 +511,7 @@ class alias_utils():
         self.summary = {
             "psr_id": self.psrdir.split("/")[-1],
             "n_stacked": self.su.n_stacked, 
-            "alias_factor": float(self.alias_factor), 
+            "alias_factor": self.alias_factor, 
             "snr_stacked": self.snr_stacked,
             "avg_snr_per_obs": self.avg_snr_per_obs,
             "avg_snr_per_subints": self.avg_snr_per_subints,
@@ -605,9 +605,9 @@ class alias_utils():
 
         # Write database
         loaded_db_hdl.insert_dealias_history(
-            n_stacked=self.summary["n_stacked"], 
-            alias_factor=self.summary["alias_factor"],
-            snr_stacked=self.summary["snr_stacked"],
+            n_stacked=float(self.summary["n_stacked"]), # ensure they are not np.float64
+            alias_factor=float(self.summary["alias_factor"]),
+            snr_stacked=float(self.summary["snr_stacked"]),
             notes=self.summary["notes"]
         )
 
