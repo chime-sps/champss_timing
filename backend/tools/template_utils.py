@@ -48,10 +48,38 @@ class StackTemplateState:
         self.template = np.median(np.array(aligned_profiles), axis=0)
         self.profiles = aligned_profiles
 
-    def get_snr(self):
+    def get_chi2(self):
         """
-        Calculate the signal-to-noise ratio (SNR) of the template.
+        Sum chi-squared of the residual between profiles and the template compared with pure noise. 
+        If the template is optimized, such profile should closely match the template after scaling, 
+        so that the chi-squared value (as well as the sum of the values) is minimized.
         """
+
+        # normalize template
+        templ_norm = self.template - self.template.mean()
+
+        chi2_sum = 0.0
+        for p in self.profiles:
+            # Skip bad profiles
+            if np.std(p) == 0:
+                continue
+
+            # Normalize this profile
+            p_norm = p - p.mean()
+
+            # Calculate the amplitude scaling factor
+            amp = (np.dot(p_norm, templ_norm)) / np.dot(templ_norm, templ_norm)
+
+            # Calculate chi2 compared with pure noise
+            chi2_sum += np.sum((p_norm - amp * templ_norm) ** 2)
+
+        return chi2_sum
+
+        return np.std(self.template)
+
+        from ..utils.data_quality import data_quality_utils
+
+        return data_quality_utils.boxcar_snr(self.template)
 
         # Center the peak
         n = len(self.template)
@@ -96,7 +124,7 @@ class StackTemplateState:
         ax[0].set_title('Template')
         ax[0].plot(self.template, label='Template')
         ax[0].set_ylabel('Amplitude')
-        ax[0].text(0.975, 0.95, f'SNR = {self.get_snr():.2f}', transform=ax[0].transAxes, va='top', ha='right')
+        ax[0].text(0.975, 0.95, f'Chi2 = {self.get_chi2():.2f}', transform=ax[0].transAxes, va='top', ha='right')
         ax[1].set_title('Daily Profiles')
         ax[1].matshow(self.profiles, aspect='auto')
         ax[1].set_ylabel('Profiles')
@@ -123,7 +151,7 @@ class StackTemplate:
         """
 
         if self.verbose:
-            self.logger.debug(f"Initial SNR = {self.state.get_snr():.4f}")
+            self.logger.debug(f"Initial Chi2 = {self.state.get_chi2():.4f}")
             self.state.plot()
 
         for i_iter in range(max_iter):
@@ -134,17 +162,17 @@ class StackTemplate:
             this_state.stack_template()
 
             # compare the snr
-            d_snr = this_state.get_snr() - self.state.get_snr()
+            d_chi2 = this_state.get_chi2() - self.state.get_chi2()
             if self.verbose:
                 self.logger.debug(f"Iteration {i_iter}: ")
-                self.logger.debug(f"  SNR_prev = {self.state.get_snr():.4f}")
-                self.logger.debug(f"  SNR_this = {this_state.get_snr():.4f}")
-                self.logger.debug(f"  dSNR = {d_snr:.4f} (tol = {tol})")
+                self.logger.debug(f"  Chi2_prev = {self.state.get_chi2():.4f}")
+                self.logger.debug(f"  Chi2_this = {this_state.get_chi2():.4f}")
+                self.logger.debug(f"  dChi2 = {d_chi2:.4f} (tol = {tol})")
                 this_state.plot()
 
-            if d_snr < tol:
+            if d_chi2 > tol:
                 if self.verbose:
-                    self.logger.success(f"Converged after {i_iter} iterations, dSNR = {d_snr}")
+                    self.logger.success(f"Converged after {i_iter} iterations, dChi2 = {d_chi2}")
                     self.state.plot()
                 break
 
