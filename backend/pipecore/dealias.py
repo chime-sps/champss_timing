@@ -1,5 +1,6 @@
 import os
 import time
+import random
 import numpy as np
 
 from ..tools.alias_utils import alias_utils
@@ -108,7 +109,7 @@ class dealias:
         # Check if the last dealias was recent enough
         last_dealias_time = last_dealias_info["timestamp"]
         time_since_last_dealias = time.time() - last_dealias_time
-        if time_since_last_dealias > self.recent_threshold: 
+        if time_since_last_dealias > self.recent_threshold + random.uniform(0, max([7 * 24 * 3600, self.recent_threshold * 0.05])):  # Add random jitter up to 7 days to avoid too many dealias runs on the same day causing the processing delayed or congested. 
             return False
             
         return True

@@ -213,7 +213,7 @@ class Main:
             for timing in self.timing_info:
                 # Check if chi2_reduced is reliable. 
                 if "CHI2R_UNRELIABLE" in timing["notes"]["remark"]:
-                    print("!!!! WARNING: Skipping chi2r value for MJD {} due to CHI2R_UNRELIABLE remark in notes. !!!!".format(timing["obs_mjds"]))
+                    self.logger.debug("Skipping chi2r value for MJD {} due to CHI2R_UNRELIABLE remark in notes. ".format(timing["obs_mjds"]))
                     continue
 
                 # metric: chi2_reduced
