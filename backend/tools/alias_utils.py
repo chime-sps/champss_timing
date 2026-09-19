@@ -294,7 +294,8 @@ class alias_utils():
         std_profile = stpl.get_template()
 
         # smooth the std profile if required
-        std_profile = gaussian_filter(np.array(data_stacked).sum(axis=0), sigma=smooth_sigma)
+        if smooth_sigma > 0:
+            std_profile = gaussian_filter(std_profile, sigma=smooth_sigma)
 
         # get shifts
         with multiprocessing.Pool(self.n_pools) as pool:
@@ -430,6 +431,7 @@ class alias_utils():
 
         # plot powers
         axs[2, 0].plot(self.normalize_power(std_profile), c="k", lw=1, label="Std Profile")
+        axs[2, 0].plot(self.normalize_power(np.sum(data_stacked, axis=0)), c="k", lw=1, label=f"Sum of subints 0-{int(len(data_stacked))-1}", alpha=0.75, linestyle=":")
         axs[2, 0].plot(self.normalize_power(np.sum(data_stacked[:int(len(data_stacked)/2)], axis=0)), c="r", lw=1, label=f"Sum of subints 0-{int((len(data_stacked))/2)-1}", alpha=0.75)
         axs[2, 0].plot(self.normalize_power(np.sum(data_stacked[int(len(data_stacked)/2):], axis=0)), c="b", lw=1, label=f"Sum of subints {int((len(data_stacked))/2)}-{len(data_stacked)-1}", alpha=0.75)
         axs[2, 0].set_title(f"Powers")
