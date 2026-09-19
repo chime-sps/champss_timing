@@ -21,6 +21,7 @@ from astropy.table import Table
 from ..utils.utils import utils
 from ..utils.exec import exec
 from ..utils.logger import logger
+from ..utils.stats_utils import stats_utils
 from ..utils.data_quality import data_quality_utils
 from ..tools.template_utils import StackTemplate
 from ..tools.shift_finder import ShiftFinder
@@ -124,14 +125,19 @@ class dealias_utils():
         m.F0.quantity = (1 / p_dealiased)
         m.F0.frozen = False
 
+        # Get get prefit residuals
+        rs_aliased = Residuals(t, m).phase_resids
+
         # remove PHOFF component if exists
         if hasattr(m, "PHOFF"):
             self.logger.debug("Removing PHOFF component from model")
             m.remove_component("PhaseOffset")
 
-        # filterout bad toas
-        rs_aliased = Residuals(t, m).phase_resids
-        i_good = np.abs(rs_aliased) < np.quantile(np.abs(rs_aliased), 0.95)
+        # calculate outlier threshold
+        mad_threshold = stats_utils.mad_outlier_thresholds(rs_aliased, z_score=3, return_interval=False)
+                
+        # filter data
+        i_good = np.where(np.abs(rs_aliased - np.median(rs_aliased)) < mad_threshold)[0]
         t = t[i_good]
         rs_aliased = rs_aliased[i_good]
 
@@ -147,15 +153,31 @@ class dealias_utils():
             return False
 
         # plot residuals
-        plt.figure(figsize=(12, 4))
+        # plt.figure(figsize=(12, 4))
+        # rs = Residuals(t, m).phase_resids
+        # y = t.get_mjds()
+        # yerr = t.get_errors().to(u.s).value * f.model.F0.value
+        # plt.errorbar(y, rs_aliased, yerr=yerr, fmt='x', label='prefit (p_aliased)', color='blue', zorder=0, alpha=0.25, capsize=3)
+        # plt.errorbar(y, rs, yerr=yerr, fmt='x', label='prefit (p_unaliased)', color='green', capsize=3)
+        # plt.errorbar(y, f.resids.phase_resids, yerr=yerr, fmt='x', label='postfit (p_unaliased)', color='black', capsize=3)
+        # plt.xlabel('MJD')
+        # plt.ylabel('Residual (phase)')
+        # plt.legend(frameon=False, fontsize=8)
+        # plt.tight_layout()
+        # plt.savefig(self.outdir + "/pulsar.dealias.pdf")
+        # self.logger.success(f"Dealiasing plot saved to {self.outdir}/pulsar.dealias.pdf")
+        fig, ax = plt.subplots(3, 1, figsize=(12, 8), sharex=True)
         rs = Residuals(t, m).phase_resids
+        y = t.get_mjds()
         yerr = t.get_errors().to(u.s).value * f.model.F0.value
-        plt.errorbar(t.get_mjds(), rs_aliased, yerr=yerr, fmt='x', label='prefit (p_aliased)', color='black', zorder=0, alpha=0.25)
-        plt.errorbar(t.get_mjds(), rs, yerr=yerr, fmt='x', label='prefit (p_unaliased)', color='blue')
-        plt.errorbar(t.get_mjds(), f.resids.phase_resids * f.model.F0.value, yerr=yerr, fmt='x', label='postfit (p_unaliased)', color='green')
-        plt.xlabel('MJD')
-        plt.ylabel('Residual (phase)')
-        plt.legend(frameon=False, fontsize=8)
+        ax[0].errorbar(y, rs_aliased, yerr=yerr, fmt='x', label='prefit (p_aliased)', color='blue', zorder=0, alpha=0.25, capsize=3)
+        ax[0].set_title('Prefit (p_aliased)')
+        ax[1].errorbar(y, rs, yerr=yerr, fmt='x', label='prefit (p_unaliased)', color='green', capsize=3)
+        ax[1].set_title('Prefit (p_unaliased)')
+        ax[1].set_ylabel('Residual (phase)')
+        ax[2].errorbar(y, f.resids.phase_resids, yerr=yerr, fmt='x', label='postfit (p_unaliased)', color='black', capsize=3)
+        ax[2].set_title('Postfit (p_unaliased)')
+        ax[2].set_xlabel('MJD')
         plt.tight_layout()
         plt.savefig(self.outdir + "/pulsar.dealias.pdf")
         self.logger.success(f"Dealiasing plot saved to {self.outdir}/pulsar.dealias.pdf")
