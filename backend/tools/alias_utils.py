@@ -472,7 +472,7 @@ class alias_utils():
         # calculate the shifts in phase
         shifts_phase = []
         for shift in shifts_expected:
-            this_shift = peak_index - 0.05 * len(data_stacked[0]) + (shift / 1) * len(data_stacked[0])
+            this_shift = peak_index + (shift / 1) * len(data_stacked[0])
             if this_shift > len(data_stacked[0]):
                 this_shift -= len(data_stacked[0])
             elif this_shift < 0:
@@ -491,8 +491,8 @@ class alias_utils():
         n_params_gs = axs[0, 1].get_gridspec()
         axs_subints = fig.add_subplot(n_params_gs[1:3, 1])
         axs_subints.matshow(data_stacked, cmap="gray_r", aspect="auto")
-        axs_subints.plot(shifts_phase, shifts_x, "r-", label="Best fit", lw=0.5)
-        axs_subints.plot([peak_index] * len(shifts_x), shifts_x, color="r", lw=1, ls=":", label="No aliasing")
+        axs_subints.plot(shifts_phase, shifts_x, color="r", lw=1, ls=":", label="Best fit")
+        axs_subints.plot([peak_index - 0.015 * len(data_stacked[0])] * len(shifts_x), shifts_x, "r-", label="No aliasing", lw=0.5, alpha=0.75)
         axs_subints.set_title("Subint Profiles")
         axs_subints.legend(frameon=False, fontsize=8)
         axs_subints.set_xlabel("Phase")
