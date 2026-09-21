@@ -17,7 +17,7 @@ class CLIInitialTimingSolutionSearch:
         self.ncpus = ncpus
         self.max_n_obs = max_n_obs
 
-        if params["ra"] is not None: # Create parfile if parameters are provided
+        if params is not None and params["ra"] is not None: # Create parfile if parameters are provided
             self.logger.info(f"Creating parfile from provided model parameters.")
             self.parfile = utils.create_parfile(**params)
         elif parfile is not None: # Use the provided parfile instead if a path to parfile is provided
@@ -35,16 +35,16 @@ class CLIInitialTimingSolutionSearch:
             logger=logger.copy()
         )
 
-    def optimize(self, output_dir, make_directory=False):
+    def optimize(self, output_dir, make_directory=False, preview=False):
         # Create output directory if it doesn't exist and make_directory is True
         if make_directory:
             self.logger.info(f"Creating output directory: {output_dir}")
             os.makedirs(output_dir, exist_ok=True)
 
         self.logger.info(f"Saving initial timing solution to {output_dir}. ")
-        plot_path = f"{output_dir}/initial.pdf"
-        parfile_path = f"{output_dir}/initial.par"
-        archive_path = f"{output_dir}/initial.ar"
+        plot_path = f"{output_dir}/search.pdf"
+        parfile_path = f"{output_dir}/search.par"
+        archive_path = f"{output_dir}/search.ar"
 
         # Optimize the initial timing solution
         solution = self.optimizer.optimize(ncpus=self.ncpus)
@@ -54,3 +54,14 @@ class CLIInitialTimingSolutionSearch:
         self.logger.success(f"Parfile -> {parfile_path}. ", layer=1)
         solution.write_archive(archive_path)
         self.logger.success(f"Archive -> {archive_path}. ", layer=1)
+
+        if preview:
+            pdf_viewer = None
+            for viewer in ["mupdf", "evince", "okular", "xdg-open"]:
+                if os.system(f"which {viewer}") == 0:
+                    pdf_viewer = viewer
+                    break
+            if pdf_viewer is not None:
+                os.system(f"{pdf_viewer} {output_dir}/search.pdf &")
+            else:
+                self.logger.warning(f"No PDF viewer found to preview the diagnostic plot at {output_dir}/search.pdf.")

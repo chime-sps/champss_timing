@@ -41,6 +41,7 @@ if __name__ == "__main__":
         "mcmc": "Run MCMC fitting for the pulsar.",
         "truncate": "Truncate source database.",
         "masterdb": "Run master database utilities.",
+        "add": "Add new timing sources through an interactive CLI.",
         "config": "Show or edit the configuration file.", 
         "info": "Show information about timing sources.",
         "misc": "Run user-defined miscellaneous scripts."
