@@ -11,11 +11,12 @@ from pint import logging
 logging.setup(level="ERROR")
 
 class CLIInitialTimingSolutionSearch:
-    def __init__(self, archive_files, parfile=None, params=None, max_n_obs=60, ncpus=1, logger=logger()):
+    def __init__(self, archive_files, parfile=None, params=None, max_n_obs=60, max_duty_cycle=None, ncpus=1, logger=logger()):
         self.archive_files = archive_files
         self.logger = logger
         self.ncpus = ncpus
         self.max_n_obs = max_n_obs
+        self.max_duty_cycle = max_duty_cycle
 
         if params is not None and params["ra"] is not None: # Create parfile if parameters are provided
             self.logger.info(f"Creating parfile from provided model parameters.")
@@ -32,6 +33,7 @@ class CLIInitialTimingSolutionSearch:
             StringIO(self.parfile), 
             self.archive_files, 
             max_n_obs=self.max_n_obs,
+            max_duty_cycle=self.max_duty_cycle,
             logger=logger.copy()
         )
 

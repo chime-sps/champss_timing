@@ -9,12 +9,13 @@ from scipy.ndimage import uniform_filter1d
 from multiprocessing import Pool
 
 class PulseProfilesState:
-    def __init__(self, shifted_profiles, epochs, df0, df1, center_epoch):
+    def __init__(self, shifted_profiles, epochs, df0, df1, center_epoch, max_width=None):
         self.shifted_profiles = shifted_profiles
         self.epochs = epochs
         self.df0 = df0
         self.df1 = df1
         self.center_epoch = center_epoch
+        self.max_width = max_width
         self.grid_search_results = None
 
     def __normalize(self, profile):
@@ -69,7 +70,7 @@ class PulseProfilesState:
         # Get stacked profile
         stacked_profile = self.get_stacked_profile()
 
-        return data_quality_utils.boxcar_snr(stacked_profile)
+        return data_quality_utils.boxcar_snr(stacked_profile, max_width=self.max_width)
 
     def plot(self, savefig=None):
         if self.grid_search_results is None:
@@ -133,9 +134,10 @@ class PulseProfilesState:
             plt.show()
 
 class PulseProfiles:
-    def __init__(self, profiles, epochs):
+    def __init__(self, profiles, epochs, max_width=None):
         self.profiles = profiles
         self.epochs = epochs
+        self.max_width = max_width
 
         if len(self.profiles) == 0 or len(self.epochs) == 0:
             raise ValueError("Profiles and epochs must not be empty.")
@@ -197,13 +199,14 @@ class PulseProfiles:
             epochs=self.epochs, 
             df0=df0, 
             df1=df1, 
-            center_epoch=center_epoch
+            center_epoch=center_epoch,
+            max_width=self.max_width,
         )
 
 class PhaseCoherentSearch:
-    def __init__(self, profiles, epochs, center_epoch=None):
+    def __init__(self, profiles, epochs, center_epoch=None, max_width=None):
         # Initialize parameters
-        self.profiles = PulseProfiles(profiles, epochs)
+        self.profiles = PulseProfiles(profiles, epochs, max_width=max_width)
 
         # Calculate the center epoch
         self.center_epoch = np.median(epochs) if center_epoch is None else center_epoch

@@ -21,6 +21,7 @@ parser.add_argument("--psr", required=False, default=None, help="Pulsar name (e.
 parser.add_argument("--parfile", required=False, default=None, help="Parfile containing pulsar parameters (optional; ignore parameter inputs if provided)")
 parser.add_argument("--output", required=False, default=None, help=f"Output directory for generated diagnostics, parfile, and stacked profile (default: ./{TIMING_SOURCES_PATH}/<psrname>)")
 parser.add_argument("--max-n-obs", "-N", required=False, default=60, type=int, help=f"Maximum number of observations to use in the search (default: 60)")
+parser.add_argument("--max-duty-cycle", required=False, default=None, type=float, help=f"Maximum duty cycle of the pulsar profile (default: None)")
 parser.add_argument("--ncpus", required=False, default=1, help="Number of CPU cores to use for the search (default: 1)")
 args = parser.parse_args()
 
@@ -42,6 +43,7 @@ cli_search = CLIInitialTimingSolutionSearch(
         "psrname": args.psr
     }, 
     max_n_obs=args.max_n_obs,
+    max_duty_cycle=args.max_duty_cycle
 )
 
 # Determine the output directory
@@ -65,6 +67,7 @@ print(f" F0: {cli_search.optimizer.model.F0.value}")
 print(f" DM: {cli_search.optimizer.model.DM.value}")
 print(f" F1: {cli_search.optimizer.model.F1.value}")
 print(f" PEPOCH: {cli_search.optimizer.model.PEPOCH.value}")
+print(f" Max duty cycle: {args.max_duty_cycle} ({'not set' if args.max_duty_cycle is None else f'{cli_search.optimizer.max_width} bins'})")
 print(f" Parfile: {args.parfile if args.parfile is not None else '(not provided)'}")
 print(f" Output: {args.output}")
 print(f" Number of CPU cores: {args.ncpus}")

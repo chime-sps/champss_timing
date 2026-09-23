@@ -49,9 +49,11 @@ class InitialTimingSolution:
             writer.unload()
 
 class InitialTimingSolutionOptimizer:
-    def __init__(self, parfile, archive_files, max_n_obs=None, logger=logger()):
+    def __init__(self, parfile, archive_files, max_n_obs=None, max_duty_cycle=None, logger=logger()):
         self.logger = logger
         self.max_n_obs = max_n_obs
+        self.max_duty_cycle = max_duty_cycle
+        self.max_width = None
 
         # Load model
         self.logger.debug(f"Loading model...")
@@ -60,6 +62,15 @@ class InitialTimingSolutionOptimizer:
         # Load archives
         self.logger.debug(f"Loading {len(archive_files)} archive files...")
         self.archive_files, self.profiles, self.epochs = self.__load_archives(archive_files, self.model, self.max_n_obs)
+
+        # Calculate max width
+        if self.max_duty_cycle is not None:
+            self.max_width = int(len(self.profiles[0]) * self.max_duty_cycle)  # Assuming 4096 bins per profile as a default
+
+        # Set pepoch to the center of the observation span
+        center_epoch = (np.max(self.epochs) + np.min(self.epochs)) / 2
+        self.logger.debug(f"Changing PEPOCH from {self.model.PEPOCH.value} to {center_epoch} (the middle of the observation span)")
+        self.model.change_pepoch(center_epoch)
 
     def __get_model(self, parfile):
         """Helper function to get model and ensure the model is valid."""
@@ -157,7 +168,7 @@ class InitialTimingSolutionOptimizer:
         df1_vals=np.linspace(-2e-12, 2e-12, n_df1_trials)
 
         # Initialize PCS
-        pcs = PhaseCoherentSearch(profiles=self.profiles, epochs=self.epochs, center_epoch=pepoch)
+        pcs = PhaseCoherentSearch(profiles=self.profiles, epochs=self.epochs, center_epoch=pepoch, max_width=self.max_width)
         best_pcs_state = pcs.search(df0_vals=df0_vals,df1_vals=df1_vals, ncpus=ncpus)
 
         return InitialTimingSolution(model=self.model, best_pcs_state=best_pcs_state, logger=self.logger)
