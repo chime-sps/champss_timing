@@ -55,8 +55,7 @@ class plot:
             "resids_phase": [], 
             "resids_err": [], 
             "resids_err_phase": [], 
-            "resids_label": [], 
-            "resids_label_types": [],
+            "resids_rcvr": [], 
             "resids_color": [], 
             "rms": [], 
 
@@ -74,6 +73,8 @@ class plot:
             "chi2r": [], 
             "snr": [], 
             "snr_mjds": [], 
+            "snr_rcvr": [], 
+            "snr_color": [], 
             "n_params": [], 
             "params_x": [], 
             "params_y": [], 
@@ -86,7 +87,8 @@ class plot:
             # Other
             "fitted_params": {}, 
             "unfreeze_params": [],
-            "mjd_gaps": []
+            "mjd_gaps": [], 
+            "rcvr_labels": []
         }
 
         # last_mjd = 0
@@ -147,6 +149,7 @@ class plot:
                     "amps": ar_info["psr_amps"],
                     "snr": ar_info["psr_snr"], 
                     "epoch": ar_info["notes"]["init_epoch"],
+                    "rcvr": ar_info["notes"]["rcvr"],
                 }
             else:
                 utils.print_warning(f"Archive {ar_id} not found in the database. Skipping amplitude retrieval for this file.")
@@ -206,11 +209,6 @@ class plot:
             # append to plot data
             plot_data["amps"].append(this_amp)
             plot_data["amps_normalized"].append(this_amp_normalized)
-
-        # get snrs
-        for profile in profiles_mjd_idxed:
-            plot_data["snr_mjds"].append(profiles_mjd_idxed[profile]["epoch"])
-            plot_data["snr"].append(profiles_mjd_idxed[profile]["snr"])
         
         # get residuals
         plot_data["resids"] = self.timing_info[-1]["residuals"]["val"]
@@ -229,23 +227,47 @@ class plot:
             utils.print_warning("No fitted mjds found in the timing info. Using the original mjds.")
             utils.print_warning("Set the fitted mjds to a time series starting from 0 and incrementing by 1.")
             plot_data["resid_mjds"] = np.arange(len(plot_data["resids"]))
-        
+                
         # get labels for each residuals
+        colors = {}
         for mjd in plot_data["resid_mjds"]:
             if int(mjd) in self.toas_mjdint_idxed:
-                plot_data["resids_label"].append(self.toas_mjdint_idxed[int(mjd)]["notes"]["label"])
+                this_rcvr = self.toas_mjdint_idxed[int(mjd)]["notes"]["rcvr"]
             else:
-                plot_data["resids_label"].append("unknown")
-            
-            if plot_data["resids_label"][-1] not in plot_data["resids_label_types"]:
-                plot_data["resids_label_types"].append(plot_data["resids_label"][-1])
-        
-        # get colors for each label
-        if len(plot_data["resids_label_types"]) <= len(self.label_colors):
-            for i in range(len(plot_data["resids_label"])):
-                plot_data["resids_color"].append(self.label_colors[plot_data["resids_label_types"].index(plot_data["resids_label"][i])])
-        else:
-            utils.print_warning("Too many labels. Using default colors.")
+                this_rcvr = "unknown"
+
+            # register new color for this receiver if not already done
+            if this_rcvr not in colors:
+                colors[this_rcvr] = self.label_colors[len(colors) % len(self.label_colors)]
+
+            # assign color
+            plot_data["resids_color"].append(colors[this_rcvr])
+
+        # get snrs
+        for profile in profiles_mjd_idxed:
+            plot_data["snr_mjds"].append(profiles_mjd_idxed[profile]["epoch"])
+            plot_data["snr"].append(profiles_mjd_idxed[profile]["snr"])
+            plot_data["snr_rcvr"].append(profiles_mjd_idxed[profile]["rcvr"])
+
+            # In case the receiver for the SNR is not already in the colors dictionary, add it
+            # This might happen if the data from a rcvr are all outliers
+            if plot_data["snr_rcvr"][-1] not in colors:
+                colors[plot_data["snr_rcvr"][-1]] = self.label_colors[len(colors) % len(self.label_colors)]
+
+            # assign color
+            plot_data["snr_color"].append(colors[plot_data["snr_rcvr"][-1]])
+
+        # Get labels corresponding to each receiver
+        rcvr_labels = {}
+        for toa in self.toas:
+            rcvr_labels[toa["notes"]["rcvr"]] = toa["notes"]["label"]
+
+        # prepare rcvr labels and colors for plotting legend
+        for rcvr, color in colors.items():
+            plot_data["rcvr_labels"].append({
+                "label": rcvr_labels.get(rcvr, f"Unknown ({rcvr})"),
+                "color": color
+            })
 
         # Get residuals in phase
         this_F0 = ((1/self.timing_info[-1]["fitted_params"]["F0"]) * u.s).to(u.us).value
@@ -360,7 +382,7 @@ class plot:
         ## plot residuals
         # axs_resids.errorbar(plot_data["resid_mjds"], plot_data["resids_phase"], plot_data["resids_err_phase"], fmt="x", c="k", markersize=5, capsize=2, label="Fitted")
         for i in range(len(plot_data["resid_mjds"])):
-            axs_resids.errorbar(plot_data["resid_mjds"][i], plot_data["resids_phase"][i], plot_data["resids_err_phase"][i], fmt="x", c=plot_data["resids_color"][i], markersize=5, capsize=2, label=plot_data["resids_label"][i])
+            axs_resids.errorbar(plot_data["resid_mjds"][i], plot_data["resids_phase"][i], plot_data["resids_err_phase"][i], fmt="x", c=plot_data["resids_color"][i], markersize=5, capsize=2)
         ## set axis limits
         lim_0, lim_1 = axs_resids.get_ylim()
         lim_0, lim_1 = (-max([np.abs(lim_0), np.abs(lim_1)]), max([np.abs(lim_0), np.abs(lim_1)]))
@@ -491,7 +513,8 @@ class plot:
         ## combine the 2 grids
         snr_gs = axs[3, 1].get_gridspec()
         axs_snr = fig.add_subplot(snr_gs[3, 1:4])
-        axs_snr.plot(plot_data["snr_mjds"], plot_data["snr"], "kx", label="SNR")
+        for i in range(len(plot_data["snr_mjds"])):
+            axs_snr.plot(plot_data["snr_mjds"][i], plot_data["snr"][i], "x", label="SNR", color=plot_data["snr_color"][i])
         # axs_snr.set_title("SNR")
         axs_snr.set_xlabel("MJD")
         axs_snr.set_ylabel("Signal to Noise Ratio")
@@ -540,8 +563,8 @@ class plot:
         fig.text(0.001, 0, f"CHAMPSS Timing Pipeline ({utils.get_version_hash()}) | PSR {plot_data['fitted_params']['PSR']} | {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", fontsize=9, ha="left", va="bottom", family="monospace")
         if show_ephms:
             # Add info to the right bottom corner
-            for i, label in enumerate(plot_data["resids_label_types"]): 
-                fig.text(0.999, 0 + (i) * 0.0125, f"{label} ⨯", fontsize=9, ha="right", va="bottom", color=self.label_colors[i])
+            for i, rcvr_info in enumerate(plot_data["rcvr_labels"]):
+                fig.text(0.999, 0 + (i) * 0.0125, f"{rcvr_info['label']} ⨯", fontsize=9, ha="right", va="bottom", color=rcvr_info["color"])
             if len(plot_data["bad_files"]) > 0:
                 fig.text(0.999, 0 + (i + 1) * 0.0125, f"Nulling ✕ | Outliers →", fontsize=9, ha="right", va="bottom", color="red")
             else:
@@ -549,8 +572,8 @@ class plot:
         else:
             # show the info horizontally at the bottom
             legend_text = ""
-            for i, label in enumerate(plot_data["resids_label_types"]): 
-                legend_text += f"{label} [ {self.label_colors[i]} ⨯ ] | "
+            for i, rcvr_info in enumerate(plot_data["rcvr_labels"]):
+                legend_text += f"{rcvr_info['label']} [ {rcvr_info['color']} ⨯ ] | "
             if len(plot_data["bad_files"]) > 0:
                 legend_text += f"Nulling [ red ✕ ] | "
             legend_text += f"Outliers [ red → ]"
