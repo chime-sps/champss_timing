@@ -338,6 +338,9 @@ class stack_utils():
                 n_freqs.append(res[1][2])
                 n_bins.append(res[1][3])
 
+            if len(n_subs) == 0:
+                raise Exception("No valid stack files found.")
+
             # Get the most common shape among the stack files
             most_common_shape = (
                 max(set(n_subs), key=n_subs.count),
