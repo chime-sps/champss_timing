@@ -17,21 +17,22 @@ parser.add_argument("--psr", type=str, required=True, help="Pulsar name to stack
 parser.add_argument("--output", type=str, required=True, help="Output file for stacked data.")
 parser.add_argument("--nobs", type=int, required=False, default=32, help="Number of observations to stack (default: all).")
 parser.add_argument("--mjd-range", type=str, required=False, help="MJD range to stack (START:FINISH).")
-parser.add_argument("--npols", type=int, required=False, default=4, help="Number of polarizations to scrunch (default: 4).")
+parser.add_argument("--npols", type=int, required=False, default=1, help="Number of polarizations to scrunch (4 or 1, default: 1).")
 parser.add_argument("--nsubs", type=int, required=False, default=16, help="Number of frequency channels to scrunch (default: 16).")
 parser.add_argument("--nfreqs", type=int, required=False, default=1024, help="Number of frequency bins to stack into (default: 1024).")
 parser.add_argument("--nbins", type=int, required=False, default=1024, help="Number of phase bins to stack into (default: 1024).")
 parser.add_argument("--ncpus", type=int, default=1, help="Number of parallel pools to use (default: 1).")
-parser.add_argument("--no-normalize", action="store_true", default=False, help="Disable normalization in stacking.")
+parser.add_argument("--interpolate", type=str, default="minimal", help="Interpolation method to use during stacking (default: minimal; options: minimal, always, never).")
+parser.add_argument("--remove-baseline", action="store_true", default=True, help="Enable baseline removal in stacking.")
 parser.add_argument("--backend", type=str, required=False, default="all", help="Backend to use for stacking (default: all).")
 parser.add_argument("--parfile", type=str, required=False, help="Parfile to use for stacking (default: pipeline output parfile).")
-parser.add_argument("--output-format", type=str, required=False, default="npy", help="Output file format (npy, pkl; default: npy).")
+parser.add_argument("--output-format", type=str, required=False, default="npz", help="Output file format (npz, pkl, json; default: npz).")
 parser.add_argument("--tmpdir", type=str, required=False, default="./__champss_timing__workspace/__stack_utils_workspaces", help="Temporary directory to use during stacking (default: ./__champss_timing__workspace/__stack_utils_workspaces).")
 args = parser.parse_args()
 
 # Sanity check
-if args.output_format not in ["npy", "pkl"]:
-    raise ValueError("Unsupported output format. Use 'npy' or 'pkl'.")
+if args.output_format not in ["npz", "pkl", "json"]:
+    raise ValueError("Unsupported output format. Use 'npz', 'pkl', or 'json'.")
 
 # Get parfile
 if args.parfile is None:
@@ -98,6 +99,7 @@ print(f"Number of frequency channels: {args.nsubs}")
 print(f"Number of frequency bins: {args.nfreqs}")
 print(f"Number of phase bins: {args.nbins}")
 print(f"Number of CPUs: {args.ncpus}")
+print(f"Remove baseline: {args.remove_baseline}")
 print(f"Using jumps: {jumps}")
 print(f"Output file: {args.output} (format: {args.output_format})")
 print(f"Parfile: {args.parfile}")
@@ -119,19 +121,22 @@ su = stack_utils(
     n_bins=args.nbins, 
     n_pools=args.ncpus, 
     jumps=jumps, 
+    interpolate=args.interpolate, 
+    remove_baseline=args.remove_baseline, 
     workspace=args.tmpdir
 )
-su.stack(normalize=not args.no_normalize)
+su.stack()
 
 # Save output
-data = su.get_data()
-if args.output_format == "npy":
-    import numpy as np
-    np.save(args.output, data)
-elif args.output_format == "pkl":
-    import pickle
-    with open(args.output, 'wb') as f:
-        pickle.dump(data, f)
-else:
-    raise ValueError("Unsupported output format. Use 'npy' or 'pkl'.")
+# data = su.get_data()
+# if args.output_format == "npy":
+#     import numpy as np
+#     np.save(args.output, data)
+# elif args.output_format == "pkl":
+#     import pickle
+#     with open(args.output, 'wb') as f:
+#         pickle.dump(data, f)
+# else:
+#     raise ValueError("Unsupported output format. Use 'npy' or 'pkl'.")
+su.save(args.output, format=args.output_format)
 print(f"Stacked data saved to {args.output}.")

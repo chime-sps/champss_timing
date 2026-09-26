@@ -29,8 +29,9 @@ class config():
             "dealiasing": {
                 "n_subints": 8, 
                 "min_snr_per_subint": 15.0, 
-                "max_n_files": 120,
+                "max_n_files": 200,
                 "n_bins": 128, 
+                "n_freqs": 256, 
                 "smooth": 0, 
                 "recent_threshold": 90 * 24 * 3600, 
             }

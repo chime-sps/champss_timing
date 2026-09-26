@@ -8,7 +8,7 @@ from ..utils.logger import logger
 from ..utils.utils import utils
 
 class dealias:
-    def __init__(self, psr_dir, db_hdl, archive_files, jumps, potential_fit_params, n_subints=8, min_snr_per_subint=5.0, max_n_files=120, n_bins=128, smooth=0, recent_threshold=90 * 24 * 3600, workspace="/tmp", cleanup=True, n_pools=1, logger=logger()):
+    def __init__(self, psr_dir, db_hdl, archive_files, jumps, potential_fit_params, n_subints=8, min_snr_per_subint=5.0, max_n_files=120, n_bins=128, n_freqs=256, smooth=0, recent_threshold=90 * 24 * 3600, workspace="/tmp", cleanup=True, n_pools=1, logger=logger()):
         self.psr_dir = psr_dir
         self.db_hdl = db_hdl
         self.jumps = jumps
@@ -16,6 +16,7 @@ class dealias:
         self.n_subints = n_subints
         self.min_snr_per_subint = min_snr_per_subint
         self.n_bins = n_bins
+        self.n_freqs = n_freqs
         self.smooth = smooth
         self.recent_threshold = recent_threshold
         self.workspace = workspace
@@ -72,8 +73,8 @@ class dealias:
         )**2
 
         # Ensure a minimum number of observations to robustly eliminate artifacts in single observation
-        if n_obs < 3:
-            n_obs = 3
+        if n_obs < 5:
+            n_obs = 5
 
         return int(np.ceil(n_obs))
 
@@ -150,6 +151,7 @@ class dealias:
             jumps=self.jumps, 
             n_subints=self.n_subints, 
             n_bins=self.n_bins, 
+            n_freqs=self.n_freqs, 
             workspace=self.workspace, 
             cleanup=self.cleanup, 
             mode="auto", 

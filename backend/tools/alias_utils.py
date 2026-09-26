@@ -206,9 +206,24 @@ class dealias_utils():
         return True
 
 class alias_utils():
-    def __init__(self, psrdir, ar_list, parfile, jumps={}, n_subints=32, n_bins=128, workspace="/tmp", cleanup=True, mode="auto", n_pools="auto", logger=logger()):
-        # self.ars = ars
-        # self.ar_list = [ar["path"] for ar in ars]
+    def __init__(self, psrdir, ar_list, parfile, jumps={}, n_subints=32, n_bins=128, n_freqs=256, workspace="/tmp", cleanup=True, mode="auto", n_pools="auto", logger=logger()):
+        """
+        Initialize the alias_utils class.
+
+        Parameters:
+        psrdir (str): Directory containing pulsar data.
+        ar_list (list): List of archive files.
+        parfile (str): Parameter file.
+        jumps (dict): Dictionary of jumps.
+        n_subints (int): Number of sub-integrations.
+        n_bins (int): Number of bins.
+        n_freqs (int): Number of frequency channels (default to one, but can be set to more if frequency resolution is needed as a by-product).
+        workspace (str): Workspace directory.
+        cleanup (bool): Whether to clean up the workspace.
+        mode (str): Mode of operation.
+        n_pools (str): Number of pools for parallel processing.
+        logger (logger): Logger instance.
+        """
 
         # set parameters
         self.psrdir = psrdir
@@ -220,6 +235,7 @@ class alias_utils():
         self.jumps = jumps
         self.n_subints = n_subints
         self.n_bins = n_bins
+        self.n_freqs = n_freqs
         self.workspace = workspace + f"/{utils.get_time_string()}__{utils.get_rand_string()}"
         self.outdir = self.workspace + "/outfiles"
         self.sidereal_day = 0.99727 # day
@@ -258,19 +274,25 @@ class alias_utils():
         os.makedirs(self.outdir)
         
         # Initialize stack_utils
+        self.logger.debug(f"Stacking with {len(self.ar_list)} archives")
+        self.logger.debug(f"Requesting: n_subints={self.n_subints}, n_pols=1, n_bins={self.n_bins}, n_freqs={self.n_freqs}")
         self.su = stack_utils(
             files=self.ar_list,
             parfile=self.parfile,
             workspace=self.workspace, 
-            n_subs=self.n_subints, n_pols=1, n_freqs=1, n_bins=self.n_bins, 
+            n_subs=self.n_subints, 
+            n_pols=1, 
+            n_freqs=self.n_freqs, 
+            n_bins=self.n_bins, 
             n_pools=self.n_pools, 
             jumps=self.jumps, 
-            remove_baseline=True, 
+            remove_baseline=True,
+            interpolate="minimal",
             logger=self.logger.copy()
         )
 
         # Stack
-        self.su.stack(normalize=True)
+        self.su.stack()
 
         # Check if stacking was successful
         if self.su.n_stacked == 0:
@@ -295,7 +317,8 @@ class alias_utils():
         return (obs_interval / obs_length) * obs_phase_shift
 
     def get_stacked_powers_and_duration(self):
-        return self.su.get_data()[:, 0, 0, :], np.mean(self.su.durations), np.mean(self.su.snrs)
+        # Reducing data dimensions: (time, pol, freq, phase) -> (time, freq, phase) -> (time, phase)
+        return self.su.get_data(fscrunch=True, keepdims=True)[:, 0, 0, :], np.mean(self.su.durations), np.mean(self.su.snrs)
 
     def cf_get_alias_factor(self, af_min=-30, af_max=30, smooth_sigma=5, subint_range=[]):
         # get stacked powers and duration
@@ -308,7 +331,7 @@ class alias_utils():
         self.logger.info(f"Duration: {duration_} days, Corrected duration: {duration} days, Number of subints: {n_subints}, Number of subints: {n_subints}")
         
         # cross-correlating subints to minimize the possible shifts (from unknown aliasing)
-        self.logger.debug("Generating standard profile by stacking subints...")
+        self.logger.debug("Optimizing stacked profile to create a template...")
         stpl = StackTemplate(data_stacked, size=self.n_bins, shift_meth="fourier", logger=self.logger.copy())
         stpl.optimize()
 
@@ -573,6 +596,12 @@ class alias_utils():
             self.logger.success(f"Pickle saved to {self.outdir}/alias_utils.pkl")
             if pickle_only:
                 return
+
+        # Save stacked data
+        self.su.save(
+            filename=os.path.join(self.outdir, "stacked_data.npz"), 
+            format="npz"
+        )
 
         # Save summary to json 
         with open(os.path.join(self.outdir, "summary.json"), "w") as f:

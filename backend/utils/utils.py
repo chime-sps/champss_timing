@@ -267,3 +267,17 @@ class utils:
                     return True
         
         return False
+
+    @staticmethod
+    def numpy_to_native(o):
+        import numpy as np
+
+        if isinstance(o, np.ndarray):
+            return o.tolist()
+        if isinstance(o, np.generic):
+            return o.item()
+        if isinstance(o, dict):
+            return {k: utils.numpy_to_native(v) for k, v in o.items()}
+        if isinstance(o, (list, tuple)):
+            return type(o)(utils.numpy_to_native(v) for v in o)
+        return o

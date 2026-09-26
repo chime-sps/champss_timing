@@ -37,7 +37,8 @@ parser.add_argument("-N", "--n-files", type=int, help="Maximum number of archive
 parser.add_argument("--parfile", type=str, help="Specify the path to timing model (default: ./timing_sources/<psr_id>/pulsar.par).", default=None, required=False)
 parser.add_argument("--subints", type=str, help="Subint range to use for alias factor calculation (e.g., 20:128). Subint converted to data point index by [int(np.floor(subint_range[0] / bin_size)), int(np.ceil(subint_range[1] / bin_size))]", default=None, required=False)
 parser.add_argument("--n-subints", type=int, help="Binsize for alias factor calculation.", default=8, required=False)
-parser.add_argument("--n-bins", type=int, help="Number of bins for alias factor calculation.", default=64, required=False)
+parser.add_argument("--n-bins", type=int, help="Number of bins for alias factor calculation.", default=128, required=False)
+parser.add_argument("--n-freqs", type=int, help="Number of frequency channels (frequencies are averaged during de-aliasing, but multi-frequency stacked data are produced as a by-product for other purposes).", default=256, required=False)
 parser.add_argument("--smoothing", type=int, help="Smoothing factor for alias factor calculation.", default=0, required=False)
 parser.add_argument("--mjd-range", type=str, help="MJD range to use for alias factor calculation (e.g., 59000:60000, inclusive).", default=None, required=False)
 parser.add_argument("--backend", type=str, help="Use the data from the specified backend.", default=None, required=False)
@@ -143,7 +144,7 @@ else:
     parfile = f"./{TIMING_SOURCES_PATH}/{args.psr}/pulsar.par"
 
 #  determine range of mjds
-if mjd_range == [] or len(psrs) > 1:
+if mjd_range == []:
     mjd_range = utils.read_start_end_from_parfile(parfile, raise_exception=False)
     logger.info(f"Auto-detected MJD range: {mjd_range}")
 
@@ -162,7 +163,8 @@ for f_info in mdb_hdl.get_raw_data_by_mjd_range(args.psr, mjd_range=mjd_range):
 
     ar_list.append({
         "location": f_info["location"],
-        "backend": f_info["backend"]
+        "backend": f_info["backend"], 
+        "mjd": f_info["mjd"]
     })
 
 # Determine backend to use
@@ -179,6 +181,7 @@ else:
 
 # Select archives from the specified backend
 ar_list = [ar for ar in ar_list if ar["backend"] == this_backend]
+mjds = [ar["mjd"] for ar in ar_list]
 logger.info(f"Number of archives from backend {this_backend}: {len(ar_list)}", layer=1)
 
 # Check if there are archives to process
@@ -191,11 +194,11 @@ if not os.path.exists(parfile):
 
 # Cut the list of archives if needed
 if args.n_files is not None:
-    # Shuffle the list of archives so that we get a random sample
-    np.random.shuffle(ar_list)
+    # Sort the list of archives by mjd
+    ar_list = sorted(ar_list, key=lambda ar: ar["mjd"])
 
-    # Cut the list
-    ar_list = ar_list[:args.n_files]
+    # Cut the list to the latest archives
+    ar_list = ar_list[-args.n_files:]
 
 # Show archive information
 logger.info(f"Number of archives: {len(ar_list)}")
@@ -203,7 +206,7 @@ for ar in ar_list:
     logger.info(f"{ar['location']} (backend: {ar['backend']})", layer=1)
 
 # Find alias
-with alias_utils(f"./{TIMING_SOURCES_PATH}/{args.psr}", ar_list, parfile, n_subints=args.n_subints, n_bins=args.n_bins, jumps=JUMPS, workspace=TEMPDIR, n_pools=args.ncpus, logger=logger.copy()) as au:
+with alias_utils(f"./{TIMING_SOURCES_PATH}/{args.psr}", ar_list, parfile, n_subints=args.n_subints, n_bins=args.n_bins, n_freqs=args.n_freqs, jumps=JUMPS, workspace=TEMPDIR, n_pools=args.ncpus, logger=logger.copy()) as au:
     # Get alias factor
     au.cf_get_alias_factor(subint_range=subint_range, smooth_sigma=args.smoothing)
 

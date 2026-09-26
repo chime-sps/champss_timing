@@ -224,6 +224,7 @@ class champss_timing:
                     min_snr_per_subint=self.timing_config["dealiasing"]["min_snr_per_subint"], 
                     max_n_files=self.timing_config["dealiasing"]["max_n_files"], 
                     n_bins=self.timing_config["dealiasing"]["n_bins"], 
+                    n_freqs=self.timing_config["dealiasing"]["n_freqs"], 
                     smooth=self.timing_config["dealiasing"]["smooth"], 
                     recent_threshold=self.timing_config["dealiasing"]["recent_threshold"], 
                     workspace=self.workspace_root, 

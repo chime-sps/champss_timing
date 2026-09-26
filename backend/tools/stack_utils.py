@@ -38,28 +38,38 @@ def _normalize_data(data):
 
     return data
 
-def _resize_array(input_array, new_shape):
+def _resize_array(a, new_shape):
     """
     Resize an N-dimensional numpy array to a new shape using interpolation.
 
     Parameters:
-        input_array (np.ndarray): The array to resize.
+        a (np.ndarray): The array to resize.
         new_shape (tuple): The desired shape (must be same number of dimensions as input).
-        order (int): Interpolation order (0=nearest, 1=linear, 3=cubic, etc.)
 
     Returns:
         np.ndarray: Resized array.
     """
-    input_shape = np.array(input_array.shape)
-    new_shape = np.array(new_shape)
+    
+    # Make sure new_shape is a tuple of integers
+    new_shape = tuple(int(n) for n in new_shape)
 
-    if len(input_shape) != len(new_shape):
-        raise ValueError("new_shape must have same number of dimensions as input_array")
+    # Skip resizing if the input array already has the desired shape
+    if a.shape == new_shape:
+        return a
 
-    if np.all(input_shape == new_shape):
-        return input_array
+    # Downsample each axis if the new size is smaller and an integer factor of the current size
+    out = copy.deepcopy(a)
+    for ax, (n_in, n_out) in enumerate(zip(a.shape, new_shape)):
+        if n_out < n_in and n_in % n_out == 0:
+            k = n_in // n_out
+            shp = out.shape[:ax] + (n_out, k) + out.shape[ax + 1:]
+            out = out.reshape(shp).mean(axis=ax + 1)
 
-    return zoom(input_array, new_shape / input_shape, order=1) # Use scipy's built-in resize function
+    if out.shape != new_shape: # Use scipy's built-in resize function to upsample or handle non-integer cases
+        out = zoom(out, np.array(new_shape) / np.array(out.shape), order=1)
+
+    return out
+
 
 def _resize_psrchive(ar_obj, new_shape):
     """
@@ -98,26 +108,31 @@ def _resize_psrchive(ar_obj, new_shape):
     
     return ar_obj
 
-def _stack_worker(file_info, normalize, config, logger):
+def _stack_worker(args):
     """
     Worker function to stack the data from the input archive.
     Parameters:
-        file_info (dict): Information about the input file, including location and backend.
-        normalize (bool): Whether to normalize the data.
-        config (dict): Configuration dictionary containing various settings 
-            (jumps, tempdir, parfile, remove_baseline, n_subs, n_pols, n_freqs, n_bins).
-        logger (logging.Logger): Logger for logging messages.
+        args (tuple): A tuple containing (file_info, normalize, config, logger).
+            file_info (dict): Information about the input file, including location and backend.
+            normalize (bool): Whether to normalize the data.
+            config (dict): Configuration dictionary containing various settings 
+                (jumps, tempdir, parfile, remove_baseline, n_subs, n_pols, n_freqs, n_bins).
+            logger (logging.Logger): Logger for logging messages.
 
     Returns:
         str: Path to the output stacked file.
     """
 
     this_outfile = ""
+    this_shape = [0, 0, 0, 0]
+
+    # Unpack arguments
+    file_info, config, logger = args
 
     # Check if the file info is valid
     if "location" not in file_info or "backend" not in file_info:
         logger.error(f"File info {file_info} does not contain location or backend information. Skipping.")
-        return this_outfile
+        return this_outfile, this_shape
 
     try:
         # read file info and jump
@@ -193,7 +208,13 @@ def _stack_worker(file_info, normalize, config, logger):
         this_duration = (this_arch.end_time() - this_arch.start_time()).in_days()
 
         # get the data
-        this_data = this_arch.get_data()
+        this_data = this_arch.get_data() # (n_subs, n_pols, n_freqs, n_bins)
+
+        # get the weights
+        this_weights = this_arch.get_weights() # (n_subs, n_freqs)
+
+        # apply weights to the data
+        this_data *= this_weights[:, None, :, None]
 
         # use float32 for memory efficiency
         this_data = this_data.astype(np.float32)
@@ -201,19 +222,13 @@ def _stack_worker(file_info, normalize, config, logger):
         # free the archive from memory
         del this_arch
         gc.collect()
-            
-        # upsample using scipy as needed
-        if this_data.shape != (config["n_subs"], config["n_pols"], config["n_freqs"], config["n_bins"]):
-            logger.warning(f"Upsampling {this_ar} from {this_data.shape} to {(config['n_subs'], config['n_pols'], config['n_freqs'], config['n_bins'])}", layer=1)
-            this_data = _resize_array(this_data, (config["n_subs"], config["n_pols"], config["n_freqs"], config["n_bins"]))
-
-        # normalize
-        if normalize:
-            this_data = _normalize_data(this_data)
 
         # get_snr
         this_profile = np.sum(this_data, axis=(0, 1, 2))
         this_snr = data_quality_utils.boxcar_snr(this_profile)
+
+        # get the shape of the data
+        this_shape = this_data.shape
 
         # save data to tempdir
         np.savez(this_outfile, data=this_data, duration=this_duration, snr=this_snr)
@@ -225,10 +240,32 @@ def _stack_worker(file_info, normalize, config, logger):
     # remove the workspace
     shutil.rmtree(this_workspace, ignore_errors=True)
 
-    return this_outfile
+    return this_outfile, this_shape
 
 class stack_utils():
-    def __init__(self, files, parfile, n_subs=16, n_pols=3, n_freqs=1024, n_bins=1024, n_pools=4, jumps={}, remove_baseline=False, workspace="/tmp", logger=logger()):
+    def __init__(self, files, parfile, n_subs=16, n_pols=3, n_freqs=1024, n_bins=1024, n_pools=4, jumps={}, remove_baseline=False, interpolate="always", workspace="/tmp", logger=logger()):
+        """
+        Initialize the stack_utils class.
+
+        Parameters:
+        files (list): List of archive files to be stacked.
+        parfile (str): Parameter file.
+        n_subs (int): Number of sub-integrations.
+        n_pols (int): Number of polarizations.
+        n_freqs (int): Number of frequency channels.
+        n_bins (int): Number of phase bins.
+        n_pools (int): Number of parallel pools.
+        jumps (dict): Dictionary of jumps.
+        remove_baseline (bool): Whether to remove baseline.
+        interpolate (str): Interpolation mode ("always", "minimal", "never").
+                           always: always interpolate the data to match the target shape.
+                           minimal: only interpolate when necessary to match the target shape.
+                           never: never interpolate the data.
+                           minimal or never: may result in the data not matching the target shape.
+        workspace (str): Workspace directory.
+        logger (logger): Logger instance.
+        """
+
         self.n_subs = n_subs
         self.n_pols = n_pols
         self.n_freqs = n_freqs
@@ -239,7 +276,12 @@ class stack_utils():
         self.n_pools = n_pools
         self.jumps = jumps
         self.remove_baseline = remove_baseline
+        self.interpolate = interpolate
         self.tempdir = workspace + f"/champss_timing__stack_utils/{utils.get_time_string()}__{utils.get_rand_string()}"
+
+        # Make sure interpolation mode is valid
+        if self.interpolate not in ["always", "minimal", "never"]:
+            raise ValueError("interpolate must be one of 'always', 'minimal', or 'never'")
 
         # Some data necessary for alias_utils
         self.durations = []
@@ -254,9 +296,9 @@ class stack_utils():
             raise ValueError("n_pols must be 1 or 4 to be physically meaningful")
 
         # Initialize the stacked data array: subints, pols, freqs, bins
-        self.stacked_data = np.zeros((self.n_subs, self.n_pols, self.n_freqs, self.n_bins), dtype=np.float32)
+        self.stacked_data = None
 
-    def stack(self, normalize=True): 
+    def stack(self): 
         # Create tempdir
         os.makedirs(self.tempdir)
 
@@ -266,6 +308,7 @@ class stack_utils():
             "tempdir": self.tempdir,
             "parfile": self.parfile,
             "remove_baseline": self.remove_baseline,
+            "interpolate": self.interpolate,
             "n_subs": self.n_subs,
             "n_pols": self.n_pols,
             "n_freqs": self.n_freqs,
@@ -274,19 +317,60 @@ class stack_utils():
         }
 
         # Run stacking
-        try: # Tempdir can still be cleanned up when task failed. 
+        try:
+            # Prepare data
+            tasks = [(file_info, worker_config, self.logger.copy()) for file_info in self.files]
             with Pool(self.n_pools) as pool:
-                stack_files = pool.starmap(
-                    _stack_worker, 
-                    tqdm.tqdm([(file_info, normalize, worker_config, self.logger.copy()) for file_info in self.files], desc="Preparing archives")
-                )
+                stack_files_res = list(tqdm.tqdm(
+                    pool.imap(_stack_worker, tasks),
+                    total=len(tasks),
+                    desc="Preparing archives",
+                ))
 
+            # Unpack the results
+            stack_files = []
+            n_subs, n_pols, n_freqs, n_bins = [], [], [], []
+            for res in stack_files_res:
+                stack_files.append(res[0])
+                n_subs.append(res[1][0])
+                n_pols.append(res[1][1])
+                n_freqs.append(res[1][2])
+                n_bins.append(res[1][3])
+
+            # Get the most common shape among the stack files
+            most_common_shape = (
+                max(set(n_subs), key=n_subs.count),
+                max(set(n_pols), key=n_pols.count),
+                max(set(n_freqs), key=n_freqs.count),
+                max(set(n_bins), key=n_bins.count)
+            )
+
+            # If always interpolate, override the most common shape with the target shape
+            if self.interpolate == "always":
+                most_common_shape = (self.n_subs, self.n_pols, self.n_freqs, self.n_bins)
+                self.logger.debug(f"Interpolating all stack files to the most common shape {most_common_shape} since interpolate=always.")
+
+            # Initialize the stacked data array
+            self.stacked_data = np.zeros(most_common_shape, dtype=np.float32)
+
+            # Stack
             for f in tqdm.tqdm(stack_files, desc="Stacking archives"):
                 if not os.path.exists(f):
                     self.logger.warning(f"Stack file {f} does not exist. The processing thread might be failed or OOM killed. ")
                     continue
+
                 # Load the data
-                this_data = np.load(f)
+                this_data = dict(np.load(f))
+
+                # Ensure the data has the most common shape
+                if this_data["data"].shape != most_common_shape:
+                    if self.interpolate == "never":
+                        self.logger.debug(f"Stack file {f} has shape {this_data['data'].shape}, expected {most_common_shape}. Skipping.")
+                        continue
+                    else:
+                        this_data["data"] = _resize_array(this_data["data"], most_common_shape)
+                        if self.interpolate == "minimal":
+                            self.logger.debug(f"Stack file {f} has been resized from {this_data['data'].shape} to {most_common_shape} despite trying to avoid interpolation as much as possible.")
 
                 # Stack the data
                 self.stacked_data += this_data["data"]
@@ -304,7 +388,11 @@ class stack_utils():
 
                 # Increment the number of stacked files
                 self.n_stacked += 1
+
+            # Update the size
+            self.n_subs, self.n_pols, self.n_freqs, self.n_bins = self.stacked_data.shape
         except Exception:
+            # Tempdir can still be cleanned up when task failed. 
             self.logger.warning(traceback.format_exc())
 
         # Clean up tempdir
@@ -314,39 +402,19 @@ class stack_utils():
         self.logger.info(f"Stacked {self.n_stacked} out of {len(self.files)} files.")
         self.logger.info(f"Stacked data shape: {self.stacked_data.shape}")
     
-    def get_data(self, n_subs=None, n_pols=None, n_freqs=None, n_bins=None, normalize=False):
-        data_shape = [self.n_subs, self.n_pols, self.n_freqs, self.n_bins]
+    def get_data(self, fscrunch=False, tscrunch=False, normalize=False, keepdims=False):
         data_copy = copy.deepcopy(self.stacked_data)
 
-        if n_subs is not None:
-            if n_subs > data_shape[0]:
-                self.logger.warning(f"Upsampling n_subs from {data_shape[0]} to {n_subs}")
-            data_shape[0] = n_subs
-            
-        if n_pols is not None:
-            if n_pols > data_shape[1]:
-                self.logger.warning(f"Upsampling n_subs from {data_shape[1]} to {n_pols}")
-            data_shape[1] = n_pols
-            
-        if n_freqs is not None:
-            if n_freqs > data_shape[2]:
-                self.logger.warning(f"Upsampling n_subs from {data_shape[2]} to {n_freqs}")
-            data_shape[2] = n_freqs
-            
-        if n_bins is not None:
-            if n_bins > data_shape[3]:
-                self.logger.warning(f"Upsampling n_subs from {data_shape[3]} to {n_bins}")
-            data_shape[3] = n_bins
+        if fscrunch:
+            data_copy = data_copy.mean(axis=2, keepdims=keepdims)
 
-        if data_shape == (self.n_subs, self.n_pols, self.n_freqs, self.n_bins): 
-            if normalize:
-                return _normalize_data(data_copy)
-            return data_copy
+        if tscrunch:
+            data_copy = data_copy.mean(axis=0, keepdims=keepdims)
 
         if normalize:
-            return _normalize_data(_resize_array(data_copy, data_shape))
+            data_copy = _normalize_data(data_copy)
             
-        return _resize_array(data_copy, data_shape)
+        return data_copy
 
     def get_stacked_snr(self):
         if self.n_bins <= 1:
@@ -355,3 +423,39 @@ class stack_utils():
         return data_quality_utils.boxcar_snr(
             self.get_data().sum(axis=(0, 1, 2))
         )
+
+    def save(self, filename, format="npz"):
+        """
+        Save the stacked data and metadata to a file.
+
+        Args:
+            filename (str): The name of the file to save the data to.
+            format (str): The format to save the data in (options: npz, pkl, json).
+        """
+        # Gather metadata
+        metadata = {
+            "n_subs": self.n_subs,
+            "n_pols": self.n_pols,
+            "n_freqs": self.n_freqs,
+            "n_bins": self.n_bins,
+            "n_stacked": self.n_stacked,
+            "durations": self.durations,
+            "snrs": self.snrs, 
+            "model": open(self.parfile, "r").read(), 
+            "remove_baseline": self.remove_baseline, 
+            "input_files": self.files
+        }
+
+        # Save the data and metadata
+        if format == "npz":
+            np.savez(filename, data=self.stacked_data, metadata=metadata)
+        elif format == "pkl":
+            with open(filename, "wb") as f:
+                import pickle
+                pickle.dump(utils.numpy_to_native({"data": self.stacked_data, "metadata": metadata}), f)
+        elif format == "json":
+            with open(filename, "w") as f:
+                import json
+                json.dump(utils.numpy_to_native({"data": self.stacked_data, "metadata": metadata}), f)
+        else: 
+            raise ValueError(f"Unsupported format: {format}. Supported formats are: npz, pkl, json.")
