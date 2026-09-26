@@ -194,11 +194,11 @@ if not os.path.exists(parfile):
 
 # Cut the list of archives if needed
 if args.n_files is not None:
-    # Sort the list of archives by mjd
-    ar_list = sorted(ar_list, key=lambda ar: ar["mjd"])
+    # Sort the list of archives by mjd (newest to oldest)
+    ar_list = sorted(ar_list, key=lambda ar: ar["mjd"], reverse=True)
 
-    # Cut the list to the latest archives
-    ar_list = ar_list[-args.n_files:]
+    # Cut the list to the specified number of files (always the newest ones)
+    ar_list = ar_list[:args.n_files]
 
 # Show archive information
 logger.info(f"Number of archives: {len(ar_list)}")

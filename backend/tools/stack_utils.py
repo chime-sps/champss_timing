@@ -296,7 +296,7 @@ class stack_utils():
             raise ValueError("n_pols must be 1 or 4 to be physically meaningful")
 
         # Initialize the stacked data array: subints, pols, freqs, bins
-        self.stacked_data = None
+        self.stacked_data = np.array([], dtype=np.float32)
 
     def stack(self): 
         # Create tempdir
@@ -328,10 +328,11 @@ class stack_utils():
                 ))
 
             # Unpack the results
-            stack_files = []
             n_subs, n_pols, n_freqs, n_bins = [], [], [], []
             for res in stack_files_res:
-                stack_files.append(res[0])
+                if res[1] == [0, 0, 0, 0]:
+                    continue
+                
                 n_subs.append(res[1][0])
                 n_pols.append(res[1][1])
                 n_freqs.append(res[1][2])
@@ -354,7 +355,9 @@ class stack_utils():
             self.stacked_data = np.zeros(most_common_shape, dtype=np.float32)
 
             # Stack
-            for f in tqdm.tqdm(stack_files, desc="Stacking archives"):
+            for this_res in tqdm.tqdm(stack_files_res, desc="Stacking archives"):
+                # Make sure stack file exists before proceeding
+                f = this_res[0]
                 if not os.path.exists(f):
                     self.logger.warning(f"Stack file {f} does not exist. The processing thread might be failed or OOM killed. ")
                     continue

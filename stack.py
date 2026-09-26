@@ -23,7 +23,7 @@ parser.add_argument("--nfreqs", type=int, required=False, default=1024, help="Nu
 parser.add_argument("--nbins", type=int, required=False, default=1024, help="Number of phase bins to stack into (default: 1024).")
 parser.add_argument("--ncpus", type=int, default=1, help="Number of parallel pools to use (default: 1).")
 parser.add_argument("--interpolate", type=str, default="minimal", help="Interpolation method to use during stacking (default: minimal; options: minimal, always, never).")
-parser.add_argument("--remove-baseline", action="store_true", default=True, help="Enable baseline removal in stacking.")
+parser.add_argument("--remove-baseline", action="store_true", default=False, help="Enable baseline removal in stacking.")
 parser.add_argument("--backend", type=str, required=False, default="all", help="Backend to use for stacking (default: all).")
 parser.add_argument("--parfile", type=str, required=False, help="Parfile to use for stacking (default: pipeline output parfile).")
 parser.add_argument("--output-format", type=str, required=False, default="npz", help="Output file format (npz, pkl, json; default: npz).")
