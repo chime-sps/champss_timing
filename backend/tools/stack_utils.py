@@ -124,7 +124,7 @@ def _stack_worker(args):
     """
 
     this_outfile = ""
-    this_shape = [0, 0, 0, 0]
+    this_shape = None
 
     # Unpack arguments
     file_info, config, logger = args
@@ -330,7 +330,7 @@ class stack_utils():
             # Unpack the results
             n_subs, n_pols, n_freqs, n_bins = [], [], [], []
             for res in stack_files_res:
-                if res[1] == [0, 0, 0, 0]:
+                if res[1] is None:
                     continue
                 
                 n_subs.append(res[1][0])

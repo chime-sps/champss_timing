@@ -96,10 +96,15 @@ class config():
         return self.data
 
     def compare_config(self, config1, config2):
+        whitelist = ["dealiasing"]
         # Compare user-defined configs
         for key in config1:
             if key.startswith("__"):
                 # Skip internal keys that start with "__"
+                continue
+            
+            if key in whitelist:
+                # Skip keys that are in the whitelist
                 continue
 
             if key not in config2:
