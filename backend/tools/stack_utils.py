@@ -207,6 +207,10 @@ def _stack_worker(args):
         # get duration
         this_duration = (this_arch.end_time() - this_arch.start_time()).in_days()
 
+        # get frequency information
+        freq_lo = this_arch.get_centre_frequency() - this_arch.get_bandwidth()/2.0
+        freq_hi = this_arch.get_centre_frequency() + this_arch.get_bandwidth()/2.0
+
         # get the data
         this_data = this_arch.get_data() # (n_subs, n_pols, n_freqs, n_bins)
 
@@ -231,7 +235,7 @@ def _stack_worker(args):
         this_shape = this_data.shape
 
         # save data to tempdir
-        np.savez(this_outfile, data=this_data, duration=this_duration, snr=this_snr)
+        np.savez(this_outfile, data=this_data, duration=this_duration, snr=this_snr, freq_lo=freq_lo, freq_hi=freq_hi)
         
     except Exception:
         logger.warning(f"Thread {this_location} failed. Please refer to the traceback below")
@@ -243,7 +247,7 @@ def _stack_worker(args):
     return this_outfile, this_shape
 
 class stack_utils():
-    def __init__(self, files, parfile, n_subs=16, n_pols=3, n_freqs=1024, n_bins=1024, n_pools=4, jumps={}, remove_baseline=False, interpolate="always", workspace="/tmp", logger=logger()):
+    def __init__(self, files, parfile, n_subs=16, n_pols=3, n_freqs=1024, n_bins=1024, n_pools=4, jumps={}, remove_baseline=False, interpolate="always", allow_inconsistent_freq=False, workspace="/tmp", logger=logger()):
         """
         Initialize the stack_utils class.
 
@@ -277,6 +281,7 @@ class stack_utils():
         self.jumps = jumps
         self.remove_baseline = remove_baseline
         self.interpolate = interpolate
+        self.allow_inconsistent_freq = allow_inconsistent_freq
         self.tempdir = workspace + f"/champss_timing__stack_utils/{utils.get_time_string()}__{utils.get_rand_string()}"
 
         # Make sure interpolation mode is valid
@@ -286,6 +291,8 @@ class stack_utils():
         # Some data necessary for alias_utils
         self.durations = []
         self.snrs = []
+        self.freq_lo = []
+        self.freq_hi = []
         self.n_stacked = 0
 
         if not os.path.exists(workspace):
@@ -368,6 +375,19 @@ class stack_utils():
                 # Load the data
                 this_data = dict(np.load(f))
 
+                # Get frequency information
+                this_freq_lo, this_freq_hi = this_data["freq_lo"], this_data["freq_hi"]
+
+                # Check if frequency information is consistent with the first stack file
+                if len(self.freq_lo) > 0 and (this_freq_lo != self.freq_lo[0] or this_freq_hi != self.freq_hi[0]):
+                    self.logger.debug(f"Frequency information in stack file {f} ({this_freq_lo}-{this_freq_hi}) is inconsistent with the first stack file ({self.freq_lo[0]}-{self.freq_hi[0]}).")
+                    if not self.allow_inconsistent_freq:
+                        self.logger.debug(f"Skipping stack file {f} due to inconsistent frequency information.")
+                        continue
+
+                self.freq_lo.append(this_freq_lo)
+                self.freq_hi.append(this_freq_hi)
+
                 # Ensure the data has the most common shape
                 if this_data["data"].shape != most_common_shape:
                     if self.interpolate == "never":
@@ -447,8 +467,12 @@ class stack_utils():
             "n_stacked": self.n_stacked,
             "durations": self.durations,
             "snrs": self.snrs, 
+            "freq_lo": self.freq_lo, 
+            "freq_hi": self.freq_hi,
             "model": open(self.parfile, "r").read(), 
+            "interpolate": self.interpolate,
             "remove_baseline": self.remove_baseline, 
+            "allow_inconsistent_freq": self.allow_inconsistent_freq,
             "input_files": self.files
         }
 
