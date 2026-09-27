@@ -26,12 +26,14 @@
                         <li><h6 class="dropdown-header">Actions</h6></li>
                         <li><a class="dropdown-item btn-sm" id="btn_new_tab" href="#">Open in New Tab</a></li>
                         <li><hr class="dropdown-divider"></li>
-                        <li><h6 class="dropdown-header">Download Diagnostic Information</h6></li>
-                        <li><a class="dropdown-item btn-sm" id="btn_pdf" href="#">Diagnostic Plot (.pdf)</a></li>
-                        <li><hr class="dropdown-divider"></li>
                         <li><h6 class="dropdown-header">Download Timing Information</h6></li>
+                        <li><a class="dropdown-item btn-sm" id="btn_pdf" href="#">Timing Diagnostics (.pdf)</a></li>
                         <li><a class="dropdown-item btn-sm" id="btn_parfile" href="#">TOA Parfile (.par)</a></li>
                         <li><a class="dropdown-item btn-sm" id="btn_timfile" href="#">TOA Timfile (.tim)</a></li>
+                        <li><h6 class="dropdown-header">Download De-aliasing Information</h6></li>
+                        <li><a class="dropdown-item btn-sm" id="btn_dealias_pdf" href="#">De-aliasing Diagnostics (.pdf)</a></li>
+                        <li><a class="dropdown-item btn-sm" id="btn_dealias_summary" href="#">De-aliasing Summary (.json)</a></li>
+                        <li><a class="dropdown-item btn-sm" id="btn_dealias_stack" href="#">Stack File (.npz)</a></li>
                         <li><hr class="dropdown-divider"></li>
                         <li><h6 class="dropdown-header">Download Debug Information</h6></li>
                         <li><a class="dropdown-item btn-sm" id="btn_dbfile" href="#">Database File (.sqlite3.db)</a></li>
@@ -212,6 +214,51 @@
         );
     }
 
+    function download_dealias_pdf() {
+        var selected_pulsars = get_selected_pulsars();
+        var urls = [];
+        var filenames = [];
+        for (var i = 0; i < selected_pulsars.length; i++) {
+            urls.push("{{ url_for("diagnostic", source_id="")}}" + selected_pulsars[i] + '/dealias/diagnostics');
+            filenames.push("champss_timing_" + selected_pulsars[i] + '_dealias.pdf');
+        }
+        zip_download(
+            'dealias_pdf__' + new Date().toISOString().replace(/T/, ' ').replace(/\..+/, '').replace(/:/g, '-'),
+            filenames, 
+            urls
+        );
+    }
+
+    function download_dealias_summary() {
+        var selected_pulsars = get_selected_pulsars();
+        var urls = [];
+        var filenames = [];
+        for (var i = 0; i < selected_pulsars.length; i++) {
+            urls.push("{{ url_for("diagnostic", source_id="")}}" + selected_pulsars[i] + '/dealias/info');
+            filenames.push("champss_timing_" + selected_pulsars[i] + '_dealias.json');
+        }
+        zip_download(
+            'dealias_summary__' + new Date().toISOString().replace(/T/, ' ').replace(/\..+/, '').replace(/:/g, '-'),
+            filenames, 
+            urls
+        );
+    }
+
+    function download_dealias_stack() {
+        var selected_pulsars = get_selected_pulsars();
+        var urls = [];
+        var filenames = [];
+        for (var i = 0; i < selected_pulsars.length; i++) {
+            urls.push("{{ url_for("diagnostic", source_id="")}}" + selected_pulsars[i] + '/dealias/stack_file');
+            filenames.push("champss_timing_" + selected_pulsars[i] + '_dealias.npz');
+        }
+        zip_download(
+            'dealias_stack__' + new Date().toISOString().replace(/T/, ' ').replace(/\..+/, '').replace(/:/g, '-'),
+            filenames, 
+            urls
+        );
+    }
+
     function download_allfiles() {
         var selected_pulsars = get_selected_pulsars();
         var urls = [];
@@ -229,6 +276,14 @@
             urls.push("{{ url_for("diagnostic", source_id="")}}" + selected_pulsars[i] + '/timfile');
             // filenames.push("champss_timing_" + selected_pulsars[i] + '.tim');
             filenames.push(selected_pulsars[i] + '/pulsar.tim');
+
+            // de-aliasing
+            urls.push("{{ url_for("diagnostic", source_id="")}}" + selected_pulsars[i] + '/dealias/diagnostics');
+            filenames.push(selected_pulsars[i] + '/dealias/diagnostic.pdf');
+            urls.push("{{ url_for("diagnostic", source_id="")}}" + selected_pulsars[i] + '/dealias/info');
+            filenames.push(selected_pulsars[i] + '/dealias/summary.json');
+            urls.push("{{ url_for("diagnostic", source_id="")}}" + selected_pulsars[i] + '/dealias/stack_file');
+            filenames.push(selected_pulsars[i] + '/dealias/stacked_data.npz');
 
             // debug
             urls.push("{{ url_for("diagnostic", source_id="")}}" + selected_pulsars[i] + '/dbfile');
@@ -264,6 +319,9 @@
         $('#btn_new_tab').click(open_in_new_tab);
         $('#btn_pdf').click(download_diagnostics);
         $('#btn_parfile').click(download_parfiles);
+        $('#btn_dealias_pdf').click(download_dealias_pdf);
+        $('#btn_dealias_summary').click(download_dealias_summary);
+        $('#btn_dealias_stack').click(download_dealias_stack);
         $('#btn_timfile').click(download_timfiles);
         $('#btn_dbfile').click(download_dbfiles);
         $('#btn_allfiles').click(download_allfiles);

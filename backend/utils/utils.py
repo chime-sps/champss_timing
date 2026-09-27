@@ -269,15 +269,27 @@ class utils:
         return False
 
     @staticmethod
+    def _native_key(k):
+        k = utils.numpy_to_native(k)
+        return k if isinstance(k, (str, int, float, bool, type(None))) else str(k)
+
+    @staticmethod
     def numpy_to_native(o):
         import numpy as np
+        from pathlib import Path
 
+        if hasattr(o, "unit") and hasattr(o, "value"):
+            return utils.numpy_to_native(o.value)
         if isinstance(o, np.ndarray):
-            return o.tolist()
+            return utils.numpy_to_native(o.tolist())  # recurse for object arrays
         if isinstance(o, np.generic):
-            return o.item()
+            return utils.numpy_to_native(o.item())
+        if isinstance(o, complex):
+            return [o.real, o.imag]
+        if isinstance(o, Path):
+            return str(o)
         if isinstance(o, dict):
-            return {k: utils.numpy_to_native(v) for k, v in o.items()}
-        if isinstance(o, (list, tuple)):
-            return type(o)(utils.numpy_to_native(v) for v in o)
+            return {utils._native_key(k): utils.numpy_to_native(v) for k, v in o.items()}
+        if isinstance(o, (list, tuple, set)):
+            return [utils.numpy_to_native(v) for v in o]
         return o

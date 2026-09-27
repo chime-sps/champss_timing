@@ -6,7 +6,7 @@ from flask import session
 from flask import redirect
 
 import os
-import copy
+import json
 import time
 import requests
 import traceback
@@ -280,6 +280,37 @@ def dealias_info(source_id):
     res.headers['Content-Type'] = 'text/plain'
     res.headers['Content-Disposition'] = f'attachment; filename="champss_timing_{source_id}_dealias_summary.json"'
     return res
+
+@app.route('/diagnostic/<source_id>/dealias/stack_file')
+@app.route('/diagnostic/<source_id>/dealias/stack_file/')
+def dealias_stack_file(source_id):
+    if source_id not in app.sources:
+        abort(404)
+
+    if not os.path.exists(app.sources[source_id].dealias_stack_file):
+        abort(404)
+
+    res = Response(open(app.sources[source_id].dealias_stack_file, 'rb').read())
+    res.headers['Content-Type'] = 'application/octet-stream'
+    res.headers['Content-Disposition'] = f'attachment; filename="champss_timing_{source_id}_stack_file.npz"'
+    return res
+
+@app.route('/diagnostic/<source_id>/dealias/stack_phase_frequency')
+@app.route('/diagnostic/<source_id>/dealias/stack_phase_frequency/')
+def dealias_stack_phase_frequency(source_id):
+    if source_id not in app.sources:
+        abort(404)
+
+    stacked_data = app.sources[source_id].get_stacked_data()
+    if stacked_data is None:
+        return '{"not_available": "No stacked file from the de-aliasing pipeline, or the data may have been generated from an older version of the pipeline."}'
+
+    # Return as json
+    return app.response_class(
+        response=json.dumps(stacked_data),
+        status=200,
+        mimetype='application/json'
+    )
 
 @app.route('/pint')
 def pint():

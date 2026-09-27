@@ -28,6 +28,7 @@ class src_loader():
         self.logfile = source_dir + "/champss_timing.log"
         self.dealias_diagnostic = source_dir + "/dealias/diagnostic.pdf"
         self.dealias_summary = source_dir + "/dealias/summary.json"
+        self.dealias_stack_file = source_dir + "/dealias/stacked_data.npz"
         self.psr_id = source_dir.split("/")[-1]
         self.psr_id_esc = self.psr_id.replace("+", "p").replace("-", "m")
         self.initialized = False
@@ -40,6 +41,7 @@ class src_loader():
         self.stats = {}
         self.parameter_info = {}
         self.tags = []
+        self.resources_status = {"pdf": False, "logfile": False, "dealias_diagnostic": False, "dealias_summary": False, "dealias_stack_file": False}
         self.preview_residual_data = []
         self.stacked_profile = []
         self.source_coincidences = None
@@ -54,6 +56,9 @@ class src_loader():
         self.db.initialize()
 
     def initialize(self):
+        # Get resource status
+        self.resources_status = self.get_resources_status()
+        
         # Get md5
         self.db_md5 = self.get_db_md5()
 
@@ -125,6 +130,16 @@ class src_loader():
         # Close database
         if self.db is not None:
             self.db.close()
+
+    def get_resources_status(self):
+        status = {
+            "pdf": os.path.exists(self.pdf),
+            "logfile": os.path.exists(self.logfile),
+            "dealias_diagnostic": os.path.exists(self.dealias_diagnostic),
+            "dealias_summary": os.path.exists(self.dealias_summary),
+            "dealias_stack_file": os.path.exists(self.dealias_stack_file)
+        }
+        return status
 
     def get_db_md5(self):
         with open(self.source_dir + "/champss_timing.sqlite3.db", "rb") as f:
@@ -558,6 +573,23 @@ class src_loader():
                     decj_err = float(line.split()[3]) / 3600
 
         return {"RAJ": raj_err, "DECJ": decj_err}
+
+    def get_stacked_data(self):
+        if not os.path.exists(self.dealias_stack_file):
+            return None
+
+        # Load the stacked data from the file
+        stacked_data = {}
+        stacked_data_raw = np.load(self.dealias_stack_file, allow_pickle=True)
+
+        # Averages to get stacked phase and stacked frequencies 
+        stacked_data["phase"] = stacked_data_raw["data"].mean(axis=2).squeeze().tolist()
+        stacked_data["freq"] = stacked_data_raw["data"].mean(axis=0).squeeze().tolist()
+
+        # Write metadata
+        stacked_data["metadata"] = utils.numpy_to_native(stacked_data_raw["metadata"])
+
+        return stacked_data
 
     def simbad_query(self, ra, dec, radius=0.5):
         def parse_coord(coord):

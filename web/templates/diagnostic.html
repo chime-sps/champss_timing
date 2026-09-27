@@ -88,12 +88,15 @@
                             <span class="visually-hidden">Toggle Dropdown</span>
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end">
-                            <li><h6 class="dropdown-header">Diagnostic</h6></li>
-                            <li><a class="dropdown-item" href="{{ url_for("diagnostic", source_id=source_id) }}/pdf" target="_blank">Diagnostic Plot (.pdf)</a></li>
-                            <li><hr class="dropdown-divider"></li>
                             <li><h6 class="dropdown-header">Timing</h6></li>
+                            <li><a class="dropdown-item{% if not sources[source_id].resources_status["pdf"]: %} disabled{% endif %}" href="{{ url_for("diagnostic", source_id=source_id) }}/pdf" target="_blank">Timing Diagnostics (.pdf)</a></li>
                             <li><a class="dropdown-item" href="{{ url_for("diagnostic", source_id=source_id) }}/parfile">Ephemeris Parfile (.par)</a></li>
                             <li><a class="dropdown-item" href="{{ url_for("diagnostic", source_id=source_id) }}/timfile">TOA Timfile (.tim)</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><h6 class="dropdown-header">De-aliasing</h6></li>
+                            <li><a class="dropdown-item{% if not sources[source_id].resources_status["dealias_diagnostic"]: %} disabled{% endif %}" href="{{ url_for("diagnostic", source_id=source_id) }}/dealias/diagnostics">De-aliasing Diagnostics (.pdf)</a></li>
+                            <li><a class="dropdown-item{% if not sources[source_id].resources_status["dealias_summary"]: %} disabled{% endif %}" href="{{ url_for("diagnostic", source_id=source_id) }}/dealias/info">De-aliasing Summary (.json)</a></li>
+                            <li><a class="dropdown-item{% if not sources[source_id].resources_status["dealias_stack_file"]: %} disabled{% endif %}" href="{{ url_for("diagnostic", source_id=source_id) }}/dealias/stack_file">Stack File (.npz)</a></li>
                             <li><hr class="dropdown-divider"></li>
                             <li><h6 class="dropdown-header">Debug</h6></li>
                             <li><a class="dropdown-item" href="{{ url_for("diagnostic", source_id=source_id) }}/dbfile">Database File (.sqlite3.db)</a></li>
@@ -1081,13 +1084,19 @@
                 "{{ url_for("diagnostic", source_id=source_id) }}/pdf",
                 "{{ url_for("diagnostic", source_id=source_id) }}/parfile",
                 "{{ url_for("diagnostic", source_id=source_id) }}/timfile",
-                "{{ url_for("diagnostic", source_id=source_id) }}/dbfile"
+                "{{ url_for("diagnostic", source_id=source_id) }}/dbfile",
+                "{{ url_for("diagnostic", source_id=source_id) }}/dealias/diagnostics",
+                "{{ url_for("diagnostic", source_id=source_id) }}/dealias/info",
+                "{{ url_for("diagnostic", source_id=source_id) }}/dealias/stack_file"
             ];
             var filenames = [
                 "{{ source_id }}/champss_diagnostics.pdf",
                 "{{ source_id }}/pulsar.par",
                 "{{ source_id }}/pulsar.tim",
-                "{{ source_id }}/champss_timing.sqlite3.db"
+                "{{ source_id }}/champss_timing.sqlite3.db",
+                "{{ source_id }}/dealias/diagnostic.pdf",
+                "{{ source_id }}/dealias/summary.json",
+                "{{ source_id }}/dealias/stacked_data.npz"
             ];
             zip_download(
                 'champss_timing_{{ source_id }}__' + new Date().toISOString().replace(/T/, ' ').replace(/\..+/, '').replace(/:/g, '-'),

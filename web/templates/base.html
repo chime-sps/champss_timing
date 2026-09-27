@@ -127,29 +127,45 @@
 
         function zip_download(outfile, filenames, urls) {
             var zip = new JSZip();
-            var count = urls.length;
+            var remaining = urls.length;
+            var skipped = [];
             var zipFilename = outfile + '.zip';
-            $('#zip_download').fadeIn();
-            $('#zip_download_progress').text('Downloading ' + count + ' files...');
-            urls.forEach(function(url, i) {
-                JSZipUtils.getBinaryContent(url, function (err, data) {
-                    if(err) {
-                        throw err;
-                    }
-                    zip.file(outfile + "/" + filenames[i], data, {binary: true});
-                    count--;
 
-                    $('#zip_download_progress').text('Downloading... (' + count + ' files remaining)');
-                    if (count == 0) {
-                        $('#zip_download_progress').text('Zipping...');
-                        zip.generateAsync({type: 'blob'}).then(function(content) {
-                            save_as(content, zipFilename);
-                            $('#zip_download_progress').text('Saved as ' + zipFilename + '. ');
-                            setTimeout(() => {
-                                $('#zip_download').fadeOut();
-                            }, 1500);
-                        });
+            $('#zip_download').fadeIn();
+            $('#zip_download_progress').text('Downloading ' + remaining + ' files...');
+
+            function finish() {
+                var added = urls.length - skipped.length;
+                if (added === 0) {
+                    $('#zip_download_progress').text('None of the files could be downloaded.');
+                    setTimeout(() => $('#zip_download').fadeOut(), 3000);
+                    return;
+                }
+
+                $('#zip_download_progress').text('Zipping...');
+                zip.generateAsync({type: 'blob'}).then(function(content) {
+                    save_as(content, zipFilename);
+                    var msg = 'Saved as ' + zipFilename + '.';
+                    if (skipped.length) {
+                        // msg += ' Skipped ' + skipped.length + ' missing file(s).';
+                        console.warn('Skipped files:', skipped);
                     }
+                    $('#zip_download_progress').text(msg);
+                    setTimeout(() => $('#zip_download').fadeOut(), skipped.length ? 3000 : 1500);
+                });
+            }
+
+            urls.forEach(function(url, i) {
+                JSZipUtils.getBinaryContent(url, function(err, data) {
+                    if (err) {
+                        skipped.push(filenames[i]);
+                    } else {
+                        zip.file(outfile + '/' + filenames[i], data, {binary: true});
+                    }
+
+                    remaining--;
+                    $('#zip_download_progress').text('Downloading... (' + remaining + ' files remaining)');
+                    if (remaining === 0) finish();
                 });
             });
         }
