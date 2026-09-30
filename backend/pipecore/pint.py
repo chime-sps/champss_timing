@@ -81,54 +81,48 @@ class pint_handler():
         # Set initialized
         self.initialized = True
 
-    def filter(self, error=True, dropout=True):
+    def filter(self):
+        # Sanity check for the number of TOAs
         if len(self.t) < 5:
             self.logger.debug("Less than 5 TOAs. Skipping filtering. ")
             return 
+        
+        # Get when is the latest 3 TOAs
+        mjds = self.t.get_mjds().value
+        mjds.sort()
+        latest_toa_threshold = np.mean([mjds[-3], mjds[-4]])
+        self.logger.debug(f"Will not filter out TOAs later than MJD {latest_toa_threshold}")
+        
+        # Error filter
+        self.error_filter(latest_toa_threshold=latest_toa_threshold)
+
+        # MAD filter
+        self.mad_filter2(latest_toa_threshold=latest_toa_threshold)
 
         # MAD filter
         # if mad:
             # self.mad_filter()
 
-        # Error filter
-        if error:
-            self.error_filter()
+        # if dropout:
+        #     # if len(self.t) > 90 and self.m.CHI2R.value < 5:
+        #         # Quantile filter
+        #         # if quantile:
+        #         #     self.quantile_filter()
+        #     if (
+        #         "F0" in self.get_unfreezed_params() and 
+        #         "F1" in self.get_unfreezed_params() and
+        #         "RAJ" in self.get_unfreezed_params() and
+        #         "DECJ" in self.get_unfreezed_params()
+        #     ):
+        #         self.mad_filter2()
+        #     elif len(self.t) > 10:
+        #         self.mad_filter2()
+        #     else:
+        #         # Dropout filter
+        #         self.dropout_chi2r_filter()
+        
 
-        if dropout:
-            # if len(self.t) > 90 and self.m.CHI2R.value < 5:
-                # Quantile filter
-                # if quantile:
-                #     self.quantile_filter()
-            if (
-                "F0" in self.get_unfreezed_params() and 
-                "F1" in self.get_unfreezed_params() and
-                "RAJ" in self.get_unfreezed_params() and
-                "DECJ" in self.get_unfreezed_params()
-            ):
-                self.mad_filter2()
-            elif len(self.t) > 60:
-                self.mad_filter2()
-            else:
-                # Dropout filter
-                self.dropout_chi2r_filter()
-
-    # def mad_filter(self, threshold=7):
-    #     # get mad
-    #     resids = np.abs(np.array(self.prefit_resids))
-    #     mad = median_abs_deviation(resids)
-
-    #     # filter
-    #     toas_bad = np.where((resids - np.median(resids)) / mad > threshold)[0]
-    #     toas_good = np.where((resids - np.median(resids)) / mad <= threshold)[0]
-
-    #     # get toas and mjds
-    #     self.bad_toas += self.t[toas_bad]
-    #     self.bad_resids = np.concatenate((self.bad_resids, resids[toas_bad]))
-    #     self.t = self.t[toas_good]
-
-    #     return self.t
-
-    def mad_filter2(self, threshold=3, max_iters=3): # mad is the robust estimate of std dev. thres of 3 corresponds to 99.7% confidence interval
+    def mad_filter2(self, threshold=3, max_iters=3, latest_toa_threshold=1e32): # mad is the robust estimate of std dev. thres of 3 corresponds to 99.7% confidence interval
         # get resids
         prefit_resids = Residuals(self.t, self.m)
         resids = np.array(prefit_resids.time_resids.to(u.s).value)
@@ -151,9 +145,9 @@ class pint_handler():
         toas_bad = np.where(np.abs(resids - median) >= mad_threshold)[0]
         toas_good = np.where(np.abs(resids - median) < mad_threshold)[0]
 
-        # sanity check: do not filter out the lastest 3 TOAs
+        # sanity check: do not filter out the lastest TOAs
         for i in toas_bad:
-            if i >= len(self.t) - 3:
+            if self.t.get_mjds().value[i] > latest_toa_threshold:
                 toas_good = np.append(toas_good, i)
                 toas_bad = np.delete(toas_bad, np.where(toas_bad == i))
 
@@ -174,128 +168,145 @@ class pint_handler():
         if max_iters == 0 or len(toas_bad) == 0:
             return self.t
             
-        return self.mad_filter2(threshold=threshold, max_iters=max_iters-1)
+        return self.mad_filter2(threshold=threshold, max_iters=max_iters-1, latest_toa_threshold=latest_toa_threshold)
 
-    def quantile_filter(self, threshold=0.95):
-        # get resids
-        prefit_resids = Residuals(self.t, self.m)
-        resids = np.abs(np.array(prefit_resids.time_resids))
+        # return self.t
 
-        # filter
-        toas_bad = np.where(resids > np.quantile(resids, threshold))[0]
-        toas_good = np.where(resids <= np.quantile(resids, threshold))[0]
-
-        # not filter out the lastest 3 TOAs
-        i_bad_toas_but_new = np.where(toas_bad >= len(self.t) - 3)[0]
-        toas_good = np.append(toas_good, toas_bad[i_bad_toas_but_new])
-        toas_bad = np.delete(toas_bad, i_bad_toas_but_new)
-
-        # get toas and mjds
-        self.logger.debug(f"Bad TOAs (quantile): {toas_bad}")
-        self.bad_toas += self.t[toas_bad]
-        self.bad_resids = np.concatenate((self.bad_resids, prefit_resids.time_resids[toas_bad]))
-        self.t = self.t[toas_good]
-
-        return self.t
-
-    def error_filter(self, threshold=0.01):
+    def error_filter(self, max_iters=3, z_score=3, latest_toa_threshold=1e32):
         # Get prefit residuals
         prefit_resids = Residuals(self.t, self.m)
 
-        # Cut errors
-        while True:
-            # get error_ok
-            threshold_phase = threshold * (1 / self.m.F0.value) * u.s
-            if threshold_phase < 15000 * u.us:
-                threshold_phase = 15000 * u.us
-            error_ok = self.t.get_errors() < threshold_phase.to(u.us)
+        # get residual errors in phase
+        errs = self.t.get_errors().to(u.s).value * self.m.F0.value
 
-            # filter
-            toas_bad = np.where(error_ok == False)[0]
-            toas_good = np.where(error_ok == True)[0]
+        # get threshold
+        median = np.median(errs)
+        mad_threshold = stats_utils.mad_outlier_thresholds(errs, z_score=z_score, return_interval=False)
+        
+        # get masks
+        toas_bad = np.where(np.abs(errs - median) >= mad_threshold)[0]
+        toas_good = np.where(np.abs(errs - median) < mad_threshold)[0]
 
-            # do not filter out more than 25% of points
-            if len(toas_bad) / len(error_ok) < 0.25:
-                break
-
-            threshold += 0.05
-            self.logger.warning(f"More than 25% of points were filtered out by the error filter. Lowering threshold to {threshold}")
-
+        # sanity check: do not filter out the lastest 3 TOAs
+        for toa_idx in toas_bad:
+            if self.t.get_mjds().value[toa_idx] > latest_toa_threshold:
+                toas_good = np.append(toas_good, toa_idx)
+                toas_bad = np.delete(toas_bad, np.where(toas_bad == toa_idx))
+        
         # get toas and mjds
         self.logger.debug(f"Bad TOAs (error): {toas_bad}")
         self.bad_toas += self.t[toas_bad]
         self.bad_resids = np.concatenate((self.bad_resids, prefit_resids.time_resids[toas_bad]))
         self.t = self.t[toas_good]
 
-        return self.t
-
-    
-    def dropout_chi2r_filter(self, threshold=30):
-        utils.print_info("Running dropout_chi2r_filter, the following PINT output is coming from dropout trials. ")
-
-        # Get chi2rs from dropout trials
-        with Pool(self.n_pools) as p:
-            dropout_chi2rs = list(tqdm.tqdm(p.map(self._dropout_filter_get_chi2rs, range(len(self.t))), total=len(self.t), desc="Dropout trials"))
-
-        # Fit model without dropout (i.e., postfit)
-        self_tmp = copy.deepcopy(self)
-        try:
-            self_tmp.fit(fitter="ls", clustering_fitter=False)
-            # no need to filter if chi2r < 1
-            if self_tmp.f.get_params_dict("all", "quantity")["CHI2R"].value < 1:
-                return self.t
-        except Exception as e:
-            self.logger.warning(f"Trial fit in dropout filter failed. ", e)
-
-        # If all chi2rs are the same value
-        if np.all(np.array(dropout_chi2rs) == dropout_chi2rs[0]):
-            self.logger.warning(f"Chi2r for all dropout trials are the same ({dropout_chi2rs[0]}). Not TOA will be removed. ")
+        if max_iters == 0 or len(toas_bad) == 0:
             return self.t
 
-        # calculate threshold
-        dropout_chi2rs = np.array(dropout_chi2rs)
-        # ref_chi2r = self_tmp.f.get_params_dict("all", "quantity")["CHI2R"].value
-        ref_chi2r = np.median(dropout_chi2rs)
-        # threshold_chi2r = ref_chi2r - median_abs_deviation(np.abs(dropout_chi2rs - ref_chi2r)) * threshold
-        threshold_chi2r = ref_chi2r - median_abs_deviation(np.abs(dropout_chi2rs)) * threshold
+        return self.error_filter(max_iters=max_iters-1, z_score=z_score, latest_toa_threshold=latest_toa_threshold)
 
-        # filter
-        toas_bad = np.where(dropout_chi2rs < threshold_chi2r)[0]
-        toas_good = np.where(dropout_chi2rs >= threshold_chi2r)[0]
+    # def mad_filter(self, threshold=7):
+    #     # get mad
+    #     resids = np.abs(np.array(self.prefit_resids))
+    #     mad = median_abs_deviation(resids)
 
-        # Sanity check: do not filter out the lastest 3 TOAs
-        if max(self.t.get_mjds().value) - min(self.t.get_mjds().value) < 60 or len(self.t.get_mjds()) < 30:
-            # do not include the lastest 3 TOAs in bad TOAs only if there's a huge gap in the lastest 3 TOAs
-            if self.check_toa_gaps(latest_n_days=3, threshold=30):
-                self.logger.warning("Huge gap ( > 30 days) in the lastest 3 TOAs. Do not filter the lastest 3 TOAs out since the model might not be able to fit the gap. ")
-                i_del = np.where(toas_bad >= len(self.t) - 3)[0]
-                toas_good = np.append(toas_good, toas_bad[i_del])
-                toas_bad = np.delete(toas_bad, i_del)
-        else:
-            # do not include the lastest 3 TOAs in bad TOAs
-            i_del = np.where(toas_bad >= len(self.t) - 3)[0]
-            toas_good = np.append(toas_good, toas_bad[i_del])
-            toas_bad = np.delete(toas_bad, i_del)
+    #     # filter
+    #     toas_bad = np.where((resids - np.median(resids)) / mad > threshold)[0]
+    #     toas_good = np.where((resids - np.median(resids)) / mad <= threshold)[0]
 
-        # # do not include the lastest 1 TOAs in bad TOAs
-        # i_del = np.where(toas_bad >= len(self.t) - 1)[0]
-        # toas_good = np.append(toas_good, toas_bad[i_del])
-        # toas_bad = np.delete(toas_bad, i_del)
+    #     # get toas and mjds
+    #     self.bad_toas += self.t[toas_bad]
+    #     self.bad_resids = np.concatenate((self.bad_resids, resids[toas_bad]))
+    #     self.t = self.t[toas_good]
 
-        # sanity check: if there are too many points get filtered out
-        if (len(toas_bad) / len(self.t)) > 0.25:
-            self.logger.warning(f"More than 25% of points were filtered out by the dropout filter. Only filter out points with top 25% dropout chi2r. ")
-            threshold_chi2r = np.percentile(dropout_chi2rs, 25)
-            toas_bad = np.where(dropout_chi2rs < threshold_chi2r)[0]
-            toas_good = np.where(dropout_chi2rs >= threshold_chi2r)[0]
+    #     return self.t
+
+    # def quantile_filter(self, threshold=0.95):
+    #     # get resids
+    #     prefit_resids = Residuals(self.t, self.m)
+    #     resids = np.abs(np.array(prefit_resids.time_resids))
+
+    #     # filter
+    #     toas_bad = np.where(resids > np.quantile(resids, threshold))[0]
+    #     toas_good = np.where(resids <= np.quantile(resids, threshold))[0]
+
+    #     # not filter out the lastest 3 TOAs
+    #     i_bad_toas_but_new = np.where(toas_bad >= len(self.t) - 3)[0]
+    #     toas_good = np.append(toas_good, toas_bad[i_bad_toas_but_new])
+    #     toas_bad = np.delete(toas_bad, i_bad_toas_but_new)
+
+    #     # get toas and mjds
+    #     self.logger.debug(f"Bad TOAs (quantile): {toas_bad}")
+    #     self.bad_toas += self.t[toas_bad]
+    #     self.bad_resids = np.concatenate((self.bad_resids, prefit_resids.time_resids[toas_bad]))
+    #     self.t = self.t[toas_good]
+
+    
+    # def dropout_chi2r_filter(self, threshold=30):
+    #     utils.print_info("Running dropout_chi2r_filter, the following PINT output is coming from dropout trials. ")
+
+    #     # Get chi2rs from dropout trials
+    #     with Pool(self.n_pools) as p:
+    #         dropout_chi2rs = list(tqdm.tqdm(p.map(self._dropout_filter_get_chi2rs, range(len(self.t))), total=len(self.t), desc="Dropout trials"))
+
+    #     # Fit model without dropout (i.e., postfit)
+    #     self_tmp = copy.deepcopy(self)
+    #     try:
+    #         self_tmp.fit(fitter="ls", clustering_fitter=False)
+    #         # no need to filter if chi2r < 1
+    #         if self_tmp.f.get_params_dict("all", "quantity")["CHI2R"].value < 1:
+    #             return self.t
+    #     except Exception as e:
+    #         self.logger.warning(f"Trial fit in dropout filter failed. ", e)
+
+    #     # If all chi2rs are the same value
+    #     if np.all(np.array(dropout_chi2rs) == dropout_chi2rs[0]):
+    #         self.logger.warning(f"Chi2r for all dropout trials are the same ({dropout_chi2rs[0]}). Not TOA will be removed. ")
+    #         return self.t
+
+    #     # calculate threshold
+    #     dropout_chi2rs = np.array(dropout_chi2rs)
+    #     # ref_chi2r = self_tmp.f.get_params_dict("all", "quantity")["CHI2R"].value
+    #     ref_chi2r = np.median(dropout_chi2rs)
+    #     # threshold_chi2r = ref_chi2r - median_abs_deviation(np.abs(dropout_chi2rs - ref_chi2r)) * threshold
+    #     threshold_chi2r = ref_chi2r - median_abs_deviation(np.abs(dropout_chi2rs)) * threshold
+
+    #     # filter
+    #     toas_bad = np.where(dropout_chi2rs < threshold_chi2r)[0]
+    #     toas_good = np.where(dropout_chi2rs >= threshold_chi2r)[0]
+
+    #     # Sanity check: do not filter out the lastest 3 TOAs
+    #     if max(self.t.get_mjds().value) - min(self.t.get_mjds().value) < 60 or len(self.t.get_mjds()) < 30:
+    #         # do not include the lastest 3 TOAs in bad TOAs only if there's a huge gap in the lastest 3 TOAs
+    #         if self.check_toa_gaps(latest_n_days=3, threshold=30):
+    #             self.logger.warning("Huge gap ( > 30 days) in the lastest 3 TOAs. Do not filter the lastest 3 TOAs out since the model might not be able to fit the gap. ")
+    #             i_del = np.where(toas_bad >= len(self.t) - 3)[0]
+    #             toas_good = np.append(toas_good, toas_bad[i_del])
+    #             toas_bad = np.delete(toas_bad, i_del)
+    #     else:
+    #         # do not include the lastest 3 TOAs in bad TOAs
+    #         i_del = np.where(toas_bad >= len(self.t) - 3)[0]
+    #         toas_good = np.append(toas_good, toas_bad[i_del])
+    #         toas_bad = np.delete(toas_bad, i_del)
+
+    #     # # do not include the lastest 1 TOAs in bad TOAs
+    #     # i_del = np.where(toas_bad >= len(self.t) - 1)[0]
+    #     # toas_good = np.append(toas_good, toas_bad[i_del])
+    #     # toas_bad = np.delete(toas_bad, i_del)
+
+    #     # sanity check: if there are too many points get filtered out
+    #     if (len(toas_bad) / len(self.t)) > 0.5:
+    #         self.logger.warning(f"More than 25% of points were filtered out by the dropout filter. Only filter out points with top 25% dropout chi2r. ")
+    #         threshold_chi2r = np.percentile(dropout_chi2rs, 25)
+    #         toas_bad = np.where(dropout_chi2rs < threshold_chi2r)[0]
+    #         toas_good = np.where(dropout_chi2rs >= threshold_chi2r)[0]
         
-        # get toas resid, err, and mjds
-        self.logger.debug(f"Bad TOAs (dropout): {toas_bad}")
-        self.bad_toas += self.t[toas_bad]
-        self.bad_resids = np.concatenate((self.bad_resids, Residuals(self.t, self.m).time_resids[toas_bad]))
-        self.t = self.t[toas_good]
+    #     # get toas resid, err, and mjds
+    #     self.logger.debug(f"Bad TOAs (dropout): {toas_bad}")
+    #     self.bad_toas += self.t[toas_bad]
+    #     self.bad_resids = np.concatenate((self.bad_resids, Residuals(self.t, self.m).time_resids[toas_bad]))
+    #     self.t = self.t[toas_good]
 
-        return self.t
+    #     return self.t
 
     def _dropout_filter_get_chi2rs(self, i):
         try:
@@ -605,7 +616,7 @@ class pint_handler():
                 self.logger.warning("Fitting failed or chi2r > 10. Try clustering fitter. ")
 
                 # Initialize clustering fitter
-                cf_m, cf_f, cf_passed = self.clustering_fitter(copy.deepcopy(this_m), copy.deepcopy(this_t), debug=True)
+                cf_m, cf_f, cf_passed = self.clustering_fitter(copy.deepcopy(this_m), copy.deepcopy(this_t))
 
                 # Check if clustering fitter passed
                 if cf_passed:
@@ -667,7 +678,7 @@ class pint_handler():
                 # get residuals
                 resids = Residuals(toas, this_model).time_resids.to(u.us).value
                 plt.plot(toas.get_mjds(), resids, "x")
-                plt.show()
+                # plt.show()
                 # print(len(toas))
         
         return this_model, fitter, True
