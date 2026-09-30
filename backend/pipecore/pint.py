@@ -184,8 +184,8 @@ class pint_handler():
         mad_threshold = stats_utils.mad_outlier_thresholds(errs, z_score=z_score, return_interval=False)
         
         # get masks
-        toas_bad = np.where(np.abs(errs - median) >= mad_threshold)[0]
-        toas_good = np.where(np.abs(errs - median) < mad_threshold)[0]
+        toas_bad = np.where(errs - median >= mad_threshold)[0]
+        toas_good = np.where(errs - median < mad_threshold)[0]
 
         # sanity check: do not filter out the lastest 3 TOAs
         for toa_idx in toas_bad:

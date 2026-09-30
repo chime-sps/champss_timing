@@ -298,6 +298,17 @@ class alias_utils():
         if self.su.n_stacked == 0:
             raise Exception("Stacking failed, no files stacked. This may be due to the input files being empty or all files being skipped due to failure in processing.")
 
+        # Update n_subints, n_bins, n_freqs based on the stacked data
+        if self.su.n_subs != self.n_subints:
+            self.n_subints = self.su.n_subs
+            self.logger.info(f"Updated n_subints from {self.n_subints} to {self.su.n_subs} from stacked data", layer=1)
+        if self.su.n_bins != self.n_bins:
+            self.n_bins = self.su.n_bins
+            self.logger.info(f"Updated n_bins from {self.n_bins} to {self.su.n_bins} from stacked data", layer=1)
+        if self.su.n_freqs != self.n_freqs:
+            self.n_freqs = self.su.n_freqs
+            self.logger.info(f"Updated n_freqs from {self.n_freqs} to {self.su.n_freqs} from stacked data", layer=1)
+
     def get_shift(self, std_profile, power, n_steps=2000):
         # Initialize shift finder
         shift_finder = ShiftFinder(std_profile, power)
