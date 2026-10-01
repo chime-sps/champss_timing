@@ -10,8 +10,8 @@ from ..fitters.mcmc import MCMCFitter
 
 # Other packages
 from multiprocessing import Pool
-from scipy.stats import median_abs_deviation
 from scipy.stats import f as f_stats
+from scipy.stats import median_abs_deviation, norm
 import numpy as np
 import shutil
 import time
@@ -87,63 +87,203 @@ class pint_handler():
             self.logger.debug("Less than 5 TOAs. Skipping filtering. ")
             return 
         
-        # Get when is the latest 3 TOAs
-        mjds = self.t.get_mjds().value
-        mjds.sort()
-        latest_toa_threshold = np.mean([mjds[-3], mjds[-4]])
-        self.logger.debug(f"Will not filter out TOAs later than MJD {latest_toa_threshold}")
+        # Get prefit residuals and errors
+        prefit_resids = Residuals(self.t, self.m)
+        resids_vals = np.array(prefit_resids.time_resids.to(u.s).value)
+        resids_errs = np.array(prefit_resids.get_data_error().to(u.s).value)
+        mjds = np.array(self.t.get_mjds().value)
+
+        # Generate initial TOA mask
+        mask = np.ones(len(self.t), dtype=bool)
+
+        # EM filter
+        mask = self.em_filter(mask, resids_vals, resids_errs)
         
         # Error filter
-        self.error_filter(latest_toa_threshold=latest_toa_threshold)
+        mask = self.error_filter(mask, resids_vals, resids_errs)
 
         # MAD filter
-        self.mad_filter2(latest_toa_threshold=latest_toa_threshold)
-
-        # MAD filter
-        # if mad:
-            # self.mad_filter()
-
-        # if dropout:
-        #     # if len(self.t) > 90 and self.m.CHI2R.value < 5:
-        #         # Quantile filter
-        #         # if quantile:
-        #         #     self.quantile_filter()
-        #     if (
-        #         "F0" in self.get_unfreezed_params() and 
-        #         "F1" in self.get_unfreezed_params() and
-        #         "RAJ" in self.get_unfreezed_params() and
-        #         "DECJ" in self.get_unfreezed_params()
-        #     ):
-        #         self.mad_filter2()
-        #     elif len(self.t) > 10:
-        #         self.mad_filter2()
-        #     else:
-        #         # Dropout filter
-        #         self.dropout_chi2r_filter()
+        mask = self.mad_filter2(mask, resids_vals, resids_errs)
         
+        # Sanity check: do not filter out the latest TOAs
+        mjds_sorted = np.sort(mjds)
+        latest_toa_threshold = np.mean([mjds_sorted[-3], mjds_sorted[-4]])
+        mask = mask | (mjds > latest_toa_threshold)
+        self.logger.debug(f"Will not filter out TOAs later than MJD {latest_toa_threshold}")
 
-    def mad_filter2(self, threshold=3, max_iters=3, latest_toa_threshold=1e32): # mad is the robust estimate of std dev. thres of 3 corresponds to 99.7% confidence interval
-        # get resids
-        prefit_resids = Residuals(self.t, self.m)
-        resids = np.array(prefit_resids.time_resids.to(u.s).value)
-        resids_errs = self.t.table["error"].to(u.s).value
+        # Sanity check: do not filter out TOAs with small residuals relative to the spin period (1% phase) or errors (50% error)
+        mask |= (np.abs(resids_vals) * self.m.F0.value < 0.01) | (np.abs(resids_vals) < 0.5 * resids_errs)
 
-        # # get mad and median
-        # mad = median_abs_deviation(resids)
-        # median = np.median(resids)
+        # Apply mask
+        self.bad_toas += self.t[~mask]
+        self.bad_resids = np.concatenate((self.bad_resids, prefit_resids.time_resids[~mask]))
+        self.t = self.t[mask]
 
-        # # scale the mad to get the threshold
-        # mad_threshold = threshold * mad
+        return
 
-        # get median
-        median = np.median(resids)
+    def em_filter(self, mask, vals, errs, threshold=0.5, n_iter=256):
+        '''
+        Filtering TOAs using the Expectation-Maximization algorithm. 
+        Args:
+            mask (np.ndarray): Current mask of TOAs.
+            vals (np.ndarray): Residual values of TOAs.
+            errs (np.ndarray): Errors of TOAs.
+            threshold (float): Probability threshold for considering a TOA as inlier.
+            n_iter (int): Number of EM iterations.
 
-        # get threshold
-        mad_threshold = stats_utils.mad_outlier_thresholds(resids, z_score=threshold, return_interval=False)
+        Returns:
+            np.ndarray: Updated mask after EM filtering.
+        '''
+
+        # Initial guess for uniform distribution
+        a, b = np.min(vals[mask]), np.max(vals[mask])
+        if b == a:
+            self.logger.warning("Uniform distribution has zero width. Stopping EM without masking.")
+            return mask
+
+        # Initial guess for Gaussian distribution
+        mu, sigma = 0, vals[mask].std() / 2
+
+        # Initial guess for the fraction of toas that are gaussian
+        f_gau = 0.5
+
+        for _ in range(n_iter):
+            # [E-step]
+            # Get the probability of, given residual r, it comes from gaussian
+            # Using Bayes' theorem: 
+            # P(gaussian|r) = P(r|gaussian) * P(gaussian) / P(r), where
+            # - P(r|gaussian): given the assumed gaussian distribution [mu, sigma], what is the likelihood of getting r
+            # - P(gaussian): the probability that r is from gaussian (i.e., "fraction_gaussian")
+            # - P(r): the overall probability of getting r (from both distributions), 
+            #         which is P(r|gaussian)*P(gaussian) + P(r|uniform)*(1-P(gaussian)). 
+
+            # P(r|gaussian)
+            p_r_gau = norm.pdf(vals[mask], mu, sigma)
+
+            # P(r|uniform)
+            p_r_uni = 1 / (b - a)
+
+            # P(gaussian|r)
+            p_gau_r = (f_gau * p_r_gau) / (p_r_gau * f_gau + p_r_uni * (1 - f_gau))
+
+            # [M-step] 
+            # Given P(gaussian|r): 
+            # - P(gaussian): the mean of P(gaussian|r) given many r's
+            # - mu and sigma: the weighted mean and standard deviation of vals using P(gaussian|r) as weights
+
+            # P(gaussian)
+            f_gau = np.mean(p_gau_r)
+            if f_gau >= 1:
+                self.logger.warning("Fraction of Gaussian components reached 1. Stopping EM without masking.")
+                return mask
+
+            # mu and sigma
+            mu = np.sum(p_gau_r * vals[mask]) / np.sum(p_gau_r)
+            sigma = np.sqrt(
+                np.sum(p_gau_r * (vals[mask] - mu)**2) / np.sum(p_gau_r)
+            )
+
+            # sanity check for mu and sigma
+            if sigma <= 0:
+                self.logger.warning("Estimated Gaussian sigma is non-positive. Stopping EM without masking.")
+                return mask
+            if mu <= a or mu >= b:
+                self.logger.warning("Estimated Gaussian mu is out of bounds. Stopping EM without masking.")
+                return mask
+
+        # Get this mask
+        this_mask = p_gau_r > threshold
+
+        # Create a new overall mask
+        new_mask = mask & this_mask
+
+        self.logger.debug(f"Outlier TOAs (em): {np.where(mask & ~new_mask)[0]}")
+
+        return new_mask
+    
+    def error_filter(self, mask, vals, errs, z_score=3, max_iters=3):
+        '''
+        Filtering TOAs based on their errors using the MAD.
+
+        Args:
+            mask (np.ndarray): Current mask of TOAs.
+            vals (np.ndarray): Residual values of TOAs.
+            errs (np.ndarray): Errors of TOAs.
+            z_score (float): Z-score threshold for outlier detection.
+            max_iters (int): Maximum number of iterations for the filtering process.
+
+        Returns:
+            np.ndarray: Updated mask after error filtering.
+        '''
+        
+        # Sanity check on number of remaining TOAs
+        if mask.sum() < 5:
+            self.logger.debug("Less than 5 TOAs remaining. Skipping error filter.")
+            return mask
+        
+        # Normalize error by subtracting the median
+        errs_log = np.log10(errs) # Take the logarithm to make the distribution gaussian-ish
+        errs_log = errs_log - np.median(errs_log[mask])
+
+        # Get threshold
+        mad_threshold = stats_utils.mad_outlier_thresholds(errs_log[mask], z_score=z_score, return_interval=False)
+        if not np.isfinite(mad_threshold) or mad_threshold <= 0:
+            self.logger.debug("Invalid MAD threshold. Skipping error filter.")
+            return mask
+
+        # Get this mask
+        this_mask = (errs_log < mad_threshold)
+
+        # Create a new overall mask
+        new_mask = mask & this_mask
+
+        self.logger.debug(f"Outlier TOAs (error): {np.where(mask & ~new_mask)[0]}")
+        if max_iters <= 1 or np.array_equal(new_mask, mask):
+            return new_mask
+
+        return self.error_filter(new_mask, vals, errs, z_score=z_score, max_iters=max_iters-1)
+
+    def mad_filter2(self, mask, vals, errs, threshold=3, max_iters=3): # mad is the robust estimate of std dev. thres of 3 corresponds to 99.7% confidence interval
+        '''
+        Filtering TOAs based on their residuals using the MAD.
+
+        Args:
+            mask (np.ndarray): Current mask of TOAs.
+            vals (np.ndarray): Residual values of TOAs.
+            errs (np.ndarray): Errors of TOAs.
+            threshold (float): Z-score threshold for outlier detection.
+            max_iters (int): Maximum number of iterations for the filtering process.
+
+        Returns:
+            np.ndarray: Updated mask after MAD filtering.
+        '''
+
+        # Sanity check on number of remaining TOAs
+        if mask.sum() < 5:
+            self.logger.debug("Less than 5 TOAs remaining. Skipping MAD filter.")
+            return mask
+
+        # Get threshold
+        mad_threshold = stats_utils.mad_outlier_thresholds(vals[mask], z_score=threshold, return_interval=False)
+        if not np.isfinite(mad_threshold) or mad_threshold <= 0:
+            self.logger.debug("Invalid MAD threshold. Skipping MAD filter.")
+            return mask
+
+        # Get this mask
+        this_mask = (np.abs(vals) < mad_threshold)
+
+        # Create a new overall mask
+        new_mask = mask & this_mask
+
+        self.logger.debug(f"Outlier TOAs (mad): {np.where(mask & ~new_mask)[0]}")
+        if max_iters <= 1 or np.array_equal(new_mask, mask):
+            return new_mask
+
+        return self.mad_filter2(new_mask, vals, errs, threshold=threshold, max_iters=max_iters-1)
         
         # filter data
-        toas_bad = np.where(np.abs(resids - median) >= mad_threshold)[0]
-        toas_good = np.where(np.abs(resids - median) < mad_threshold)[0]
+        toas_bad = np.where(np.abs(vals) >= mad_threshold)[0]
+        toas_good = np.where(np.abs(vals) < mad_threshold)[0]
 
         # sanity check: do not filter out the lastest TOAs
         for i in toas_bad:
@@ -154,7 +294,7 @@ class pint_handler():
         # sanity check: do not filter out toas within 1.5 times its toa error or 1% of the phase
         P0 = (1 / self.m.F0.value)
         for i in toas_bad:
-            if np.abs(resids[i]) / P0 < 0.015 or np.abs(resids[i]) < resids_errs[i] * 1.5:
+            if np.abs(resids[i]) / P0 < 0.01 or np.abs(resids[i]) < resids_errs[i] * 1.5:
                 toas_good = np.append(toas_good, i)
                 toas_bad = np.delete(toas_bad, np.where(toas_bad == i))
 
@@ -165,44 +305,12 @@ class pint_handler():
         self.t = self.t[toas_good]
 
         # Breaking the iteration if no more bad TOAs or max iters reached
-        if max_iters == 0 or len(toas_bad) == 0:
+        if max_iters <= 1 or len(toas_bad) == 0:
             return self.t
             
         return self.mad_filter2(threshold=threshold, max_iters=max_iters-1, latest_toa_threshold=latest_toa_threshold)
 
         # return self.t
-
-    def error_filter(self, max_iters=3, z_score=3, latest_toa_threshold=1e32):
-        # Get prefit residuals
-        prefit_resids = Residuals(self.t, self.m)
-
-        # get residual errors in phase
-        errs = self.t.get_errors().to(u.s).value * self.m.F0.value
-
-        # get threshold
-        median = np.median(errs)
-        mad_threshold = stats_utils.mad_outlier_thresholds(errs, z_score=z_score, return_interval=False)
-        
-        # get masks
-        toas_bad = np.where(errs - median >= mad_threshold)[0]
-        toas_good = np.where(errs - median < mad_threshold)[0]
-
-        # sanity check: do not filter out the lastest 3 TOAs
-        for toa_idx in toas_bad:
-            if self.t.get_mjds().value[toa_idx] > latest_toa_threshold:
-                toas_good = np.append(toas_good, toa_idx)
-                toas_bad = np.delete(toas_bad, np.where(toas_bad == toa_idx))
-        
-        # get toas and mjds
-        self.logger.debug(f"Bad TOAs (error): {toas_bad}")
-        self.bad_toas += self.t[toas_bad]
-        self.bad_resids = np.concatenate((self.bad_resids, prefit_resids.time_resids[toas_bad]))
-        self.t = self.t[toas_good]
-
-        if max_iters == 0 or len(toas_bad) == 0:
-            return self.t
-
-        return self.error_filter(max_iters=max_iters-1, z_score=z_score, latest_toa_threshold=latest_toa_threshold)
 
     # def mad_filter(self, threshold=7):
     #     # get mad
@@ -439,8 +547,7 @@ class pint_handler():
     
     def check_toa_gaps(self, latest_n_days=2, threshold=15):
         # Get MJDs and sort them by time
-        mjds = self.t.get_mjds().value
-        mjds.sort()
+        mjds = np.sort(self.t.get_mjds().value)
         mjds = mjds[-latest_n_days:]
 
         # Sanity check if there's more than 1 TOA in the latest n days
@@ -644,8 +751,7 @@ class pint_handler():
 
     def clustering_fitter(self, m, t, clustering_threshold=12, debug=False):
         # Get mjds
-        mjds = t.get_mjds().value
-        mjds.sort()
+        mjds = np.sort(self.t.get_mjds().value)
         mjd_median, mjd_mad = self.get_typical_observation_interval(mjds)
 
         # Clustering
