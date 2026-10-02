@@ -104,15 +104,16 @@ class pint_handler():
 
         # MAD filter
         mask = self.mad_filter2(mask, resids_vals, resids_errs)
+
+        # Sanity check: do not filter out TOAs with larger error but still close enough in terms of residuals:
+        #     residuals relative to the spin period (1.5 std) AND errors (1.5 sigma error)
+        mask |= (np.abs(resids_vals) < 3 * np.std(resids_vals[mask])) & (np.abs(resids_vals) < 1.5 * resids_errs)
         
         # Sanity check: do not filter out the latest TOAs
         mjds_sorted = np.sort(mjds)
         latest_toa_threshold = np.mean([mjds_sorted[-3], mjds_sorted[-4]])
         mask = mask | (mjds > latest_toa_threshold)
         self.logger.debug(f"Will not filter out TOAs later than MJD {latest_toa_threshold}")
-
-        # Sanity check: do not filter out TOAs with small residuals relative to the spin period (1% phase) or errors (50% error)
-        mask |= (np.abs(resids_vals) * self.m.F0.value < 0.01) | (np.abs(resids_vals) < 0.5 * resids_errs)
 
         # Apply mask
         self.bad_toas += self.t[~mask]
