@@ -315,7 +315,7 @@ class pint_handler():
         # fit current model
         try:
             self_current.filter()
-            self_current.fit(fitter="ls")
+            self_current.fit(fitter="ls", clustering_fitter=False)
         except:
             self.logger.warning("Failed to fit for TOAs with current model. ")
             return False, 1.0
@@ -326,7 +326,7 @@ class pint_handler():
             self_additional.unfreeze(param)
         try:
             self_additional.filter()
-            self_additional.fit(fitter="ls")
+            self_additional.fit(fitter="ls", clustering_fitter=False)
         except:
             self.logger.warning("F-test failed. ")
             return False, 1.0
