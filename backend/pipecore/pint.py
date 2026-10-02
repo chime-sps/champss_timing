@@ -48,7 +48,8 @@ class pint_handler():
         self.f_status = None
         self.prefit_resids = None
         self.bad_toas = []
-        self.bad_resids = []
+        self.bad_resids_prefit = {"vals": [], "errs": []}
+        self.bad_resids_postfit = {"vals": [], "errs": []}
 
         self.initialized = False
         if initialize:
@@ -76,7 +77,10 @@ class pint_handler():
         # Run prefit
         self.prefit_resids = Residuals(self.t, self.m)
         self.bad_toas = self.t[0:0]
-        self.bad_resids = self.prefit_resids.time_resids[self.bad_toas]
+        self.bad_resids_prefit["vals"] = self.prefit_resids.time_resids[self.bad_toas]
+        self.bad_resids_prefit["errs"] = self.prefit_resids.get_data_error(scaled=True)[self.bad_toas]
+        self.bad_resids_postfit["vals"] = self.prefit_resids.time_resids[self.bad_toas]
+        self.bad_resids_postfit["errs"] = self.prefit_resids.get_data_error(scaled=True)[self.bad_toas]
 
         # Set initialized
         self.initialized = True
@@ -90,7 +94,7 @@ class pint_handler():
         # Get prefit residuals and errors
         prefit_resids = Residuals(self.t, self.m)
         resids_vals = np.array(prefit_resids.time_resids.to(u.s).value)
-        resids_errs = np.array(prefit_resids.get_data_error().to(u.s).value)
+        resids_errs = np.array(prefit_resids.get_data_error(scaled=True).to(u.s).value)
         mjds = np.array(self.t.get_mjds().value)
 
         # Generate initial TOA mask
@@ -117,12 +121,13 @@ class pint_handler():
 
         # Apply mask
         self.bad_toas += self.t[~mask]
-        self.bad_resids = np.concatenate((self.bad_resids, prefit_resids.time_resids[~mask]))
+        self.bad_resids_prefit["vals"] = np.concatenate((self.bad_resids_prefit["vals"], prefit_resids.time_resids[~mask]))
+        self.bad_resids_prefit["errs"] = np.concatenate((self.bad_resids_prefit["errs"], prefit_resids.get_data_error(scaled=True)[~mask]))
         self.t = self.t[mask]
 
         return
 
-    def em_filter(self, mask, vals, errs, threshold=0.5, n_iter=256):
+    def em_filter(self, mask, vals, errs, threshold=0.2, n_iter=256):
         '''
         Filtering TOAs using the Expectation-Maximization algorithm. 
         Args:
@@ -281,158 +286,6 @@ class pint_handler():
             return new_mask
 
         return self.mad_filter2(new_mask, vals, errs, threshold=threshold, max_iters=max_iters-1)
-        
-        # filter data
-        toas_bad = np.where(np.abs(vals) >= mad_threshold)[0]
-        toas_good = np.where(np.abs(vals) < mad_threshold)[0]
-
-        # sanity check: do not filter out the lastest TOAs
-        for i in toas_bad:
-            if self.t.get_mjds().value[i] > latest_toa_threshold:
-                toas_good = np.append(toas_good, i)
-                toas_bad = np.delete(toas_bad, np.where(toas_bad == i))
-
-        # sanity check: do not filter out toas within 1.5 times its toa error or 1% of the phase
-        P0 = (1 / self.m.F0.value)
-        for i in toas_bad:
-            if np.abs(resids[i]) / P0 < 0.01 or np.abs(resids[i]) < resids_errs[i] * 1.5:
-                toas_good = np.append(toas_good, i)
-                toas_bad = np.delete(toas_bad, np.where(toas_bad == i))
-
-        # get toas and mjds
-        self.logger.debug(f"Bad TOAs (mad): {toas_bad}")
-        self.bad_toas += self.t[toas_bad]
-        self.bad_resids = np.concatenate((self.bad_resids, prefit_resids.time_resids[toas_bad]))
-        self.t = self.t[toas_good]
-
-        # Breaking the iteration if no more bad TOAs or max iters reached
-        if max_iters <= 1 or len(toas_bad) == 0:
-            return self.t
-            
-        return self.mad_filter2(threshold=threshold, max_iters=max_iters-1, latest_toa_threshold=latest_toa_threshold)
-
-        # return self.t
-
-    # def mad_filter(self, threshold=7):
-    #     # get mad
-    #     resids = np.abs(np.array(self.prefit_resids))
-    #     mad = median_abs_deviation(resids)
-
-    #     # filter
-    #     toas_bad = np.where((resids - np.median(resids)) / mad > threshold)[0]
-    #     toas_good = np.where((resids - np.median(resids)) / mad <= threshold)[0]
-
-    #     # get toas and mjds
-    #     self.bad_toas += self.t[toas_bad]
-    #     self.bad_resids = np.concatenate((self.bad_resids, resids[toas_bad]))
-    #     self.t = self.t[toas_good]
-
-    #     return self.t
-
-    # def quantile_filter(self, threshold=0.95):
-    #     # get resids
-    #     prefit_resids = Residuals(self.t, self.m)
-    #     resids = np.abs(np.array(prefit_resids.time_resids))
-
-    #     # filter
-    #     toas_bad = np.where(resids > np.quantile(resids, threshold))[0]
-    #     toas_good = np.where(resids <= np.quantile(resids, threshold))[0]
-
-    #     # not filter out the lastest 3 TOAs
-    #     i_bad_toas_but_new = np.where(toas_bad >= len(self.t) - 3)[0]
-    #     toas_good = np.append(toas_good, toas_bad[i_bad_toas_but_new])
-    #     toas_bad = np.delete(toas_bad, i_bad_toas_but_new)
-
-    #     # get toas and mjds
-    #     self.logger.debug(f"Bad TOAs (quantile): {toas_bad}")
-    #     self.bad_toas += self.t[toas_bad]
-    #     self.bad_resids = np.concatenate((self.bad_resids, prefit_resids.time_resids[toas_bad]))
-    #     self.t = self.t[toas_good]
-
-    
-    # def dropout_chi2r_filter(self, threshold=30):
-    #     utils.print_info("Running dropout_chi2r_filter, the following PINT output is coming from dropout trials. ")
-
-    #     # Get chi2rs from dropout trials
-    #     with Pool(self.n_pools) as p:
-    #         dropout_chi2rs = list(tqdm.tqdm(p.map(self._dropout_filter_get_chi2rs, range(len(self.t))), total=len(self.t), desc="Dropout trials"))
-
-    #     # Fit model without dropout (i.e., postfit)
-    #     self_tmp = copy.deepcopy(self)
-    #     try:
-    #         self_tmp.fit(fitter="ls", clustering_fitter=False)
-    #         # no need to filter if chi2r < 1
-    #         if self_tmp.f.get_params_dict("all", "quantity")["CHI2R"].value < 1:
-    #             return self.t
-    #     except Exception as e:
-    #         self.logger.warning(f"Trial fit in dropout filter failed. ", e)
-
-    #     # If all chi2rs are the same value
-    #     if np.all(np.array(dropout_chi2rs) == dropout_chi2rs[0]):
-    #         self.logger.warning(f"Chi2r for all dropout trials are the same ({dropout_chi2rs[0]}). Not TOA will be removed. ")
-    #         return self.t
-
-    #     # calculate threshold
-    #     dropout_chi2rs = np.array(dropout_chi2rs)
-    #     # ref_chi2r = self_tmp.f.get_params_dict("all", "quantity")["CHI2R"].value
-    #     ref_chi2r = np.median(dropout_chi2rs)
-    #     # threshold_chi2r = ref_chi2r - median_abs_deviation(np.abs(dropout_chi2rs - ref_chi2r)) * threshold
-    #     threshold_chi2r = ref_chi2r - median_abs_deviation(np.abs(dropout_chi2rs)) * threshold
-
-    #     # filter
-    #     toas_bad = np.where(dropout_chi2rs < threshold_chi2r)[0]
-    #     toas_good = np.where(dropout_chi2rs >= threshold_chi2r)[0]
-
-    #     # Sanity check: do not filter out the lastest 3 TOAs
-    #     if max(self.t.get_mjds().value) - min(self.t.get_mjds().value) < 60 or len(self.t.get_mjds()) < 30:
-    #         # do not include the lastest 3 TOAs in bad TOAs only if there's a huge gap in the lastest 3 TOAs
-    #         if self.check_toa_gaps(latest_n_days=3, threshold=30):
-    #             self.logger.warning("Huge gap ( > 30 days) in the lastest 3 TOAs. Do not filter the lastest 3 TOAs out since the model might not be able to fit the gap. ")
-    #             i_del = np.where(toas_bad >= len(self.t) - 3)[0]
-    #             toas_good = np.append(toas_good, toas_bad[i_del])
-    #             toas_bad = np.delete(toas_bad, i_del)
-    #     else:
-    #         # do not include the lastest 3 TOAs in bad TOAs
-    #         i_del = np.where(toas_bad >= len(self.t) - 3)[0]
-    #         toas_good = np.append(toas_good, toas_bad[i_del])
-    #         toas_bad = np.delete(toas_bad, i_del)
-
-    #     # # do not include the lastest 1 TOAs in bad TOAs
-    #     # i_del = np.where(toas_bad >= len(self.t) - 1)[0]
-    #     # toas_good = np.append(toas_good, toas_bad[i_del])
-    #     # toas_bad = np.delete(toas_bad, i_del)
-
-    #     # sanity check: if there are too many points get filtered out
-    #     if (len(toas_bad) / len(self.t)) > 0.5:
-    #         self.logger.warning(f"More than 25% of points were filtered out by the dropout filter. Only filter out points with top 25% dropout chi2r. ")
-    #         threshold_chi2r = np.percentile(dropout_chi2rs, 25)
-    #         toas_bad = np.where(dropout_chi2rs < threshold_chi2r)[0]
-    #         toas_good = np.where(dropout_chi2rs >= threshold_chi2r)[0]
-        
-    #     # get toas resid, err, and mjds
-    #     self.logger.debug(f"Bad TOAs (dropout): {toas_bad}")
-    #     self.bad_toas += self.t[toas_bad]
-    #     self.bad_resids = np.concatenate((self.bad_resids, Residuals(self.t, self.m).time_resids[toas_bad]))
-    #     self.t = self.t[toas_good]
-
-    #     return self.t
-
-    def _dropout_filter_get_chi2rs(self, i):
-        try:
-            # copy self
-            self_tmp = copy.deepcopy(self)
-
-            # remove toa
-            self_tmp.t = self_tmp.t[:i] + self_tmp.t[i+1:]
-
-            # fit
-            f_tmp = WLSFitter(self_tmp.t, self_tmp.m)
-            f_tmp.fit_toas()
-
-            return f_tmp.get_params_dict("all", "quantity")["CHI2R"].value
-        except Exception as e:
-            self.logger.warning(f"Dropout trial failed for TOA {i}. ", e)
-            return 1e64
     
     def f_test(self, additional_params, p_value_threshold=0.05, beamsize=0.87376064): # chime beam size
         # Ref: [1] https://sites.duke.edu/bossbackup/files/2013/02/NonLinSummary.pdf
@@ -519,32 +372,6 @@ class pint_handler():
             return False, p_value
         
         return True, p_value
-
-
-    def freeze(self, param):
-        if not self.initialized:
-            self.initialize()
-
-        self.m[param].frozen = True
-
-    def unfreeze(self, param):
-        if not self.initialized:
-            self.initialize()
-
-        self.m[param].frozen = False
-
-    def freeze_all(self):
-        if not self.initialized:
-            self.initialize()
-
-        for param in self.m.params:
-            self.m[param].frozen = True
-    
-    def get_unfreezed_params(self):
-        if not self.initialized:
-            self.initialize()
-
-        return self.m.free_params
     
     def check_toa_gaps(self, latest_n_days=2, threshold=15):
         # Get MJDs and sort them by time
@@ -738,6 +565,12 @@ class pint_handler():
                     else:
                         self.logger.error("Clustering fitter is not better. ")
 
+        # Calculate residuals for bad toas
+        if hasattr(self, "f"):
+            bad_residuals = Residuals(self.bad_toas, self.f.model)
+            self.bad_resids_postfit["vals"] = bad_residuals.time_resids
+            self.bad_resids_postfit["errs"] = bad_residuals.get_data_error(scaled=True)
+
     def get_typical_observation_interval(self, mjds):
         mjds = sorted(mjds)
         
@@ -789,8 +622,6 @@ class pint_handler():
                 # print(len(toas))
         
         return this_model, fitter, True
-
-    
 
     def nearest_search_fitter(self, m, t, clustering_window=12, debug=False):
         '''
@@ -910,6 +741,31 @@ class pint_handler():
         self.logger.success("Clustering fitter finished successfully. ")
         return this_model, this_fitter, True
 
+    def freeze(self, param):
+        if not self.initialized:
+            self.initialize()
+
+        self.m[param].frozen = True
+
+    def unfreeze(self, param):
+        if not self.initialized:
+            self.initialize()
+
+        self.m[param].frozen = False
+
+    def freeze_all(self):
+        if not self.initialized:
+            self.initialize()
+
+        for param in self.m.params:
+            self.m[param].frozen = True
+    
+    def get_unfreezed_params(self):
+        if not self.initialized:
+            self.initialize()
+
+        return self.m.free_params
+
     def plot(self, savefig=None):
         if not self.initialized:
             self.initialize()
@@ -930,46 +786,74 @@ class pint_handler():
         if isinstance(self.f, MCMCFitter):
             return self.f.plot(savefig=savefig) # use MCMC plot function
 
-        # Get residuals
-        resids = Residuals(self.t, self.m)
-        rs = resids.time_resids
-        rs_err = resids.get_data_error(scaled=True)
-        xt = self.t.get_mjds()
+        # Calculate prefit residuals
+        prefit_resids = Residuals(self.t, self.m)
+        prefit_resids_vals = prefit_resids.time_resids
+        prefit_resids_errs = prefit_resids.get_data_error(scaled=True)
+        prefit_mjds = self.t.get_mjds()
+
+        # Calculate post-fit residuals if the fitter exists
+        if self.f:
+            postfit_resids = self.f.resids.time_resids
+            postfit_resids_errs = self.f.resids.get_data_error(scaled=True)
+            postfit_mjds = self.t.get_mjds()
 
         # Initialize the figure
-        plt.figure()
+        fig, ax = plt.subplots(2, 1, sharex=True, figsize=(10, 6))
 
         # Plot pre-fit residuals
-        plt.errorbar(
-            xt.value,
-            rs.to(u.us).value,
-            self.t.get_errors().to(u.us).value,
+        ax[0].errorbar(
+            prefit_mjds,
+            prefit_resids_vals.to(u.us).value,
+            prefit_resids_errs.to(u.us).value,
             fmt="x",
-            label="Pre-fit",
-            alpha=0.55, 
             c="k", 
             capsize=3
         )
+        ax[0].errorbar(
+            self.bad_toas.get_mjds(),
+            self.bad_resids_prefit["vals"].to(u.us).value,
+            self.bad_resids_prefit["errs"].to(u.us).value,
+            fmt="x",
+            label="Bad TOAs",
+            c="r",
+            capsize=3
+        )
+        ax[0].legend()
+        ax[0].set_ylabel("Residual ($\\rm \\mu s$)")
+        ax[0].set_title("Pre-fit Residuals")
+        ax[0].grid(True)
 
         # Plot post-fit residuals
         if(self.f != False):
-            plt.errorbar(
-                xt.value,
-                self.f.resids.time_resids.to(u.us).value,
-                self.f.resids.get_data_error(scaled=True).to(u.us).value,
-                fmt="x",
-                label="Post-fit", 
-                alpha=0.75, 
-                c="r", 
+            ax[1].errorbar(
+                postfit_mjds,
+                postfit_resids.to(u.us).value,
+                postfit_resids_errs.to(u.us).value,
+                fmt="x", 
+                c="k", 
                 capsize=3
             )
+            ax[1].errorbar(
+                self.bad_toas.get_mjds(),
+                self.bad_resids_postfit["vals"].to(u.us).value,
+                self.bad_resids_postfit["errs"].to(u.us).value,
+                fmt="x",
+                label="Bad TOAs",
+                c="r",
+                capsize=3
+            )
+            ax[1].legend()
+            ax[1].set_ylabel("Residual ($\\rm \\mu s$)")
+            ax[1].set_xlabel("MJD")
+            ax[1].set_title("Post-fit Residuals")
+            ax[1].grid(True)
 
-        # Title, labels, etc. 
-        plt.title(f"{self.m.PSR.value} Timing Residuals")
-        plt.xlabel("MJD")
-        plt.ylabel("Residual ($\\rm \\mu s$)")
-        plt.grid()
-        plt.legend()
+            # Set the same scale as the pre-fit residuals
+            ylim_lower = min([ax[0].get_ylim()[0], ax[1].get_ylim()[0]])
+            ylim_upper = max([ax[0].get_ylim()[1], ax[1].get_ylim()[1]])
+            ax[0].set_ylim(ylim_lower, ylim_upper)
+            ax[1].set_ylim(ylim_lower, ylim_upper)
 
         # Save the figure
         plt.tight_layout()
@@ -1003,3 +887,4 @@ class pint_handler():
             return f"# Fitting failed. \n# Error: {self.f['error']}"
         
         return self.f.model.as_parfile()
+        
