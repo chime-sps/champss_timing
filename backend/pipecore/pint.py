@@ -7,6 +7,7 @@ from pint.residuals import Residuals
 # Fitters
 from ..fitters.wls import WLSFitter
 from ..fitters.mcmc import MCMCFitter
+from ..fitters.clustering import ClusteringFitter
 
 # Other packages
 from multiprocessing import Pool
@@ -291,7 +292,7 @@ class pint_handler():
         # Ref: [1] https://sites.duke.edu/bossbackup/files/2013/02/NonLinSummary.pdf
         #      [2] https://online.stat.psu.edu/stat501/lesson/6/6.2
 
-        utils.print_info(f"Running f_test for {additional_params}, the following PINT output is coming from f_test trials. ")
+        self.logger.info(f"Running f_test for {additional_params}, the following PINT output is coming from f_test trials. ")
 
         def get_rss(resids):
             '''
@@ -307,8 +308,11 @@ class pint_handler():
             '''
             return np.sum([resid**2 for resid in resids])
 
-        # fit current model
+        # make a copy of self
         self_current = copy.deepcopy(self)
+        self_current.logger = self.logger.copy()
+
+        # fit current model
         try:
             self_current.filter()
             self_current.fit(fitter="ls")
@@ -446,7 +450,7 @@ class pint_handler():
         f.plot(savefig=savefig)
         self.logger.debug(f"MCMC report saved to {savefig}")
         
-    def fit(self, raise_exception=True, fitter="ls", maxiter=100, nwalkers=50, nsteps=1500, clustering_fitter=True):
+    def fit(self, raise_exception=True, fitter="ls", maxiter=10, nwalkers=50, nsteps=1500, clustering_fitter=True):
         '''
         Fit the model to the TOAs.
 
@@ -457,11 +461,11 @@ class pint_handler():
         fitter : str
             The fitter to use ("ls", "mcmc", or "auto"). Default is "ls". "auto" will choose the fitter based on the number of free parameters (> 2 = MCMC, <= 2 = LS).
         maxiter : int
-            The maximum number of iterations for LS fitter. Default is 100.
+            The maximum number of iterations for LS fitter. Default is 10.
         nwalkers : int
-            The number of walkers for MCMC fitter. Default is 250.
+            The number of walkers for MCMC fitter. Default is 50.
         nsteps : int
-            The number of steps for MCMC fitter. Default is 2500.
+            The number of steps for MCMC fitter. Default is 1500.
         clustering_fitter : bool
             Whether to use the clustering fitter if the fitting fails. Default is True.
         '''
@@ -544,202 +548,51 @@ class pint_handler():
             else:
                 self.logger.error(traceback.format_exc())
 
-        # Run clustering fitter if required
-        if clustering_fitter and len(this_t) > 15:
-            # If fitting failed, or chi2r > 10, try clustering fitter
-            if not self.f_status or self.f.get_params_dict("all", "quantity")["CHI2R"].value > 10:
-                self.logger.warning("Fitting failed or chi2r > 10. Try clustering fitter. ")
+        # Run clustering fitter when there's a large gap in the TOAs recently
+        if clustering_fitter and len(this_t) >= 3: # Clustering is not meaningful for n_toas < 3
+            # Initialize clustering fitter
+            cf = ClusteringFitter(this_t, this_m)
 
-                # Initialize clustering fitter
-                cf_m, cf_f, cf_passed = self.clustering_fitter(copy.deepcopy(this_m), copy.deepcopy(this_t))
+            # If there are clusters
+            if cf.clustered_toas.has_clusters():
+                # Get size and the number of days since the last gap
+                gap_size = cf.clustered_toas.get_gap_size()
+                c0_baseline, days_since_gap = cf.clustered_toas.get_cluster_baselines()
 
-                # Check if clustering fitter passed
-                if cf_passed:
-                    ls_chi2r = self.f.get_params_dict("all", "quantity")["CHI2R"].value
-                    cf_chi2r = cf_f.get_params_dict("all", "quantity")["CHI2R"].value
-                    if cf_chi2r < ls_chi2r and cf_chi2r < 10:
-                        # self.m = cf_m
-                        self.f = cf_f
-                        self.f_status = True
-                        self.logger.success("Clustering fitter resolved the issue. ")
+                # Determine whether this is right after a large gap
+                if gap_size > np.min([7, np.min([c0_baseline * 0.1, 3])]) and days_since_gap < 30: 
+                    self.logger.debug(f"Right after a large gap: gap_size={gap_size}, days_since_gap={days_since_gap}")
+
+                    # Get chi2r values for each cluster and combined
+                    chi2r_c0, _, chi2r_c0c1 = cf.clustered_toas.get_chi2rs(this_m)
+
+                    # Determine whether the combined chi2r is significantly worse than the first cluster alone
+                    if chi2r_c0c1 > chi2r_c0 * 1.5: # If the combined chi2r is significantly worse than the first cluster alone
+                        self.logger.debug(f"Combined chi2r ({chi2r_c0c1}) is significantly worse than the first cluster alone ({chi2r_c0}).")
+                        self.logger.info("Using clustering fitter to resolve phase wraps due to the gap.")
+
+                        # Fit using the clustering fitter
+                        best_fitter_state = cf.fit_toas()
+
+                        # Check if the clustering fitter state is better than the LS fitting results
+                        if best_fitter_state.model.CHI2R.value < self.f.model.CHI2R.value:
+                            self.logger.success(f"Clustering fitter improved the fit: CHI2R {self.f.model.CHI2R.value} -> {best_fitter_state.model.CHI2R.value}")
+                            self.f = best_fitter_state
+                            self.f_status = True
+                        else:
+                            self.logger.debug("Clustering fitter did not improve the fit.")
                     else:
-                        self.logger.error("Clustering fitter is not better. ")
+                        self.logger.debug(f"Combined chi2r ({chi2r_c0c1}) is not significantly worse than the first cluster alone ({chi2r_c0}). Will not use clustering fitter.")
+                else:
+                    self.logger.debug(f"Not right after a large gap (gap_size={gap_size}, days_since_gap={days_since_gap}). Will not use clustering fitter.")
+            else:
+                self.logger.debug("No clusters are present. Will not test for large gaps.")
 
         # Calculate residuals for bad toas
-        if hasattr(self, "f"):
+        if hasattr(self, "f") and len(self.bad_toas) > 0:
             bad_residuals = Residuals(self.bad_toas, self.f.model)
             self.bad_resids_postfit["vals"] = bad_residuals.time_resids
             self.bad_resids_postfit["errs"] = bad_residuals.get_data_error(scaled=True)
-
-    def get_typical_observation_interval(self, mjds):
-        mjds = sorted(mjds)
-        
-        # Get difference between each observation
-        diffs = np.diff(mjds)
-
-        # Get the median and mad of the differences
-        median = np.median(diffs)
-        mad = median_abs_deviation(diffs)
-
-        return median, mad
-
-    def clustering_fitter(self, m, t, clustering_threshold=12, debug=False):
-        # Get mjds
-        mjds = np.sort(self.t.get_mjds().value)
-        mjd_median, mjd_mad = self.get_typical_observation_interval(mjds)
-
-        # Clustering
-        clusters = [[0]]
-        for i in range(len(mjds) - 1):
-            if mjds[i+1] - mjds[i] > clustering_threshold * mjd_mad + mjd_median:
-                clusters.append([])
-            clusters[-1].append(i+1)
-
-        # Sort by num
-        clusters = sorted(clusters, key=lambda x: len(x), reverse=True)
-
-        toas_idxes = []
-        this_model = m
-        for cluster in clusters:
-            toas_idxes += cluster
-            toas = t[toas_idxes]
-
-            # fit 
-            try:
-                fitter = WLSFitter(toas, this_model)
-                fitter.fit_toas()
-                this_model = fitter.model
-            except Exception as e:
-                self.logger.warning("Fitting failed in clustering fitter. Error: %s", e)
-                self.logger.warning("Returning the last successful model. ")
-                return m, fitter, False
-
-            if debug:
-                # get residuals
-                resids = Residuals(toas, this_model).time_resids.to(u.us).value
-                plt.plot(toas.get_mjds(), resids, "x")
-                # plt.show()
-                # print(len(toas))
-        
-        return this_model, fitter, True
-
-    def nearest_search_fitter(self, m, t, clustering_window=12, debug=False):
-        '''
-        Re-fit starting from the densiest part of the TOAs and adding the rest of TOAs iteratively. 
-
-        Parameters
-        ----------
-        m : pint.models.timing_model.TimingModel
-            The timing model to fit.
-        t : pint.toa.TOA
-            The TOAs to fit.
-        clustering_window : int
-            The clustering window in days. 
-            This window is used to find the densiest cluster of TOAs. However, only the densiest 2 TOAs in the densiest cluster will be used to start fitting.
-            Default is 12 days.
-        debug : bool
-            Whether to plot the residuals after each fit. Default is False.
-        
-        Returns
-        -------
-        m : pint.models.timing_model.TimingModel
-            The fitted timing model.
-        f : WLSFitter
-            The fitter used for the fitting.
-        passed : bool
-            Whether the clustering fitter passed successfully.
-            If the fitting fails, it will return the last successful model and fitter.
-            If the clustering window is less than 2, it will raise an exception.
-        '''
-
-        def get_min_diff_idx(toa_vals, window):
-            # Iterate through each window and calculate the standard diff
-            diffs = []
-            for i in range(len(toa_vals) - window):
-                # Get toas in the window
-                window_toas = toa_vals[i:i + window]
-
-                # Get standard diff
-                diffs.append(
-                    np.mean(
-                        np.diff(window_toas)
-                    )
-                )
-
-            # Find where the diff is minimal
-            min_diff_idx = np.argmin(diffs)
-
-            return min_diff_idx
-
-        # Sanity check
-        if clustering_window < 2:
-            raise Exception("Clustering window must be at least 2. ") 
-        if len(t) < clustering_window + 2:
-            self.logger.warning("Less than {} TOAs. Clustering fitter is not ideal. ".format(clustering_window + 2))
-            return m, WLSFitter(t, m), False
-        
-        # Check if the model and TOAs are initialized
-        if not self.initialized:
-            self.initialize()
-
-        # Sort TOAs by MJD
-        t = t[np.argsort(t.get_mjds().value)]
-        print(t.get_mjds().value)
-
-        # Find the densiest cluster given the window
-        min_diff_idx = get_min_diff_idx(t.get_mjds().value, clustering_window)
-
-        # Find the densiest 2 TOAs in the densiest cluster window to start fitting
-        if clustering_window > 2:
-            min_diff_idx = min_diff_idx + get_min_diff_idx(
-                t.get_mjds().value[min_diff_idx:min_diff_idx + clustering_window], 2
-            )
-
-        # Get list of TOAs
-        # toas = t[min_diff_idx:(min_diff_idx + 2)]
-        # toas_leftover = t[:min_diff_idx] + t[(min_diff_idx + 2):]
-        toas_idxes = list(range(min_diff_idx, min_diff_idx + 2))
-        toas_leftover_idxes = list(range(0, min_diff_idx)) + list(range(min_diff_idx + 2, len(t)))
-
-        # Initialize fitting
-        this_fitter = WLSFitter(t[toas_idxes], m)
-        this_fitter.fit_toas()
-        this_model = this_fitter.model
-
-        # Iterate through the rest of the TOAs
-        while len(toas_leftover_idxes) > 0:
-            # Search for the nearest TOA
-            this_diffs = np.abs(np.array(t[toas_leftover_idxes].get_mjds().value) - np.mean(t[toas_idxes].get_mjds().value))
-            this_min_diff_idx = np.argmin(this_diffs)
-
-            # Pop the nearest TOA
-            # this_toa = toas_leftover.pop(this_min_diff_idx)
-            # print(toas_leftover.get_mjds().value)
-            # this_toa = toas_leftover[this_min_diff_idx]
-            # toas_leftover = toas_leftover[:this_min_diff_idx] + toas_leftover[(this_min_diff_idx + 1):]
-            # toas = toas + this_toa
-            toas_idxes.append(toas_leftover_idxes.pop(this_min_diff_idx))
-
-            # Fit the model
-            try:
-                this_fitter = WLSFitter(t[toas_idxes], this_model)
-                this_fitter.fit_toas()
-                this_model = this_fitter.model
-            except Exception as e:
-                self.logger.warning("Fitting failed in clustering fitter. ", e)
-                self.logger.warning("Returning the last successful model. ")
-                return this_model, this_fitter, False
-
-            if debug:
-                # get residuals
-                resids = Residuals(t[toas_idxes], this_model).time_resids.to(u.us).value
-                plt.plot(t[toas_idxes].get_mjds(), resids, "x")
-                plt.show()
-                # print(len(toas))
-
-        # Return the final model and fitter
-        self.logger.success("Clustering fitter finished successfully. ")
-        return this_model, this_fitter, True
 
     def freeze(self, param):
         if not self.initialized:
