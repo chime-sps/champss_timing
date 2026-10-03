@@ -47,7 +47,7 @@ class pint_handler():
 
         self.m, self.t = None, None
         self.f = None
-        self.f_status = None
+        self.f_remarks = []
         self.prefit_resids = None
         self.bad_toas = []
         self.bad_resids_prefit = {"vals": [], "errs": []}
@@ -547,11 +547,10 @@ class pint_handler():
         # Run fit
         try:
             self.f.fit_toas(maxiter=maxiter)
-            self.f_status = True
         except Exception as e:
             self.logger.warning("Fitting failed, restoring prefit model. Error:", e)
 
-            self.f_status = False
+            self.f_remarks.append("FITTING_FAILED")
             self.f = f_prefit # Return the prefit model if fitting fails
             
             if raise_exception: # Raise exception if required
@@ -571,7 +570,7 @@ class pint_handler():
                 c0_baseline, days_since_gap = cf.clustered_toas.get_cluster_baselines()
 
                 # Determine whether this is right after a large gap
-                if gap_size > np.min([60, np.max([c0_baseline * 0.1, 10])]) and days_since_gap < 15: 
+                if gap_size > np.min([60, np.max([c0_baseline * 0.1, 10])]) and days_since_gap < 30: 
                     self.logger.debug(f"Right after a large gap: gap_size={gap_size}, days_since_gap={days_since_gap}")
 
                     # Get chi2r values for each cluster and combined
@@ -589,7 +588,11 @@ class pint_handler():
                         if best_fitter_state.model.CHI2R.value < self.f.model.CHI2R.value:
                             self.logger.success(f"Clustering fitter improved the fit: CHI2R {self.f.model.CHI2R.value} -> {best_fitter_state.model.CHI2R.value}")
                             self.f = best_fitter_state
-                            self.f_status = True
+                            self.f_remarks.append("CLUSTERING_FITTER_IMPROVED")
+
+                            # Remove FITTING_FAILED status
+                            if "FITTING_FAILED" in self.f_remarks:
+                                self.f_remarks.remove("FITTING_FAILED")
                         else:
                             self.logger.debug(f"Clustering fitter did not improve the fit (CHI2R {self.f.model.CHI2R.value} -> {best_fitter_state.model.CHI2R.value})")
                     else:
@@ -599,11 +602,18 @@ class pint_handler():
             else:
                 self.logger.debug("No cluster is present. Will not test for large gaps.")
 
-        # Calculate residuals for bad toas
-        if hasattr(self, "f") and len(self.bad_toas) > 0:
-            bad_residuals = Residuals(self.bad_toas, self.f.model)
-            self.bad_resids_postfit["vals"] = bad_residuals.time_resids
-            self.bad_resids_postfit["errs"] = bad_residuals.get_data_error(scaled=True)
+        # Some final checks and calculations
+        if hasattr(self, "f"):
+            # Check if chi2r is reliable
+            if np.isnan(self.f.model.CHI2R.value) or np.isinf(self.f.model.CHI2R.value):
+                self.f.model.CHI2R.value = 0.0
+                self.f_remarks.append("CHI2R_UNRELIABLE")
+                    
+            # Calculate residuals for bad toas
+            if len(self.bad_toas) > 0:
+                bad_residuals = Residuals(self.bad_toas, self.f.model)
+                self.bad_resids_postfit["vals"] = bad_residuals.time_resids
+                self.bad_resids_postfit["errs"] = bad_residuals.get_data_error(scaled=True)
 
     def freeze(self, param):
         if not self.initialized:

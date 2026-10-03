@@ -141,7 +141,7 @@ class ClusteringFitter:
                 )
 
         # Plot for verbose
-        if self.verbose or True:
+        if self.verbose:
             import matplotlib.pyplot as plt
 
             # Get mjds
@@ -170,13 +170,14 @@ class ClusteringFitter:
             ax[1].set_title("Residuals with Best Phase Offset")
             ax[2].plot(trial_phase_offsets, postfit_chi2rs, marker='o')
             ax[2].axvline(trial_phase_offsets[best_index], color='r', linestyle='--', label='Best Phase Offset')
+            ax[2].set_yscale('log') 
             ax[2].legend()
             ax[2].set_xlabel("Phase Offset")
             ax[2].set_ylabel("CHI2R")
             ax[2].set_title("CHI2R vs Phase Offset")
 
-            import time
-            plt.savefig(f"clustering_fit_{int(time.time())}.png")
+            # import time
+            # plt.savefig(f"clustering_fit_{int(time.time())}.png")
 
             plt.show()
 

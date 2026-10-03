@@ -88,7 +88,9 @@ class plot:
             "fitted_params": {}, 
             "unfreeze_params": [],
             "mjd_gaps": [], 
-            "rcvr_labels": []
+            "rcvr_labels": [], 
+            "fitting_failure_remarks": [],
+            "clustering_fitting_remarks": [],
         }
 
         # last_mjd = 0
@@ -138,6 +140,12 @@ class plot:
                 plot_data["params_y"].append(this_param)
 
             plot_data["rms"].append(np.sqrt(np.mean(np.array(this_timing["residuals"]["val"])**2)))
+
+            if "FITTING_FAILED" in this_timing["notes"]["remark"]:
+                plot_data["fitting_failure_remarks"].append(np.max(this_timing["obs_mjds"]))
+
+            if "CLUSTERING_FITTER_IMPROVED" in this_timing["notes"]["remark"]:
+                plot_data["clustering_fitting_remarks"].append(np.max(this_timing["obs_mjds"]))
 
         # get files and metadata
         profiles_mjd_idxed = {}
@@ -436,6 +444,13 @@ class plot:
         ## show bad file mjds
         for this_bad_file_mjd in plot_data["bad_files_mjds"]:
             axs_chi2r.fill_between([this_bad_file_mjd-0.5, this_bad_file_mjd+0.5], lim_0, lim_1, color="mistyrose", label="Data Quality Issue")
+        ## show remarks
+        for this_mjd in plot_data["clustering_fitting_remarks"]:
+            axs_chi2r.axvline(x=this_mjd, color="b", linestyle="--", alpha=0.5, lw=0.5)
+            axs_chi2r.annotate("Clustering Fitting", xy=(this_mjd, lim_0), xytext=(1.5, 1.5), textcoords="offset points", rotation=90, verticalalignment="bottom", horizontalalignment="left", color="b", alpha=0.5, fontsize=6)
+        for this_mjd in plot_data["fitting_failure_remarks"]:
+            axs_chi2r.axvline(x=this_mjd, color="r", linestyle="--", alpha=0.5, lw=0.5)
+            axs_chi2r.annotate("Fitting Failure", xy=(this_mjd, lim_0), xytext=(1.5, 1.5), textcoords="offset points", rotation=90, verticalalignment="bottom", horizontalalignment="left", color="r", alpha=0.5, fontsize=6)
         ## set xlim to the range of mjds
         axs_chi2r.set_xlim(resid_xlim[0], resid_xlim[1])
         # self.__legend_without_duplicate_labels(axs_chi2r)

@@ -129,7 +129,7 @@ class dealias:
         # Check whether enough files
         n_files_required = self.get_minimal_required_file()
         if len(self.archive_files) < n_files_required:
-            self.logger.error(f"Not enough archive files. Required: {n_files_required}, available: {len(self.archive_files)}")
+            self.logger.debug(f"Not enough archive files. Required: {n_files_required}, available: {len(self.archive_files)}")
             return
         
         # Cap at twice as much of the required number of files
