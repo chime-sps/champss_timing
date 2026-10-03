@@ -93,6 +93,7 @@ class pint_handler():
             return 
         
         # Get prefit residuals and errors
+        f0 = self.m.F0.value
         prefit_resids = Residuals(self.t, self.m)
         resids_vals = np.array(prefit_resids.time_resids.to(u.s).value)
         resids_errs = np.array(prefit_resids.get_data_error(scaled=True).to(u.s).value)
@@ -102,7 +103,7 @@ class pint_handler():
         mask = np.ones(len(self.t), dtype=bool)
 
         # EM filter
-        mask = self.em_filter(mask, resids_vals, resids_errs)
+        mask = self.em_filter(mask, resids_vals, f0)
         
         # Error filter
         mask = self.error_filter(mask, resids_vals, resids_errs)
@@ -128,7 +129,7 @@ class pint_handler():
 
         return
 
-    def em_filter(self, mask, vals, errs, threshold=0.2, n_iter=256):
+    def em_filter(self, mask, vals, f0, threshold=0.2, n_iter=256):
         '''
         Filtering TOAs using the Expectation-Maximization algorithm. 
         Args:
@@ -143,7 +144,7 @@ class pint_handler():
         '''
 
         # Initial guess for uniform distribution
-        a, b = np.min(vals[mask]), np.max(vals[mask])
+        a, b = -0.5 / f0, 0.5 / f0
         if b == a:
             self.logger.warning("Uniform distribution has zero width. Stopping EM without masking.")
             return mask
@@ -181,7 +182,7 @@ class pint_handler():
             # P(gaussian)
             f_gau = np.mean(p_gau_r)
             if f_gau >= 1:
-                self.logger.warning("Fraction of Gaussian components reached 1. Stopping EM without masking.")
+                self.logger.debug("Fraction of Gaussian components reached 1. Stopping EM without masking.")
                 return mask
 
             # mu and sigma
@@ -197,6 +198,11 @@ class pint_handler():
             if mu <= a or mu >= b:
                 self.logger.warning("Estimated Gaussian mu is out of bounds. Stopping EM without masking.")
                 return mask
+            
+        # Test mixture implies too few outliers
+        if np.sum(mask) * (1 - f_gau) < 1: # less than 1% outliers
+            self.logger.debug("Mixture model not significantly better than pure Gaussian. Stopping EM without masking.")
+            return mask
 
         # Get this mask
         this_mask = p_gau_r > threshold
@@ -554,20 +560,20 @@ class pint_handler():
             cf = ClusteringFitter(this_t, this_m)
 
             # If there are clusters
-            if cf.clustered_toas.has_clusters():
+            if cf.clustered_toas.has_valid_clusters():
                 # Get size and the number of days since the last gap
                 gap_size = cf.clustered_toas.get_gap_size()
                 c0_baseline, days_since_gap = cf.clustered_toas.get_cluster_baselines()
 
                 # Determine whether this is right after a large gap
-                if gap_size > np.min([7, np.min([c0_baseline * 0.1, 3])]) and days_since_gap < 30: 
+                if gap_size > np.min([60, np.max([c0_baseline * 0.1, 10])]) and days_since_gap < 15: 
                     self.logger.debug(f"Right after a large gap: gap_size={gap_size}, days_since_gap={days_since_gap}")
 
                     # Get chi2r values for each cluster and combined
                     chi2r_c0, _, chi2r_c0c1 = cf.clustered_toas.get_chi2rs(this_m)
 
                     # Determine whether the combined chi2r is significantly worse than the first cluster alone
-                    if chi2r_c0c1 > chi2r_c0 * 1.5: # If the combined chi2r is significantly worse than the first cluster alone
+                    if chi2r_c0c1 > chi2r_c0 * 3 and chi2r_c0c1 > 1.5: # If the combined chi2r is significantly worse than the first cluster alone
                         self.logger.debug(f"Combined chi2r ({chi2r_c0c1}) is significantly worse than the first cluster alone ({chi2r_c0}).")
                         self.logger.info("Using clustering fitter to resolve phase wraps due to the gap.")
 
@@ -580,13 +586,13 @@ class pint_handler():
                             self.f = best_fitter_state
                             self.f_status = True
                         else:
-                            self.logger.debug("Clustering fitter did not improve the fit.")
+                            self.logger.debug(f"Clustering fitter did not improve the fit (CHI2R {self.f.model.CHI2R.value} -> {best_fitter_state.model.CHI2R.value})")
                     else:
                         self.logger.debug(f"Combined chi2r ({chi2r_c0c1}) is not significantly worse than the first cluster alone ({chi2r_c0}). Will not use clustering fitter.")
                 else:
                     self.logger.debug(f"Not right after a large gap (gap_size={gap_size}, days_since_gap={days_since_gap}). Will not use clustering fitter.")
             else:
-                self.logger.debug("No clusters are present. Will not test for large gaps.")
+                self.logger.debug("No cluster is present. Will not test for large gaps.")
 
         # Calculate residuals for bad toas
         if hasattr(self, "f") and len(self.bad_toas) > 0:
