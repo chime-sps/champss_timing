@@ -2,9 +2,6 @@ import copy
 import tqdm
 import numpy as np
 import astropy.units as u
-from pint.fitter import WLSFitter
-from pint.residuals import Residuals
-from scipy.cluster.vq import kmeans, vq, whiten
 from pint import logging
 
 from .downhillwls import LenientDownhillWLSFitter
