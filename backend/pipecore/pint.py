@@ -52,6 +52,7 @@ class pint_handler():
         self.bad_toas = []
         self.bad_resids_prefit = {"vals": [], "errs": []}
         self.bad_resids_postfit = {"vals": [], "errs": []}
+        self.realtime_diagnostic_data = []
 
         self.initialized = False
         if initialize:
@@ -104,13 +105,16 @@ class pint_handler():
         mask = np.ones(len(self.t), dtype=bool)
 
         # EM filter
-        mask = self.em_filter(mask, resids_vals, f0)
+        mask = self.em_filter(mask, resids_vals, resids_errs, f0)
+
+        # Sanity check: do not filter out TOAs within 3% of phase
+        mask |= np.abs(resids_vals) < 0.03 / f0
         
         # Error filter
         mask = self.error_filter(mask, resids_vals, resids_errs)
 
         # MAD filter
-        mask = self.mad_filter2(mask, resids_vals, resids_errs)
+        # mask = self.mad_filter(mask, resids_vals, resids_errs)
 
         # Sanity check: do not filter out TOAs with larger error but still close enough in terms of residuals:
         #     residuals relative to the spin period (1.5 std) AND errors (1.5 sigma error)
@@ -130,9 +134,9 @@ class pint_handler():
 
         return
 
-    def em_filter(self, mask, vals, f0, threshold=0.2, n_iter=256):
+    def em_filter(self, mask, vals, errs, f0, threshold=0.05, n_iter=256):
         '''
-        Filtering TOAs using the Expectation-Maximization algorithm. 
+        Filtering TOAs using the Expectation-Maximization algorithm. If the fitting fails, it falls back to the MAD filter.
         Args:
             mask (np.ndarray): Current mask of TOAs.
             vals (np.ndarray): Residual values of TOAs.
@@ -144,11 +148,16 @@ class pint_handler():
             np.ndarray: Updated mask after EM filtering.
         '''
 
+        # Check if enough toas for EM filtering
+        if np.sum(mask) < 20:
+            self.logger.warning("Not enough TOAs for EM filtering. Falling back to MAD filter.")
+            return self.mad_filter(mask, vals, errs)
+
         # Initial guess for uniform distribution
         a, b = -0.5 / f0, 0.5 / f0
         if b == a:
-            self.logger.warning("Uniform distribution has zero width. Stopping EM without masking.")
-            return mask
+            self.logger.warning("Uniform distribution has zero width. Falling back to MAD filter.")
+            return self.mad_filter(mask, vals, errs)
 
         # Initial guess for Gaussian distribution
         mu, sigma = 0, vals[mask].std() / 2
@@ -183,8 +192,8 @@ class pint_handler():
             # P(gaussian)
             f_gau = np.mean(p_gau_r)
             if f_gau >= 1:
-                self.logger.debug("Fraction of Gaussian components reached 1. Stopping EM without masking.")
-                return mask
+                self.logger.debug("Fraction of Gaussian components reached 1. Falling back to MAD filter.")
+                return self.mad_filter(mask, vals, errs)
 
             # mu and sigma
             mu = np.sum(p_gau_r * vals[mask]) / np.sum(p_gau_r)
@@ -194,24 +203,38 @@ class pint_handler():
 
             # sanity check for mu and sigma
             if sigma <= 0:
-                self.logger.warning("Estimated Gaussian sigma is non-positive. Stopping EM without masking.")
-                return mask
+                self.logger.warning("Estimated Gaussian sigma is non-positive. Falling back to MAD filter.")
+                return self.mad_filter(mask, vals, errs)
             if mu <= a or mu >= b:
-                self.logger.warning("Estimated Gaussian mu is out of bounds. Stopping EM without masking.")
-                return mask
+                self.logger.warning("Estimated Gaussian mu is out of bounds. Falling back to MAD filter.")
+                return self.mad_filter(mask, vals, errs)
             
         # Test mixture implies too few outliers
         if np.sum(mask) * (1 - f_gau) < 1: # less than 1% outliers
-            self.logger.debug("Mixture model not significantly better than pure Gaussian. Stopping EM without masking.")
-            return mask
+            self.logger.debug("Mixture model not significantly better than pure Gaussian. Falling back to MAD filter.")
+            return self.mad_filter(mask, vals, errs)
 
-        # Get this mask
+        # # Get this mask
         this_mask = p_gau_r > threshold
 
         # Create a new overall mask
         new_mask = mask & this_mask
 
+        # Store realtime diagnostic data for EM filter
         self.logger.debug(f"Outlier TOAs (em): {np.where(mask & ~new_mask)[0]}")
+        self.realtime_diagnostic_data.append({
+            "type": "em_filter",
+            "vals": vals,
+            "vals_gau": vals[this_mask],
+            "vals_uni": vals[~this_mask],
+            "mu": mu,
+            "sigma": sigma,
+            "a": a, 
+            "b": b,
+            "p_gau_r": p_gau_r,
+            "threshold": threshold,
+            "new_mask": new_mask
+        })
 
         return new_mask
     
@@ -241,9 +264,15 @@ class pint_handler():
 
         # Get threshold
         mad_threshold = stats_utils.mad_outlier_thresholds(errs_log[mask], z_score=z_score, return_interval=False)
+
+        # Sanity check for threshold: infinite or non-positive values
         if not np.isfinite(mad_threshold) or mad_threshold <= 0:
             self.logger.debug("Invalid MAD threshold. Skipping error filter.")
             return mask
+
+        # Sanity check for threshold: never cut below 5 times of median error
+        # p.s., errs_log = log(err) - log(med) = log(err/med) -> log(5) is err/med = 5. 
+        mad_threshold = max(mad_threshold, np.log10(5))
 
         # Get this mask
         this_mask = (errs_log < mad_threshold)
@@ -251,13 +280,21 @@ class pint_handler():
         # Create a new overall mask
         new_mask = mask & this_mask
 
+        # Get data for realtime diagnostics
         self.logger.debug(f"Outlier TOAs (error): {np.where(mask & ~new_mask)[0]}")
+        self.realtime_diagnostic_data.append({
+            "type": "error_filter",
+            "errs_log": errs_log,
+            "mad_threshold": mad_threshold,
+            "new_mask": new_mask
+        })
+
         if max_iters <= 1 or np.array_equal(new_mask, mask):
             return new_mask
 
         return self.error_filter(new_mask, vals, errs, z_score=z_score, max_iters=max_iters-1)
-
-    def mad_filter2(self, mask, vals, errs, threshold=3, max_iters=3): # mad is the robust estimate of std dev. thres of 3 corresponds to 99.7% confidence interval
+    
+    def mad_filter(self, mask, vals, errs, threshold=3, max_iters=3): # mad is the robust estimate of std dev. thres of 3 corresponds to 99.7% confidence interval
         '''
         Filtering TOAs based on their residuals using the MAD.
 
@@ -277,23 +314,39 @@ class pint_handler():
             self.logger.debug("Less than 5 TOAs remaining. Skipping MAD filter.")
             return mask
 
+        # Normalize residuals by their errors
+        vals_norm = vals / errs
+
         # Get threshold
-        mad_threshold = stats_utils.mad_outlier_thresholds(vals[mask], z_score=threshold, return_interval=False)
+        mad_threshold = stats_utils.mad_outlier_thresholds(vals_norm[mask], z_score=threshold, return_interval=False)
+
+        # Sanity check for threshold: infinite or non-positive values
         if not np.isfinite(mad_threshold) or mad_threshold <= 0:
             self.logger.debug("Invalid MAD threshold. Skipping MAD filter.")
             return mask
 
+        # Sanity check for threshold: never cut below 1.5 times of median error
+        mad_threshold = max(mad_threshold, 1.5 * np.median(errs))
+
         # Get this mask
-        this_mask = (np.abs(vals) < mad_threshold)
+        this_mask = (np.abs(vals_norm) < mad_threshold)
 
         # Create a new overall mask
         new_mask = mask & this_mask
 
+        # Store realtime diagnostic data for MAD filter
         self.logger.debug(f"Outlier TOAs (mad): {np.where(mask & ~new_mask)[0]}")
+        self.realtime_diagnostic_data.append({
+            "type": "mad_filter",
+            "vals_norm": vals_norm,
+            "mad_threshold": mad_threshold,
+            "new_mask": new_mask
+        })
+
         if max_iters <= 1 or np.array_equal(new_mask, mask):
             return new_mask
 
-        return self.mad_filter2(new_mask, vals, errs, threshold=threshold, max_iters=max_iters-1)
+        return self.mad_filter(new_mask, vals, errs, threshold=threshold, max_iters=max_iters-1)
     
     def f_test(self, additional_params, p_value_threshold=0.05, beamsize=0.87376064): # chime beam size
         # Ref: [1] https://sites.duke.edu/bossbackup/files/2013/02/NonLinSummary.pdf
@@ -673,7 +726,10 @@ class pint_handler():
             postfit_mjds = self.t.get_mjds()
 
         # Initialize the figure
-        fig, ax = plt.subplots(2, 1, sharex=True, figsize=(10, 6))
+        fig, ax = plt.subplots(
+            2 + len(self.realtime_diagnostic_data), 1, 
+            figsize=(10, 6 + 3 * len(self.realtime_diagnostic_data))
+        )
 
         # Plot pre-fit residuals
         ax[0].errorbar(
@@ -728,6 +784,34 @@ class pint_handler():
             ylim_upper = max([ax[0].get_ylim()[1], ax[1].get_ylim()[1]])
             ax[0].set_ylim(ylim_lower, ylim_upper)
             ax[1].set_ylim(ylim_lower, ylim_upper)
+
+        # Plot realtime diagnostic data
+        for i, data in enumerate(self.realtime_diagnostic_data):
+            this_ax = ax[2 + i]
+            if data["type"] == "error_filter":
+                this_ax.hist(data["errs_log"], bins=100, color="k")
+                this_ax.axvspan(np.min(data["errs_log"]), data["mad_threshold"], color="b", linestyle="--", label="Good", alpha=0.2)
+                this_ax.legend()
+                this_ax.set_title("Error Filter Diagnostic")
+                this_ax.set_xlabel("Log Errors")
+                this_ax.set_ylabel("Frequency")
+            elif data["type"] == "mad_filter":
+                this_ax.hist(data["vals_norm"], bins=100, color="k")
+                this_ax.axvspan(-data["mad_threshold"], data["mad_threshold"], color="b", alpha=0.2, label="Good")
+                this_ax.legend()
+                this_ax.set_title("MAD Filter Diagnostic")
+                this_ax.set_xlabel("Normalized Values")
+                this_ax.set_ylabel("Frequency")
+            elif data["type"] == "em_filter":
+                _, bins, _ = this_ax.hist(data["vals"], bins=100, color="k", alpha=0)
+                this_ax.hist(data["vals_gau"], bins=bins, color="k", label="Gaussian Component")
+                this_ax.hist(data["vals_uni"], bins=bins, color="r", label="Uniform Component")
+                this_ax.axvline(data["mu"], color="k", linestyle="-", label="Gaussian Mean")
+                this_ax.axvspan(data["mu"] - data["sigma"], data["mu"] + data["sigma"], color="k", alpha=0.2, label="Gaussian Mean ± Sigma")
+                this_ax.legend()
+                this_ax.set_title("EM Filter Diagnostic")
+                this_ax.set_xlabel("Values")
+                this_ax.set_ylabel("Frequency")
 
         # Save the figure
         plt.tight_layout()

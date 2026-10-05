@@ -365,7 +365,7 @@ class champss_timing:
         try:
             ar_list_untimed = self.db_get_untimed_archives(ar_list)
             self.logger.info(f"Timing module input parameters: ")
-            self.logger.data(f"Timing {mjds} with archives: " + "\n -> " + "\n -> ".join([f"{this_ar['path']}" for this_ar in ar_list]))
+            self.logger.data(f"Number of input files: {len(ar_list)}")
             self.logger.data(f"Fit params: {fit_params}")
             self.logger.data(f"Potential Fit params: {potential_fit_params}")
             self.logger.data(f"MJD range: {min(mjds)} - {max(mjds)}")
