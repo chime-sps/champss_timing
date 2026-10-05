@@ -104,7 +104,7 @@ class pint_handler():
         # Generate initial TOA mask
         mask = np.ones(len(self.t), dtype=bool)
 
-        # EM filter
+        # EM filter (with fallback to MAD filter)
         mask = self.em_filter(mask, resids_vals, resids_errs, f0)
 
         # Sanity check: do not filter out TOAs within 3% of phase
@@ -112,9 +112,6 @@ class pint_handler():
         
         # Error filter
         mask = self.error_filter(mask, resids_vals, resids_errs)
-
-        # MAD filter
-        # mask = self.mad_filter(mask, resids_vals, resids_errs)
 
         # Sanity check: do not filter out TOAs with larger error but still close enough in terms of residuals:
         #     residuals relative to the spin period (1.5 std) AND errors (1.5 sigma error)

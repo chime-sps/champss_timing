@@ -255,8 +255,11 @@ class timing():
             self.logger.debug("Running MCMC... ")
             self.pint.fit_mcmc_report(mcmc_report)
 
-        self.logger.debug("Plotting residuals... ")
-        self.pint.plot()
+        self.logger.debug("Generating realtime diagnostics... ")
+        try:
+            self.pint.plot()
+        except Exception as e:
+            self.logger.error(f"Error while generating realtime diagnostics: {e}", layer=1)
 
         self.logger.debug("Saving model... ")
         self.pint.save(write_tim=True)
