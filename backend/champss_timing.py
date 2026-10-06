@@ -498,13 +498,10 @@ class champss_timing:
     def db_insert_timing_info(self, ar_list_filtered, mjds, pint):
         # Get PINT objects
         pint_f = pint.f
-        pint_t = pint.t
         pint_t_mask = pint.t_mask
         pint_f_remarks = pint.f_remarks
         pint_postfit_resids = pint.postfit_resids
         pint_mjds = pint.t.get_mjds().value
-        # pint_bad_resids = pint.bad_resids_postfit
-        # pint_bad_toas = pint.bad_toas
         unfreezed_params = pint.get_unfreezed_params()
 
         # Get postfit parameters

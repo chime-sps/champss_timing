@@ -49,18 +49,15 @@ class pint_handler():
         self.n_pools = self_super.n_pools
 
         self.m, self.t = None, None
+        self.t_mask = None
+
         self.f = None
         self.f_remarks = []
-        self.t_mask = None
-        self.realtime_diagnostic_data = []
-
 
         self.prefit_resids = None
         self.postfit_resids = None
 
-        # self.bad_toas = []
-        # self.bad_resids_prefit = {"vals": [], "errs": []}
-        # self.bad_resids_postfit = {"vals": [], "errs": []}
+        self.realtime_diagnostic_data = []
 
         self.initialized = False
         if initialize:
@@ -199,17 +196,23 @@ class pint_handler():
                 np.sum(p_gau_r * (vals[mask] - mu)**2) / np.sum(p_gau_r)
             )
 
-            # Test mixture implies too few outliers
-            if np.sum(mask) * (1 - f_gau) < 1: # less than 1 outliers
-                self.logger.debug(f"Mixture implies too few outliers, assuming no outliers.")
-                self.logger.debug(f"f_gau: {f_gau}, number of available TOAs: {np.sum(mask)}", layer=1)
-                return mask # assuming no outliers
+            # sanity check for f_gau
+            if f_gau >= 1:
+                raise EMFilterFallback("Fraction of Gaussian components reached 1.")
 
             # sanity check for mu and sigma
             if sigma <= 0:
                 raise EMFilterFallback("Estimated Gaussian sigma is non-positive.")
             if mu <= a or mu >= b:
                 raise EMFilterFallback("Estimated Gaussian mu is out of bounds.")
+            if not (np.isfinite(mu) and np.isfinite(sigma)):
+                raise EMFilterFallback("EM produced non-finite parameters.")
+
+        # Test mixture implies too few outliers
+        if np.sum(mask) * (1 - f_gau) < 1: # less than 1 outliers
+            self.logger.debug(f"Mixture implies too few outliers, assuming no outliers.")
+            self.logger.debug(f"f_gau: {f_gau}, number of available TOAs: {np.sum(mask)}", layer=1)
+            return mask # assuming no outliers
 
         # Get this mask
         this_mask = p_gau_r > threshold
@@ -323,7 +326,7 @@ class pint_handler():
             return mask
 
         # Sanity check for threshold: never cut below 1.5 times of median error
-        mad_threshold = max(mad_threshold, 1.5 * np.median(errs))
+        mad_threshold = max(mad_threshold, 1.5)
 
         # Get this mask
         this_mask = (np.abs(vals_norm) < mad_threshold)
@@ -418,8 +421,8 @@ class pint_handler():
         n_additional = len(self_additional.m.free_params)
 
         # calculate df
-        df_current = len(self_current.t) - n_current
-        df_additional = len(self_additional.t) - n_additional
+        df_current = len(self_current.t[self_current.t_mask]) - n_current
+        df_additional = len(self_additional.t[self_additional.t_mask]) - n_additional
 
         # calculate f
         F = ((rss_current - rss_additional) / (df_current - df_additional)) / (rss_additional / df_additional)
