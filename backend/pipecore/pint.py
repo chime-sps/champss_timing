@@ -32,6 +32,9 @@ from ..utils.stats_utils import stats_utils
 # Set logging level
 pint.logging.setup(level="WARNING")
 
+class EMFilterFallback(Exception):
+    pass
+
 ###################################################################
 # PINT Handler                                                    #
 ###################################################################
@@ -109,7 +112,11 @@ class pint_handler():
             self.t_mask = np.ones(len(self.t), dtype=bool)
 
         # EM filter (with fallback to MAD filter)
-        self.t_mask = self.em_filter(self.t_mask, resids_vals, resids_errs, f0)
+        try:
+            self.t_mask = self.em_filter(self.t_mask, resids_vals, f0)
+        except EMFilterFallback as reason:
+            self.logger.info(f"Falling back to MAD filter. Reason: {reason}", layer=1)
+            self.t_mask = self.mad_filter(self.t_mask, resids_vals, resids_errs)
 
         # Sanity check: do not filter out TOAs within 3% of phase
         self.t_mask |= np.abs(resids_vals) < 0.03 / f0
@@ -129,9 +136,10 @@ class pint_handler():
 
         return
 
-    def em_filter(self, mask, vals, errs, f0, threshold=0.05, n_iter=256):
+    def em_filter(self, mask, vals, f0, threshold=0.05, n_iter=256):
         '''
-        Filtering TOAs using the Expectation-Maximization algorithm. If the fitting fails, it falls back to the MAD filter.
+        Filtering TOAs using the Expectation-Maximization algorithm. 
+        If fitting does not reliable, it raises an EMFilterFallback exception to trigger the fallback in filter().
         Args:
             mask (np.ndarray): Current mask of TOAs.
             vals (np.ndarray): Residual values of TOAs.
@@ -145,14 +153,12 @@ class pint_handler():
 
         # Check if enough toas for EM filtering
         if np.sum(mask) < 20:
-            self.logger.warning("Not enough TOAs for EM filtering. Falling back to MAD filter.")
-            return self.mad_filter(mask, vals, errs)
+            raise EMFilterFallback("Not enough TOAs for EM filtering.")
 
         # Initial guess for uniform distribution
         a, b = -0.5 / f0, 0.5 / f0
         if b == a:
-            self.logger.warning("Uniform distribution has zero width. Falling back to MAD filter.")
-            return self.mad_filter(mask, vals, errs)
+            raise EMFilterFallback("Uniform distribution has zero width.")
 
         # Initial guess for Gaussian distribution
         mu, sigma = 0, vals[mask].std() / 2
@@ -186,9 +192,6 @@ class pint_handler():
 
             # P(gaussian)
             f_gau = np.mean(p_gau_r)
-            if f_gau >= 1:
-                self.logger.debug("Fraction of Gaussian components reached 1. Falling back to MAD filter.")
-                return self.mad_filter(mask, vals, errs)
 
             # mu and sigma
             mu = np.sum(p_gau_r * vals[mask]) / np.sum(p_gau_r)
@@ -196,20 +199,19 @@ class pint_handler():
                 np.sum(p_gau_r * (vals[mask] - mu)**2) / np.sum(p_gau_r)
             )
 
+            # Test mixture implies too few outliers
+            if np.sum(mask) * (1 - f_gau) < 1: # less than 1 outliers
+                self.logger.debug(f"Mixture implies too few outliers, assuming no outliers.")
+                self.logger.debug(f"f_gau: {f_gau}, number of available TOAs: {np.sum(mask)}", layer=1)
+                return mask # assuming no outliers
+
             # sanity check for mu and sigma
             if sigma <= 0:
-                self.logger.warning("Estimated Gaussian sigma is non-positive. Falling back to MAD filter.")
-                return self.mad_filter(mask, vals, errs)
+                raise EMFilterFallback("Estimated Gaussian sigma is non-positive.")
             if mu <= a or mu >= b:
-                self.logger.warning("Estimated Gaussian mu is out of bounds. Falling back to MAD filter.")
-                return self.mad_filter(mask, vals, errs)
-            
-        # Test mixture implies too few outliers
-        if np.sum(mask) * (1 - f_gau) < 1: # less than 1% outliers
-            self.logger.debug("Mixture model not significantly better than pure Gaussian. Falling back to MAD filter.")
-            return self.mad_filter(mask, vals, errs)
+                raise EMFilterFallback("Estimated Gaussian mu is out of bounds.")
 
-        # # Get this mask
+        # Get this mask
         this_mask = p_gau_r > threshold
 
         # Create a new overall mask
