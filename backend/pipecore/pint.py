@@ -48,11 +48,16 @@ class pint_handler():
         self.m, self.t = None, None
         self.f = None
         self.f_remarks = []
-        self.prefit_resids = None
-        self.bad_toas = []
-        self.bad_resids_prefit = {"vals": [], "errs": []}
-        self.bad_resids_postfit = {"vals": [], "errs": []}
+        self.t_mask = None
         self.realtime_diagnostic_data = []
+
+
+        self.prefit_resids = None
+        self.postfit_resids = None
+
+        # self.bad_toas = []
+        # self.bad_resids_prefit = {"vals": [], "errs": []}
+        # self.bad_resids_postfit = {"vals": [], "errs": []}
 
         self.initialized = False
         if initialize:
@@ -79,11 +84,9 @@ class pint_handler():
 
         # Run prefit
         self.prefit_resids = Residuals(self.t, self.m)
-        self.bad_toas = self.t[0:0]
-        self.bad_resids_prefit["vals"] = self.prefit_resids.time_resids[self.bad_toas]
-        self.bad_resids_prefit["errs"] = self.prefit_resids.get_data_error(scaled=True)[self.bad_toas]
-        self.bad_resids_postfit["vals"] = self.prefit_resids.time_resids[self.bad_toas]
-        self.bad_resids_postfit["errs"] = self.prefit_resids.get_data_error(scaled=True)[self.bad_toas]
+
+        # Initialize a blank TOA mask
+        self.t_mask = np.ones(len(self.t), dtype=bool)
 
         # Set initialized
         self.initialized = True
@@ -96,38 +99,33 @@ class pint_handler():
         
         # Get prefit residuals and errors
         f0 = self.m.F0.value
-        prefit_resids = Residuals(self.t, self.m)
-        resids_vals = np.array(prefit_resids.time_resids.to(u.s).value)
-        resids_errs = np.array(prefit_resids.get_data_error(scaled=True).to(u.s).value)
+        resids_vals = np.array(self.prefit_resids.time_resids.to(u.s).value)
+        resids_errs = np.array(self.prefit_resids.get_data_error(scaled=True).to(u.s).value)
         mjds = np.array(self.t.get_mjds().value)
 
-        # Generate initial TOA mask
-        mask = np.ones(len(self.t), dtype=bool)
+        # Restore initial TOA mask (make sure filtering only applied once)
+        if np.sum(self.t_mask) != len(self.t):
+            self.logger.warning("Rerunning filter will not retain previous TOA mask. Restoring initial TOA mask.")
+            self.t_mask = np.ones(len(self.t), dtype=bool)
 
         # EM filter (with fallback to MAD filter)
-        mask = self.em_filter(mask, resids_vals, resids_errs, f0)
+        self.t_mask = self.em_filter(self.t_mask, resids_vals, resids_errs, f0)
 
         # Sanity check: do not filter out TOAs within 3% of phase
-        mask |= np.abs(resids_vals) < 0.03 / f0
+        self.t_mask |= np.abs(resids_vals) < 0.03 / f0
         
         # Error filter
-        mask = self.error_filter(mask, resids_vals, resids_errs)
+        self.t_mask = self.error_filter(self.t_mask, resids_vals, resids_errs)
 
         # Sanity check: do not filter out TOAs with larger error but still close enough in terms of residuals:
         #     residuals relative to the spin period (1.5 std) AND errors (1.5 sigma error)
-        mask |= (np.abs(resids_vals) < 3 * np.std(resids_vals[mask])) & (np.abs(resids_vals) < 1.5 * resids_errs)
+        self.t_mask |= (np.abs(resids_vals) < 3 * np.std(resids_vals[self.t_mask])) & (np.abs(resids_vals) < 1.5 * resids_errs)
         
         # Sanity check: do not filter out the latest TOAs
         mjds_sorted = np.sort(mjds)
         latest_toa_threshold = np.mean([mjds_sorted[-3], mjds_sorted[-4]])
-        mask = mask | (mjds > latest_toa_threshold)
+        self.t_mask = self.t_mask | (mjds > latest_toa_threshold)
         self.logger.debug(f"Will not filter out TOAs later than MJD {latest_toa_threshold}")
-
-        # Apply mask
-        self.bad_toas += self.t[~mask]
-        self.bad_resids_prefit["vals"] = np.concatenate((self.bad_resids_prefit["vals"], prefit_resids.time_resids[~mask]))
-        self.bad_resids_prefit["errs"] = np.concatenate((self.bad_resids_prefit["errs"], prefit_resids.get_data_error(scaled=True)[~mask]))
-        self.t = self.t[mask]
 
         return
 
@@ -554,9 +552,17 @@ class pint_handler():
             if "PMDEC" not in self.m.free_params:
                 self.logger.debug("PMDEC -> 0", layer=1)
                 self.m["PMDEC"].value = 0
+        
+
+        # Initialize a copy of model and toas
+        this_m = copy.deepcopy(self.m)
+        this_t = copy.deepcopy(self.t)
+
+        # Apply toa mask
+        this_t = this_t[self.t_mask]
 
         # Check if there are enough TOAs to fit
-        if len(self.t) <= 1 and maxiter > 1:
+        if len(this_t) <= 1 and maxiter > 1:
             raise Exception("Not enough TOAs to fit (need at least 2). ")
 
         # Automatically choose the fitter
@@ -567,11 +573,6 @@ class pint_handler():
             else:
                 fitter = "ls"
                 self.logger.debug("Using LS fitter. ", layer=1)
-        
-
-        # Initialize a copy of model and toas
-        this_m = copy.deepcopy(self.m)
-        this_t = copy.deepcopy(self.t)
 
         # # Compute PHOFF
         # this_m = self.compute_phoff(this_m, this_t, freeze_phoff=False)
@@ -658,12 +659,9 @@ class pint_handler():
             if np.isnan(self.f.model.CHI2R.value) or np.isinf(self.f.model.CHI2R.value):
                 self.f.model.CHI2R.value = 0.0
                 self.f_remarks.append("CHI2R_UNRELIABLE")
-                    
-            # Calculate residuals for bad toas
-            if len(self.bad_toas) > 0:
-                bad_residuals = Residuals(self.bad_toas, self.f.model)
-                self.bad_resids_postfit["vals"] = bad_residuals.time_resids
-                self.bad_resids_postfit["errs"] = bad_residuals.get_data_error(scaled=True)
+
+            # Calculate postfit residuals
+            self.postfit_resids = Residuals(self.t, self.f.model)
 
     def freeze(self, param):
         if not self.initialized:
@@ -711,16 +709,9 @@ class pint_handler():
             return self.f.plot(savefig=savefig) # use MCMC plot function
 
         # Calculate prefit residuals
-        prefit_resids = Residuals(self.t, self.m)
-        prefit_resids_vals = prefit_resids.time_resids
-        prefit_resids_errs = prefit_resids.get_data_error(scaled=True)
+        prefit_resids_vals = self.prefit_resids.time_resids
+        prefit_resids_errs = self.prefit_resids.get_data_error(scaled=True)
         prefit_mjds = self.t.get_mjds()
-
-        # Calculate post-fit residuals if the fitter exists
-        if self.f:
-            postfit_resids = self.f.resids.time_resids
-            postfit_resids_errs = self.f.resids.get_data_error(scaled=True)
-            postfit_mjds = self.t.get_mjds()
 
         # Initialize the figure
         fig, ax = plt.subplots(
@@ -730,17 +721,17 @@ class pint_handler():
 
         # Plot pre-fit residuals
         ax[0].errorbar(
-            prefit_mjds,
-            prefit_resids_vals.to(u.us).value,
-            prefit_resids_errs.to(u.us).value,
+            prefit_mjds[self.t_mask],
+            prefit_resids_vals[self.t_mask].to(u.us).value,
+            prefit_resids_errs[self.t_mask].to(u.us).value,
             fmt="x",
             c="k", 
             capsize=3
         )
         ax[0].errorbar(
-            self.bad_toas.get_mjds(),
-            self.bad_resids_prefit["vals"].to(u.us).value,
-            self.bad_resids_prefit["errs"].to(u.us).value,
+            prefit_mjds[~self.t_mask],
+            prefit_resids_vals[~self.t_mask].to(u.us).value,
+            prefit_resids_errs[~self.t_mask].to(u.us).value,
             fmt="x",
             label="Bad TOAs",
             c="r",
@@ -752,19 +743,23 @@ class pint_handler():
         ax[0].grid(True)
 
         # Plot post-fit residuals
-        if(self.f != False):
+        if self.f :
+            postfit_resids = self.postfit_resids.time_resids
+            postfit_resids_errs = self.postfit_resids.get_data_error(scaled=True)
+            postfit_mjds = self.t.get_mjds()
+
             ax[1].errorbar(
-                postfit_mjds,
-                postfit_resids.to(u.us).value,
-                postfit_resids_errs.to(u.us).value,
+                postfit_mjds[self.t_mask],
+                postfit_resids[self.t_mask].to(u.us).value,
+                postfit_resids_errs[self.t_mask].to(u.us).value,
                 fmt="x", 
                 c="k", 
                 capsize=3
             )
             ax[1].errorbar(
-                self.bad_toas.get_mjds(),
-                self.bad_resids_postfit["vals"].to(u.us).value,
-                self.bad_resids_postfit["errs"].to(u.us).value,
+                postfit_mjds[~self.t_mask],
+                postfit_resids[~self.t_mask].to(u.us).value,
+                postfit_resids_errs[~self.t_mask].to(u.us).value,
                 fmt="x",
                 label="Bad TOAs",
                 c="r",

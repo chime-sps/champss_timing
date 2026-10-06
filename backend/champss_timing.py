@@ -499,20 +499,26 @@ class champss_timing:
         # Get PINT objects
         pint_f = pint.f
         pint_t = pint.t
+        pint_t_mask = pint.t_mask
         pint_f_remarks = pint.f_remarks
-        pint_bad_resids = pint.bad_resids_postfit
-        pint_bad_toas = pint.bad_toas
+        pint_postfit_resids = pint.postfit_resids
+        pint_mjds = pint.t.get_mjds().value
+        # pint_bad_resids = pint.bad_resids_postfit
+        # pint_bad_toas = pint.bad_toas
         unfreezed_params = pint.get_unfreezed_params()
 
-        # Get timing info
+        # Get postfit parameters
         fitted_params = pint_f.get_params_dict("all", "quantity")
-        residuals = pint_f.resids.time_resids.to(u.us).value
-        # residuals_err = pint_t.get_errors().to(u.us).value
-        residuals_err = pint_f.resids.get_data_error(scaled=True).to(u.us).value # get weighted residuals error with EFAC/EQUAD applied
-        residual_mjds = pint_t.get_mjds().value
-        bad_residuals = pint_bad_resids["vals"].to(u.us).value
-        bad_residuals_err = pint_bad_resids["errs"].to(u.us).value
-        bad_residual_mjds = pint_bad_toas.get_mjds().value
+
+        # Get postfit good residuals
+        residuals = pint_postfit_resids.time_resids[pint_t_mask].to(u.us).value
+        residuals_err = pint_postfit_resids.get_data_error(scaled=True)[pint_t_mask].to(u.us).value
+        residual_mjds = pint_mjds[pint_t_mask]
+
+        # Get postfit bad residuals
+        bad_residuals = pint_postfit_resids.time_resids[~pint_t_mask].to(u.us).value
+        bad_residuals_err = pint_postfit_resids.get_data_error(scaled=True)[~pint_t_mask].to(u.us).value
+        bad_residual_mjds = pint_mjds[~pint_t_mask]
         
         # Prepare timing info for JSON dump
         fitted_params_dict = {}
