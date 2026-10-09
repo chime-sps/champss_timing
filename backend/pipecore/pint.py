@@ -451,38 +451,6 @@ class pint_handler():
             return True
 
         return False
-
-    # def compute_phoff(self, m, t, freeze_phoff=True):
-    #     # Make sure the PHOFF component present
-    #     if not hasattr(m, 'PHOFF'):
-    #         m.add_component(
-    #             Component.component_types["PhaseOffset"]()
-    #         )
-
-    #     # Freeze all parameters except PHOFF
-    #     freezed_params = []
-    #     for param in m.params:
-    #         if param != 'PHOFF' and not m[param].frozen:
-    #             m[param].frozen = True
-    #             freezed_params.append(param)
-        
-    #     # Unfreeze PHOFF
-    #     m['PHOFF'].frozen = False
-
-    #     # Fit the model
-    #     f = LenientDownhillWLSFitter(t, m)
-    #     f.fit_toas()
-    #     self.logger.debug(f"Computed PHOFF: {f.model['PHOFF'].value}")
-
-    #     # Restore the frozen parameters
-    #     for param in freezed_params:
-    #         f.model[param].frozen = False
-
-    #     # Freeze PHOFF again if required
-    #     if freeze_phoff:
-    #         f.model['PHOFF'].frozen = True
-
-    #     return f.model
     
     def fit_mcmc_report(self, savefig, nwalkers=50, nsteps=1500):
         '''
@@ -579,12 +547,12 @@ class pint_handler():
                 fitter = "ls"
                 self.logger.debug("Using LS fitter. ", layer=1)
 
-        # # Compute PHOFF
-        # this_m = self.compute_phoff(this_m, this_t, freeze_phoff=False)
+        # Compute PHOFF
+        this_m = self.compute_phoff(this_m, this_t, freeze_phoff=False, reset_phoff=True)
 
-        # Remove PHOFF
-        if hasattr(this_m, "PHOFF"):
-            this_m.remove_component("PhaseOffset")
+        # # Remove PHOFF
+        # if hasattr(this_m, "PHOFF"):
+        #     this_m.remove_component("PhaseOffset")
 
         # Compute pulse number
         this_t.compute_pulse_numbers(this_m) # compute pulse number to help fitters converge better
@@ -667,6 +635,43 @@ class pint_handler():
 
             # Calculate postfit residuals
             self.postfit_resids = Residuals(self.t, self.f.model)
+
+    def compute_phoff(self, m, t, freeze_phoff=True, reset_phoff=True):
+        # Make sure the PHOFF component present
+        if not hasattr(m, 'PHOFF'):
+            m.add_component(
+                Component.component_types["PhaseOffset"]()
+            )
+
+        # Reset PHOFF if required
+        if reset_phoff:
+            if hasattr(m, 'PHOFF'):
+                m['PHOFF'].value = 0
+
+        # Freeze all parameters except PHOFF
+        freezed_params = []
+        for param in m.params:
+            if param != 'PHOFF' and not m[param].frozen:
+                m[param].frozen = True
+                freezed_params.append(param)
+        
+        # Unfreeze PHOFF
+        m['PHOFF'].frozen = False
+
+        # Fit the model
+        f = LenientDownhillWLSFitter(t, m)
+        f.fit_toas()
+        self.logger.debug(f"Computed PHOFF: {f.model['PHOFF'].value}")
+
+        # Restore the frozen parameters
+        for param in freezed_params:
+            f.model[param].frozen = False
+
+        # Freeze PHOFF again if required
+        if freeze_phoff:
+            f.model['PHOFF'].frozen = True
+
+        return f.model
 
     def freeze(self, param):
         if not self.initialized:
