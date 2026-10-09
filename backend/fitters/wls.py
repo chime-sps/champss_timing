@@ -1,4 +1,5 @@
 import pint
+import copy
 import pint.fitter
 from pint.fitter import fit_wls_svd
 from pint.pint_matrix import (
@@ -20,7 +21,6 @@ from typing import Optional
 
 class WLSFitter(pint.fitter.WLSFitter):
     def __init__(self, *args, **kwargs):
-        log.trace(f"Using WLSFitter (CHAMPSS Timing Pipeline version)")
         super().__init__(*args, **kwargs)
 
     def fit_toas(self, *args, **kwargs):
@@ -28,8 +28,15 @@ class WLSFitter(pint.fitter.WLSFitter):
         Overwrite the fit_toas method to add additional sanity checks on the fitted parameters. 
         '''
 
+        # Make a copy of prefit state
+        prefit_state = copy.deepcopy(self)
+
         # Fit the TOAs using the parent class method
         res = super().fit_toas(*args, **kwargs)
+
+        # Check for convergence
+        if self.resids.chi2 >= prefit_state.resids.chi2:
+            raise ValueError(f"Fitting failed. Post-fit CHI2R is not better than pre-fit CHI2R (post={self.resids.chi2}, pre={prefit_state.resids.chi2}). ")
 
         # Check if the output model has physical parameters 
         raj = self.model.RAJ.quantity.to(u.deg).value

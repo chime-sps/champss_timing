@@ -14,6 +14,7 @@ from ..fitters.clustering import ClusteringFitter
 from multiprocessing import Pool
 from scipy.stats import f as f_stats
 from scipy.stats import median_abs_deviation, norm
+from astropy.coordinates import SkyCoord
 import numpy as np
 import shutil
 import time
@@ -392,29 +393,23 @@ class pint_handler():
             return False, 1.0
 
         # Sanity check for postfit parameters
-        raj_current = self_current.f.model.RAJ.quantity.to(u.deg).value
-        raj_additional = self_additional.f.model.RAJ.quantity.to(u.deg).value
-        raj_diff = np.min([
-            (raj_current - raj_additional) % 360,
-            (raj_additional - raj_current) % 360
-        ])
-        decj_current = self_current.f.model.DECJ.quantity.to(u.deg).value
-        decj_additional = self_additional.f.model.DECJ.quantity.to(u.deg).value
-        decj_diff = np.min([
-            (decj_current - decj_additional),
-            (decj_additional - decj_current)
-        ])
-        if raj_diff > beamsize * 2 or decj_diff > beamsize * 1.5:
+        c_cur = SkyCoord(self_current.f.model.RAJ.quantity, self_current.f.model.DECJ.quantity)
+        c_add = SkyCoord(self_additional.f.model.RAJ.quantity, self_additional.f.model.DECJ.quantity)
+        if c_cur.separation(c_add).to_value(u.deg) > 2 * beamsize:
             self.logger.warning("F-test failed. Postfit RAJ change is much larger than beam size (i.e., not physical). ")
             return False, 1.0
 
-        # Get residuals
-        current_resids = self_current.f.resids.time_resids
-        additional_resids = self_additional.f.resids.time_resids
+        # # Get residuals
+        # current_resids = self_current.f.resids.time_resids
+        # additional_resids = self_additional.f.resids.time_resids
 
-        # get rsses
-        rss_current = get_rss(current_resids)
-        rss_additional = get_rss(additional_resids)
+        # # get rsses
+        # rss_current = get_rss(current_resids)
+        # rss_additional = get_rss(additional_resids)
+
+        # Use weighted chi2 calculated by pint as rss
+        rss_current = self_current.f.resids.chi2
+        rss_additional = self_additional.f.resids.chi2
 
         # get number of unfreezed params
         n_current = len(self_current.m.free_params)
@@ -557,20 +552,29 @@ class pint_handler():
         # Compute pulse number
         this_t.compute_pulse_numbers(this_m) # compute pulse number to help fitters converge better
 
-        # Initialize fitter
-        f_prefit = None
-        if fitter == "ls": # Least Squares fitting
-            f_prefit = LenientDownhillWLSFitter(this_t, this_m, track_mode="use_pulse_numbers")
-            self.f = copy.deepcopy(f_prefit)
-        elif fitter == "mcmc": # MCMC fitting
-            f_prefit = MCMCFitter(this_t, this_m, nwalkers=nwalkers, nsteps=nsteps, n_pools=self.n_pools)
-            self.f = copy.deepcopy(f_prefit)
-        else:
-            raise Exception(f"Fitter {fitter} is not supported. Supported fitters: ls, mcmc. ")
-
         # Run fit
         try:
-            self.f.fit_toas(maxiter=maxiter)
+            f_prefit = None
+            if fitter == "ls": # Least Squares fitting
+                # Initialize fitter
+                f_prefit = LenientDownhillWLSFitter(this_t, this_m, track_mode="use_pulse_numbers")
+
+                # Make a copy of the prefit fitter
+                self.f = copy.deepcopy(f_prefit)
+
+                # Fit
+                self.f.fit_toas(maxiter=maxiter)
+            elif fitter == "mcmc": # MCMC fitting
+                # Initialize fitter
+                f_prefit = MCMCFitter(this_t, this_m, nwalkers=nwalkers, nsteps=nsteps, n_pools=self.n_pools)
+
+                # Make a copy of the prefit fitter
+                self.f = copy.deepcopy(f_prefit)
+
+                # Fit
+                self.f.fit_toas(maxiter=maxiter)
+            else:
+                raise Exception(f"Fitter {fitter} is not supported. Supported fitters: ls, mcmc. ")
         except Exception as e:
             self.logger.warning("Fitting failed, restoring prefit model. Error:", e)
 
