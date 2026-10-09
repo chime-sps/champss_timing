@@ -4,6 +4,7 @@ import os
 import shutil
 import glob
 import argparse
+import traceback
 from astropy.time import Time
 from backend.datastores.database import database
 from backend.utils.utils import utils
@@ -41,9 +42,9 @@ if args.psr is None:
     # Show warning if no pulsar name is provided (so that all pulsars will be truncated)
     utils.print_warning(f"WARNING: No pulsar name provided. Will truncate all pulsars in {psrbasedir}")
     for i in range(5):
-        print(f"Press Ctrl+C to cancel or wait {i} seconds to continue...", end="\r")
+        print(f"Press Ctrl+C to cancel or wait {5-i} seconds to continue...", end="\r")
         time.sleep(1)
-    response = input("Type 'confirm' to continue: ")
+    response = input("Type 'confirm' to continue applying truncation for ALL pulsars: ")
     if response != "confirm":
         print("Truncation cancelled by user.")
         exit()
@@ -83,104 +84,108 @@ for pulsar in pulsars:
     parfile_bak_path = f"./timing_sources/{pulsar}/parfile_bak/initial_parfile.bak"
     parfile_path = f"./timing_sources/{pulsar}/pulsar.par"
     ar_cache_path = f"./timing_sources/{pulsar}/__champss_archive_cache__"
-    
-    # Truncate timing info
-    if os.path.exists(db_path):
-        print(f"Truncating timing info for {pulsar} at {db_path}")
 
-        # Get timing info
-        print("Reading database")
-        with database(db_path, readonly=True) as db:
-            all_timing_info = db.get_all_timing_info()
+    try:
+        # Truncate timing info
+        if os.path.exists(db_path):
+            print(f"Truncating timing info for {pulsar} at {db_path}")
 
-        # Get mjds for timing info and sort them in descending order
-        mjds = [max(info["obs_mjds"]) for info in all_timing_info]
-        mjds.sort(reverse=True)
+            # Get timing info
+            print("Reading database")
+            with database(db_path, readonly=True) as db:
+                all_timing_info = db.get_all_timing_info()
 
-        # Determine the MJD threshold for truncation based on the provided arguments
-        this_truncate_mjd = None
-        if args.mjd:
-            if args.mjd <= min(mjds):
-                print(f"Provided MJD {args.mjd} is earlier than the earliest timing info MJD {min(mjds)}")
-                print(f" Skipping truncation for {pulsar}")
-                continue
-            
-            this_truncate_mjd = args.mjd
-        elif args.l:
-            if max(mjds) - args.l <= min(mjds):
-                print(f"Truncating by {args.l} days before the latest timing info MJD {max(mjds)} would result in a truncation MJD earlier than the earliest timing info MJD {min(mjds)}")
-                print(f" Skipping truncation for {pulsar}")
-                continue
-            
-            this_truncate_mjd = max(mjds) - args.l
-        elif args.n:
-            if len(mjds) <= args.n:
-                print(f"Cannot truncate to the last {args.n} timing info entries because there are only {len(mjds)} entries available.")
-                print(f" Skipping truncation for {pulsar}")
-                continue
+            # Get mjds for timing info and sort them in descending order
+            mjds = [max(info["obs_mjds"]) for info in all_timing_info]
+            mjds.sort(reverse=True)
 
-            this_truncate_mjd = mjds[args.n]
-        elif args.days:
-            mjd_today = Time(datetime.datetime.now()).mjd
-            this_truncate_mjd = mjd_today - args.days
+            # Determine the MJD threshold for truncation based on the provided arguments
+            this_truncate_mjd = None
+            if args.mjd:
+                if args.mjd <= min(mjds):
+                    print(f"Provided MJD {args.mjd} is earlier than the earliest timing info MJD {min(mjds)}")
+                    print(f" Skipping truncation for {pulsar}")
+                    continue
+                
+                this_truncate_mjd = args.mjd
+            elif args.l:
+                if max(mjds) - args.l <= min(mjds):
+                    print(f"Truncating by {args.l} days before the latest timing info MJD {max(mjds)} would result in a truncation MJD earlier than the earliest timing info MJD {min(mjds)}")
+                    print(f" Skipping truncation for {pulsar}")
+                    continue
+                
+                this_truncate_mjd = max(mjds) - args.l
+            elif args.n:
+                if len(mjds) <= args.n:
+                    print(f"Cannot truncate to the last {args.n} timing info entries because there are only {len(mjds)} entries available.")
+                    print(f" Skipping truncation for {pulsar}")
+                    continue
 
-            if this_truncate_mjd <= min(mjds):
-                print(f"Truncating by {args.days} days before today would result in a truncation MJD earlier than the earliest timing info MJD {min(mjds)}")
-                print(f" Skipping truncation for {pulsar}")
-                continue
+                this_truncate_mjd = mjds[args.n]
+            elif args.days:
+                mjd_today = Time(datetime.datetime.now()).mjd
+                this_truncate_mjd = mjd_today - args.days
 
-        # Final safety check
-        if this_truncate_mjd is not None:
-            kept = [m for m in mjds if m <= this_truncate_mjd]
-            if not kept:
-                print(f"Truncation at MJD {this_truncate_mjd} would remove all timing info. Skipping {pulsar}")
-                continue
-            if len(kept) == len(mjds):
-                print(f"No timing info later than MJD {this_truncate_mjd}. Skipping {pulsar}")
-                continue
+                if this_truncate_mjd <= min(mjds):
+                    print(f"Truncating by {args.days} days before today would result in a truncation MJD earlier than the earliest timing info MJD {min(mjds)}")
+                    print(f" Skipping truncation for {pulsar}")
+                    continue
 
-        print(f"Truncating timing info for {pulsar} with MJD threshold: {this_truncate_mjd}")
-
-        # Reopen the database for writing
-        with database(db_path) as db:
-            # Truncate timing info and dealias history based on the calculated MJD threshold
-            print("Truncating timing info and dealias history")
+            # Final safety check
             if this_truncate_mjd is not None:
-                db.remove_timing_info(mjd_later_than=this_truncate_mjd, show_warning=False)
-                db.remove_dealias_history(mjd_later_than=this_truncate_mjd, show_warning=False)
-            else:
-                db.truncate_timing_info(show_warning=False)
-                db.truncate_dealias_history(show_warning=False)
+                kept = [m for m in mjds if m <= this_truncate_mjd]
+                if not kept:
+                    print(f"Truncation at MJD {this_truncate_mjd} would remove all timing info. Skipping {pulsar}")
+                    continue
+                if len(kept) == len(mjds):
+                    print(f"No timing info later than MJD {this_truncate_mjd}. Skipping {pulsar}")
+                    continue
 
-            # Truncate config if requested
-            if args.truncate_config:
-                print("Truncating config")
-                db.truncate_config(show_warning=False)
+            print(f"Truncating timing info for {pulsar} with MJD threshold: {this_truncate_mjd}")
 
-            # Restore parfile
-            if this_truncate_mjd is not None:
-                last = db.get_last_timing_info()
-                parfile_to_restore = last["notes"]["fitted_parfile"]
-                print(f"Restoring parfile for {pulsar} at {parfile_path} from MJD {max(last['obs_mjds'])}")
-                with open(parfile_path, "w") as f:
-                    f.write(parfile_to_restore)
-            else:
-                print(f"Restoring initial parfile for {pulsar} at {parfile_path}")
-                if os.path.exists(parfile_bak_path):
-                    shutil.copy(parfile_bak_path, parfile_path)
+            # Reopen the database for writing
+            with database(db_path) as db:
+                # Truncate timing info and dealias history based on the calculated MJD threshold
+                print("Truncating timing info and dealias history")
+                if this_truncate_mjd is not None:
+                    db.remove_timing_info(mjd_later_than=this_truncate_mjd, show_warning=False)
+                    db.remove_dealias_history(mjd_later_than=this_truncate_mjd, show_warning=False)
+                else:
+                    db.truncate_timing_info(show_warning=False)
+                    db.truncate_dealias_history(show_warning=False)
 
-        # Delete archive cache
-        if args.delete_archive_cache and os.path.exists(ar_cache_path):
-            print(f"Deleting archive cache for {pulsar} at {ar_cache_path}")
-            shutil.rmtree(ar_cache_path)
-            print("Done")
+                # Truncate config if requested
+                if args.truncate_config:
+                    print("Truncating config")
+                    db.truncate_config(show_warning=False)
 
-        # Delete database
-        if args.delete_database and os.path.exists(db_path):
-            print(f"Deleting database for {pulsar} at {db_path}")
-            os.remove(db_path)
-            print("Done")
+                # Restore parfile
+                if this_truncate_mjd is not None:
+                    last = db.get_last_timing_info()
+                    parfile_to_restore = last["notes"]["fitted_parfile"]
+                    print(f"Restoring parfile for {pulsar} at {parfile_path} from MJD {max(last['obs_mjds'])}")
+                    with open(parfile_path, "w") as f:
+                        f.write(parfile_to_restore)
+                else:
+                    print(f"Restoring initial parfile for {pulsar} at {parfile_path}")
+                    if os.path.exists(parfile_bak_path):
+                        shutil.copy(parfile_bak_path, parfile_path)
 
-        print(f"Finished truncation for {pulsar}")
+            # Delete archive cache
+            if args.delete_archive_cache and os.path.exists(ar_cache_path):
+                print(f"Deleting archive cache for {pulsar} at {ar_cache_path}")
+                shutil.rmtree(ar_cache_path)
+                print("Done")
+
+            # Delete database
+            if args.delete_database and os.path.exists(db_path):
+                print(f"Deleting database for {pulsar} at {db_path}")
+                os.remove(db_path)
+                print("Done")
+
+            print(f"Finished truncation for {pulsar}")
+    except Exception as e:
+        traceback.print_exc()
+        print(f"An error occurred while truncating timing info for {pulsar}: {e}")
     else:
         print(f"Skipping truncation for {pulsar}. Database does not exist.")
