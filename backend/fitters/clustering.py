@@ -33,7 +33,24 @@ class ClusteredTOAs:
 
         return cluster_0, cluster_1
 
-    def fit_with_phase_offset(self, model, phase_offset=0):
+    def fit_with_phase_offset(self, model, phase_offset=0, maxiter=10):
+        """
+        Fit the model to the TOAs in cluster_1 iteratively, adding a phase offset on the first iteration.
+        
+        Parameters:
+        model : astropy.modeling.Model
+            The timing model to fit.
+        phase_offset : float, optional
+            The phase offset to apply to the first iteration of cluster_1, by default 0.
+        maxiter : int, optional
+            The maximum number of iterations for the fitter, by default 10.
+            If maxiter is equal to or less than 0, the fitting will be skipped and return prefit state. 
+        
+        Returns:
+        LenientDownhillWLSFitter
+            The fitter after the final iteration.
+        """
+
         # Make copy of m and t
         m = copy.deepcopy(model)
 
@@ -57,9 +74,13 @@ class ClusteredTOAs:
             # Initialize fitter with combined TOAs
             f = LenientDownhillWLSFitter(this_t0 + this_t1, m, track_mode="use_pulse_numbers")
 
+            # Check if maxiter is valid
+            if maxiter <= 0:
+                continue # continue without fitting
+
             # Fit the model
             try:
-                f.fit_toas(maxiter=10)
+                f.fit_toas(maxiter=maxiter)
             except Exception as e:
                 print(f"Fitting failed at phase offset {phase_offset}. Error: {e}")
                 continue
@@ -101,7 +122,7 @@ class ClusteringFitter:
         self.model = model
         self.verbose = verbose
 
-    def fit_toas(self, maxiter=10, n_offsets=25, center_offset=0, *args, **kwargs):
+    def fit_toas(self, maxiter=20, n_offsets=25, center_offset=0, *args, **kwargs):
         # Initialize offsets
         trial_phase_offsets = np.arange(center_offset - n_offsets, center_offset + n_offsets + 1)
         
@@ -127,6 +148,13 @@ class ClusteringFitter:
         # Find the model with lowest chi2r
         best_index = np.argmin(postfit_chi2rs)
         best_fitter_state = postfit_fitters_states[best_index]
+
+        # Check if there are more than one best chi2r
+        best_chi2r = postfit_chi2rs[best_index]
+        best_indices = [i for i, chi2r in enumerate(postfit_chi2rs) if chi2r == best_chi2r]
+        if len(best_indices) > 1 and self.verbose:
+            print(f"Multiple best chi2r found at indices: {best_indices}. Returning prefit state.")
+            return self.clustered_toas.fit_with_phase_offset(self.model, phase_offset=0, maxiter=0)
 
         # Check if the best state is the first or the last trial
         if best_index == 0 or best_index == len(trial_phase_offsets) - 1:
@@ -177,7 +205,8 @@ class ClusteringFitter:
             ax[2].set_title("CHI2R vs Phase Offset")
 
             # import time
-            # plt.savefig(f"clustering_fit_{int(time.time())}.png")
+            import time
+            plt.savefig(f"clustering_fit_{int(time.time())}.png")
 
             plt.show()
 

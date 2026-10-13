@@ -1,7 +1,7 @@
 import pint
 import copy
 import pint.fitter
-from pint.fitter import fit_wls_svd
+from pint.fitter import fit_wls_svd, ConvergenceFailure
 from pint.pint_matrix import (
     CorrelationMatrix,
     CovarianceMatrix
@@ -19,7 +19,7 @@ from typing import Optional
 # Overwrite pint.fitter.WLSFitter to add constraints on RA and DEC #
 ####################################################################
 
-class WLSFitter(pint.fitter.WLSFitter):
+class GuardedWLSFitter(pint.fitter.WLSFitter):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -36,7 +36,7 @@ class WLSFitter(pint.fitter.WLSFitter):
 
         # Check for convergence
         if self.resids.chi2 >= prefit_state.resids.chi2:
-            raise ValueError(f"Fitting failed. Post-fit CHI2R is not better than pre-fit CHI2R (post={self.resids.chi2}, pre={prefit_state.resids.chi2}). ")
+            raise ConvergenceFailure(f"Fitting failed. Post-fit CHI2R is not better than pre-fit CHI2R (post={self.resids.chi2}, pre={prefit_state.resids.chi2}). ")
 
         # Check if the output model has physical parameters 
         raj = self.model.RAJ.quantity.to(u.deg).value

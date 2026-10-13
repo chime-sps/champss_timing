@@ -5,7 +5,7 @@ from pint.models.timing_model import Component
 from pint.residuals import Residuals
 
 # Fitters
-from ..fitters.wls import WLSFitter
+# from ..fitters.wls import WLSFitter
 from ..fitters.downhillwls import LenientDownhillWLSFitter
 from ..fitters.mcmc import MCMCFitter
 from ..fitters.clustering import ClusteringFitter
@@ -473,7 +473,7 @@ class pint_handler():
         f.plot(savefig=savefig)
         self.logger.debug(f"MCMC report saved to {savefig}")
         
-    def fit(self, raise_exception=True, fitter="ls", maxiter=10, nwalkers=50, nsteps=1500, clustering_fitter=True):
+    def fit(self, raise_exception=True, fitter="ls", maxiter=15, miniter=5, nwalkers=50, nsteps=1500, clustering_fitter=True):
         '''
         Fit the model to the TOAs.
 
@@ -484,7 +484,11 @@ class pint_handler():
         fitter : str
             The fitter to use ("ls", "mcmc", or "auto"). Default is "ls". "auto" will choose the fitter based on the number of free parameters (> 2 = MCMC, <= 2 = LS).
         maxiter : int
-            The maximum number of iterations for LS fitter. Default is 10.
+            The maximum number of iterations for LS fitter. Default is 15.
+            When maxiter=0 (or less than miniter), the LS fitter will be initialized but will not run any iterations.
+            When using MCMC fitter, maxiter is the number of MCMC steps. 
+        miniter : int
+            The minimum number of iterations for LS fitter. Default is 5.
         nwalkers : int
             The number of walkers for MCMC fitter. Default is 50.
         nsteps : int
@@ -530,7 +534,7 @@ class pint_handler():
         this_t = this_t[self.t_mask]
 
         # Check if there are enough TOAs to fit
-        if len(this_t) <= 1 and maxiter > 1:
+        if len(this_t) <= 1 and maxiter > 0:
             raise Exception("Not enough TOAs to fit (need at least 2). ")
 
         # Automatically choose the fitter
@@ -562,8 +566,18 @@ class pint_handler():
                 # Make a copy of the prefit fitter
                 self.f = copy.deepcopy(f_prefit)
 
-                # Fit
-                self.f.fit_toas(maxiter=maxiter)
+                # Check if number of iterations is sensible
+                if maxiter > miniter and  maxiter > 0:
+                    # Fit
+                    # miniter: the minimal number of steps to take with WLSFitter
+                    # maxiter-miniter: maximum number of additional steps to take beyond miniter with DownhillWLSFitter
+                    # The chi2 changes very small from day to day, and DownhillWLSFitter sometimes think the fit has converged prematurely.
+                    # Therefore, we use a combination of WLSFitter and DownhillWLSFitter here to ensure the fit gets better day by day. 
+                    self.f.fit_toas(maxiter=maxiter-miniter, miniter=miniter)
+                else:
+                    self.logger.info(f"Skipping LS fitting due to given maxiter/miniter configuration (maxiter={maxiter}, miniter={miniter}). ", layer=1)
+                    clustering_fitter = False
+
             elif fitter == "mcmc": # MCMC fitting
                 # Initialize fitter
                 f_prefit = MCMCFitter(this_t, this_m, nwalkers=nwalkers, nsteps=nsteps, n_pools=self.n_pools)
@@ -571,8 +585,12 @@ class pint_handler():
                 # Make a copy of the prefit fitter
                 self.f = copy.deepcopy(f_prefit)
 
-                # Fit
-                self.f.fit_toas(maxiter=maxiter)
+                # Check if number of iterations is sensible
+                if maxiter > 0:
+                    # Fit
+                    self.f.fit_toas(maxiter=maxiter)
+                else:
+                    self.logger.info(f"Skipping MCMC fitting due to given maxiter configuration (maxiter={maxiter}). ", layer=1)
             else:
                 raise Exception(f"Fitter {fitter} is not supported. Supported fitters: ls, mcmc. ")
         except Exception as e:
@@ -598,7 +616,7 @@ class pint_handler():
                 c0_baseline, days_since_gap = cf.clustered_toas.get_cluster_baselines()
 
                 # Determine whether this is right after a large gap
-                if gap_size > np.min([60, np.max([c0_baseline * 0.1, 10])]) and days_since_gap < 30: 
+                if gap_size > np.min([60, np.max([c0_baseline * 0.1, 10])]) and days_since_gap < 90: 
                     self.logger.debug(f"Right after a large gap: gap_size={gap_size}, days_since_gap={days_since_gap}")
 
                     # Get chi2r values for each cluster and combined

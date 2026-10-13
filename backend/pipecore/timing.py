@@ -249,7 +249,7 @@ class timing():
             self.pint.fit(raise_exception=False)
         else:
             self.logger.debug("Skipping fitting... ")
-            self.pint.fit(maxiter=1) # run a fake fit to update the model and residuals without changing the parameters
+            self.pint.fit(maxiter=0) # run a fake fit to update the model and residuals without changing the parameters
 
         if mcmc_report is not None:
             self.logger.debug("Running MCMC... ")
