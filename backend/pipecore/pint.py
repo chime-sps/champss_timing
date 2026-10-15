@@ -51,6 +51,7 @@ class pint_handler():
 
         self.m, self.t = None, None
         self.t_mask = None
+        self.t_mask_robust = None
 
         self.f = None
         self.f_remarks = []
@@ -107,30 +108,37 @@ class pint_handler():
         # Restore initial TOA mask (make sure filtering only applied once)
         if np.sum(self.t_mask) != len(self.t):
             self.logger.warning("Rerunning filter will not retain previous TOA mask. Restoring initial TOA mask.")
-            self.t_mask = np.ones(len(self.t), dtype=bool)
+        
+        t_mask = np.ones(len(self.t), dtype=bool)
 
         # EM filter (with fallback to MAD filter)
         try:
-            self.t_mask = self.em_filter(self.t_mask, resids_vals, f0)
+            t_mask = self.em_filter(t_mask, resids_vals, f0)
         except EMFilterFallback as reason:
             self.logger.info(f"Falling back to MAD filter. Reason: {reason}", layer=1)
-            self.t_mask = self.mad_filter(self.t_mask, resids_vals, resids_errs)
+            t_mask = self.mad_filter(t_mask, resids_vals, resids_errs)
 
         # Sanity check: do not filter out TOAs within 3% of phase
-        self.t_mask |= np.abs(resids_vals) < 0.03 / f0
+        t_mask |= np.abs(resids_vals) < 0.03 / f0
         
         # Error filter
-        self.t_mask = self.error_filter(self.t_mask, resids_vals, resids_errs)
+        t_mask = self.error_filter(t_mask, resids_vals, resids_errs)
 
         # Sanity check: do not filter out TOAs with larger error but still close enough in terms of residuals:
         #     residuals relative to the spin period (1.5 std) AND errors (1.5 sigma error)
-        self.t_mask |= (np.abs(resids_vals) < 3 * np.std(resids_vals[self.t_mask])) & (np.abs(resids_vals) < 1.5 * resids_errs)
+        t_mask |= (np.abs(resids_vals) < 3 * np.std(resids_vals[t_mask])) & (np.abs(resids_vals) < 1.5 * resids_errs)
+
+        # Save the "robust" TOA mask before applying the latest TOA sanity check
+        self.t_mask_robust = t_mask.copy()
         
         # Sanity check: do not filter out the latest TOAs
         mjds_sorted = np.sort(mjds)
         latest_toa_threshold = np.mean([mjds_sorted[-3], mjds_sorted[-4]])
-        self.t_mask = self.t_mask | (mjds > latest_toa_threshold)
+        t_mask = t_mask | (mjds > latest_toa_threshold)
         self.logger.debug(f"Will not filter out TOAs later than MJD {latest_toa_threshold}")
+
+        # Save the final TOA mask
+        self.t_mask = t_mask
 
         return
 
@@ -526,12 +534,10 @@ class pint_handler():
                 self.m["PMDEC"].value = 0
         
 
-        # Initialize a copy of model and toas
+        # Make a copy of model and toas
         this_m = copy.deepcopy(self.m)
-        this_t = copy.deepcopy(self.t)
-
-        # Apply toa mask
-        this_t = this_t[self.t_mask]
+        this_t = copy.deepcopy(self.t)[self.t_mask]
+        this_t_robust = copy.deepcopy(self.t)[self.t_mask_robust]
 
         # Check if there are enough TOAs to fit
         if len(this_t) <= 1 and maxiter > 0:
@@ -605,9 +611,11 @@ class pint_handler():
                 self.logger.error(traceback.format_exc())
 
         # Run clustering fitter when there's a large gap in the TOAs recently
-        if clustering_fitter and len(this_t) >= 3: # Clustering is not meaningful for n_toas < 3
+        # We use this_t_robust for clustering since the fitter is very sensitive to outliers
+        # Final residuals saved to database will be re-calculated afterwards using this_t, so this should be okay. 
+        if clustering_fitter and len(this_t_robust) >= 3: # Clustering is not meaningful for n_toas < 3
             # Initialize clustering fitter
-            cf = ClusteringFitter(this_t, this_m)
+            cf = ClusteringFitter(this_t_robust, this_m)
 
             # If there are clusters
             if cf.clustered_toas.has_valid_clusters():
