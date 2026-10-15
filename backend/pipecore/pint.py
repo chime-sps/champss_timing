@@ -616,7 +616,7 @@ class pint_handler():
                 c0_baseline, days_since_gap = cf.clustered_toas.get_cluster_baselines()
 
                 # Determine whether this is right after a large gap
-                if gap_size > np.min([60, np.max([c0_baseline * 0.1, 10])]) and days_since_gap < 90: 
+                if gap_size > np.min([60, np.max([c0_baseline * 0.1, 5])]) and days_since_gap < 30: 
                     self.logger.debug(f"Right after a large gap: gap_size={gap_size}, days_since_gap={days_since_gap}")
 
                     # Get chi2r values for each cluster and combined
