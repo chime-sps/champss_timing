@@ -94,8 +94,11 @@ class pint_handler():
         self.initialized = True
 
     def filter(self):
+        t_mask = np.ones(len(self.t), dtype=bool)
+
         # Sanity check for the number of TOAs
         if len(self.t) < 5:
+            self.t_mask_robust, self.t_mask = t_mask, t_mask
             self.logger.debug("Less than 5 TOAs. Skipping filtering. ")
             return 
         
@@ -108,8 +111,6 @@ class pint_handler():
         # Restore initial TOA mask (make sure filtering only applied once)
         if np.sum(self.t_mask) != len(self.t):
             self.logger.warning("Rerunning filter will not retain previous TOA mask. Restoring initial TOA mask.")
-        
-        t_mask = np.ones(len(self.t), dtype=bool)
 
         # EM filter (with fallback to MAD filter)
         try:
