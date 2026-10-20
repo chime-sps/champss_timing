@@ -583,6 +583,7 @@ class pint_handler():
                     self.f.fit_toas(maxiter=maxiter-miniter, miniter=miniter)
                 else:
                     self.logger.info(f"Skipping LS fitting due to given maxiter/miniter configuration (maxiter={maxiter}, miniter={miniter}). ", layer=1)
+                    self.f.fit_toas(maxiter=0, miniter=0)
                     clustering_fitter = False
 
             elif fitter == "mcmc": # MCMC fitting
