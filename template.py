@@ -17,6 +17,7 @@ parser.add_argument("-p", "--psr", type=str, help="Pulsar name", required=True)
 parser.add_argument("-o", "--output", type=str, help="Output template file name", default="paas.std")
 parser.add_argument("-r", "--rcvr", type=str, help="Receiver name. Use all observations if not specified.", default=None)
 parser.add_argument("--debug", action="store_true", help="Enable debug mode", default=False)
+parser.add_argument("--center", action="store_true", help="Center the template profile", default=False)
 args = parser.parse_args()
 
 logger.info(f"Generating template for {args.psr} > {args.output}")
@@ -56,6 +57,6 @@ stpl.optimize()
 
 # Save template
 logger.debug("Writing template...")
-stpl.to_archive(args.output, psr=args.psr, dm=dm)
+stpl.to_archive(args.output, psr=args.psr, dm=dm, center=args.center)
 
 logger.success(f"Template saved to {args.output}")

@@ -6,6 +6,93 @@ from astropy.coordinates import SkyCoord
 from ..utils.correlation import discrete_shifts, fourier_shifts
 from ..utils.logger import logger
 
+
+def center_profile(prof):
+    """
+    To center the profile so that the phase of the fundamental Fourier harmonic is zero (i.e., the Princeton convention; adopted from PRESTO).
+
+    Parameters
+    ----------
+    prof : array_like
+        The input profile to be centered.
+
+    Returns
+    -------
+    out : ndarray
+        The centered profile.
+    rot : float
+        The applied leftward rotation in turns (0-1).
+    """
+
+    # Take the FFT of the profile
+    f = np.fft.rfft(prof)
+
+    # Find the phase of the fundamental Fourier harmonic
+    phi = np.angle(f[..., 1].sum())
+
+    # Shift the profile to center the fundamental phase at zero
+    f = f * np.exp(-1j * np.arange(len(f)) * phi)
+
+    # Inverse FFT to get the centered profile in the time domain
+    out = np.fft.irfft(f, n=len(prof), axis=-1)
+
+    # Calculate the applied rotation in phase
+    rot = np.mod(-phi / (2 * np.pi), 1.0)
+
+    return out, rot
+
+def get_template_from_archive(filename):
+    from ..io.archive import ArchiveReader
+
+    return Template(
+        ArchiveReader(filename).get_amps()
+    )
+
+class Template(list):
+    """A pulse profile template that behaves like a list of floats."""
+
+    def __init__(self, template=()):
+        super().__init__(template)
+
+    def __getitem__(self, index):
+        result = super().__getitem__(index)
+        return Template(result) if isinstance(index, slice) else result
+
+    def center(self):
+        """
+        Center the profile following the Princeton convention.
+        """
+
+        centered, rot = center_profile(self)
+        self[:] = centered
+        
+        return rot
+
+    def to_list(self):
+        """
+        Return a plain list copy of the template.
+        """
+
+        return list(self)
+
+    def to_archive(self, filename, psr="Template", dm=0, overwrite=True):
+        """
+        Write the template to a PSRCHIVE compatible format.
+        """
+
+        from ..io.template_writer import TemplateWriter # Import the TemplateWriter here since TemplateWriter uses psrchive package but there's no reason for web server to install it. 
+        
+        with TemplateWriter(filename, overwrite=overwrite) as writer:
+            # Write the data to the archive
+            writer.write(self.to_list(), interpolate=True)
+
+            # Set the metadata
+            writer.set_source(psr)
+            writer.set_dm(dm)
+            
+            # Unload the archive
+            writer.unload()
+
 class StackTemplateState:
     def __init__(self, profiles, shift_meth):
 
@@ -195,7 +282,7 @@ class StackTemplate:
         """
         Get the template.
         """
-        return self.state.template
+        return Template(self.state.template)
 
     def get_aligned_profiles(self):
         """
@@ -209,20 +296,18 @@ class StackTemplate:
         """
         return self.get_template(), self.get_aligned_profiles()
 
-    def to_archive(self, filename, psr="Template", dm=0, overwrite=True):
+    def to_archive(self, filename, psr="Template", dm=0, center=False, overwrite=True):
         """
         Write the template to a PSRCHIVE compatible format.
         """
 
-        from ..io.template_writer import TemplateWriter # Import the TemplateWriter here since TemplateWriter uses psrchive package but there's no reason for web server to install it. 
-        
-        with TemplateWriter(filename, overwrite=overwrite) as writer:
-            # Write the data to the archive
-            writer.write(self.get_template(), interpolate=True)
+        # Get template
+        templ = self.get_template()
 
-            # Set the metadata
-            writer.set_source(psr)
-            writer.set_dm(dm)
-            
-            # Unload the archive
-            writer.unload()
+        # Center the template if requested
+        if center:
+            templ.center()
+
+        # Save the template to the archive
+        templ.to_archive(filename, psr=psr, dm=dm, overwrite=overwrite)
+
