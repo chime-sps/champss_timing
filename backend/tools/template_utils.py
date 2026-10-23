@@ -44,15 +44,20 @@ def center_profile(prof):
 def get_template_from_archive(filename):
     from ..io.archive import ArchiveReader
 
-    return Template(
-        ArchiveReader(filename).get_amps()
-    )
+    ar = ArchiveReader(filename)
+    amps = ar.get_amps()
+    dm = ar.get_dm()
+    psr = ar.get_psr()
+
+    return Template(amps, dm=dm, psr=psr)
 
 class Template(list):
     """A pulse profile template that behaves like a list of floats."""
 
-    def __init__(self, template=()):
+    def __init__(self, template=(), psr="Template", dm=0):
         super().__init__(template)
+        self.psr = psr
+        self.dm = dm
 
     def __getitem__(self, index):
         result = super().__getitem__(index)
@@ -75,7 +80,7 @@ class Template(list):
 
         return list(self)
 
-    def to_archive(self, filename, psr="Template", dm=0, overwrite=True):
+    def to_archive(self, filename, overwrite=True):
         """
         Write the template to a PSRCHIVE compatible format.
         """
@@ -87,8 +92,8 @@ class Template(list):
             writer.write(self.to_list(), interpolate=True)
 
             # Set the metadata
-            writer.set_source(psr)
-            writer.set_dm(dm)
+            writer.set_source(self.psr)
+            writer.set_dm(self.dm)
             
             # Unload the archive
             writer.unload()
@@ -278,11 +283,18 @@ class StackTemplate:
 
         return residuals
 
-    def get_template(self):
+    def get_template(self, psr="Template", dm=0):
         """
-        Get the template.
+        Get the template. The method returns a Template object with the specified pulsar name and dispersion measure.
+
+        Parameters
+        ----------
+        psr : str
+            Pulsar name for the template (default: "Template").
+        dm : float
+            Dispersion measure for the template (default: 0).
         """
-        return Template(self.state.template)
+        return Template(self.state.template, psr=psr, dm=dm)
 
     def get_aligned_profiles(self):
         """
@@ -302,12 +314,12 @@ class StackTemplate:
         """
 
         # Get template
-        templ = self.get_template()
+        templ = self.get_template(psr=psr, dm=dm)
 
         # Center the template if requested
         if center:
             templ.center()
 
         # Save the template to the archive
-        templ.to_archive(filename, psr=psr, dm=dm, overwrite=overwrite)
+        templ.to_archive(filename, overwrite=overwrite)
 

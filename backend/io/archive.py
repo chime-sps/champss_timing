@@ -66,6 +66,9 @@ class ArchiveReader:
     def get_dm(self):
         return self.archive.get_dispersion_measure()
 
+    def get_psr(self):
+        return self.archive.get_source()
+
     def get_ephem(self):
         # Use TempFile context manager to handle temporary file
         with TempFile() as tmp_filename:
