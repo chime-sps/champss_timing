@@ -420,7 +420,7 @@ class src_loader():
     def get_profile_data(self, filename):
         return self.db.get_archive_info_by_filename(filename)
     
-    def get_latest_profile(self, xy=False, centered=True):
+    def get_latest_profile(self, xy=False, rotate=0):
         # Last archive info
         last_archive_info = self.last_archive_info
 
@@ -431,17 +431,17 @@ class src_loader():
             }
 
         # Center profile if needed
-        if centered and len(last_archive_info["psr_amps"]) > 0:
-            i_max = np.argmax(last_archive_info["psr_amps"])
-            last_archive_info["psr_amps"] = np.roll(last_archive_info["psr_amps"], int(len(last_archive_info["psr_amps"])/4)-i_max).tolist()
+        amp = last_archive_info["psr_amps"]
+        if rotate != 0 and len(last_archive_info["psr_amps"]) > 0:
+            amp = np.roll(last_archive_info["psr_amps"], int(len(last_archive_info["psr_amps"])*rotate)).tolist()
 
         if xy:
-            x = np.linspace(0, 1, len(last_archive_info["psr_amps"]))
-            return {"x": x.tolist(), "y": last_archive_info["psr_amps"]}
+            x = np.linspace(0, 1, len(amp)) - rotate
+            return {"x": x.tolist(), "y": amp}
         
-        return last_archive_info["psr_amps"]
+        return amp
     
-    def get_profile_template(self, xy=False, centered=True):
+    def get_profile_template(self, xy=False, rotate=0):
         # Get template from config
         template = self.db.get_config("__template:amps")
 
@@ -452,12 +452,11 @@ class src_loader():
             template = json.loads(template)
 
         # Center template if needed
-        if centered and len(template) > 0:
-            i_max = np.argmax(template)
-            template = np.roll(template, int(len(template)/4)-i_max).tolist()
+        if rotate != 0 and len(template) > 0:
+            template = np.roll(template, int(len(template)*rotate)).tolist()
         
         if xy:
-            x = np.linspace(0, 1, len(template))
+            x = np.linspace(0, 1, len(template)) - rotate
             return {"x": x.tolist(), "y": template}
         
         return template
@@ -536,21 +535,21 @@ class src_loader():
 
         return stacked_profile, pointing_positions
     
-    def get_stacked_profile(self, xy=False, centered=True):
+    def get_stacked_profile(self, xy=False, rotate=0):
         # Get stacked profile if not already loaded
         if self.stacked_profile == [] or self.stacked_profile is None:
             self.cache_stacked_profile_and_pointing_positions()
 
         # Center stacked profile if needed
-        if centered and len(self.stacked_profile) > 0:
-            i_max = np.argmax(self.stacked_profile)
-            self.stacked_profile = np.roll(self.stacked_profile, int(len(self.stacked_profile)/4)-i_max).tolist()
+        profile = self.stacked_profile
+        if rotate != 0 and len(self.stacked_profile) > 0:
+            profile = np.roll(profile, int(len(profile)*rotate)).tolist()
 
         if xy:
-            x = np.linspace(0, 1, len(self.stacked_profile))
-            return {"x": x.tolist(), "y": self.stacked_profile}
+            x = np.linspace(0, 1, len(profile)) - rotate
+            return {"x": x.tolist(), "y": profile}
 
-        return self.stacked_profile
+        return profile
 
     def get_pointing_positions(self):
         # Get pointing positions if not already loaded
@@ -610,7 +609,7 @@ class src_loader():
 
         api = "https://simbad.cds.unistra.fr/simbad/sim-coo?output.format=ASCII&Coord=%RA%+%DEC%&Radius=%RADIUS%&Radius.unit=deg"
         api = api.replace("%RA%", str(ra)).replace("%DEC%", str(dec)).replace("%RADIUS%", str(radius))
-        table_raw = requests.get(api).text
+        table_raw = requests.get(api, timeout=10).text
         
         table = {}
         for line in table_raw.split("\n"):
@@ -687,9 +686,12 @@ class src_loader():
 
         # simbad query
         if simbad:
-            sources += self.simbad_query(ra, dec, radius)
-            self.source_coincidences_catalogs.append("SIMBAD Query")
-            print(f"Found {len(sources)} sources in total with SIMBAD Query")
+            try:
+                sources += self.simbad_query(ra, dec, radius)
+                self.source_coincidences_catalogs.append("SIMBAD Query")
+                print(f"Found {len(sources)} sources in total with SIMBAD Query")
+            except Exception as e:
+                print(f"SIMBAD query failed: {e}")
 
         # sort by distance
         sources = sorted(sources, key=lambda x: x["distance"])

@@ -229,7 +229,7 @@
                             <h6><b>TEMPLATE</b></h6>
                             <div id="profile_template" style="width: 100%; height: 250px; "></div>
                             <script>
-                                var profile_template = {{ sources[source_id].get_profile_template(xy=True) | safe }};
+                                var profile_template = {{ sources[source_id].get_profile_template(xy=True, rotate=0.25) | safe }};
                                 var trace = {
                                     x: profile_template["x"],
                                     y: profile_template["y"],
@@ -257,6 +257,22 @@
                                         showticklabels: false,
                                         exponentformat: 'none',
                                     },
+                                    shapes: [
+                                        {
+                                            type: 'line',
+                                            xref: 'x',
+                                            yref: 'paper', // Spans full height like axvline
+                                            x0: 0,         // Placed at X = 0
+                                            y0: 0,         // Bottom of plot area
+                                            x1: 0,         // Placed at X = 0
+                                            y1: 1,         // Top of plot area
+                                            line: {
+                                                color: 'black', // c="k"
+                                                width: 1.5,
+                                                dash: 'dot'     // linestyle=":"
+                                            }
+                                        }
+                                    ], 
                                     showlegend: false,
                                     margin: {'t':0,'l':0,'b':0,'r':0}
                                 };
@@ -275,7 +291,7 @@
                         <h6><b>STACKED</b></h6>
                         <div id="profile_stacked" style="width: 100%; height: 250px; "></div>
                         <script>
-                            var profile_stacked = {{ sources[source_id].get_stacked_profile(xy=True) | safe }};
+                            var profile_stacked = {{ sources[source_id].get_stacked_profile(xy=True, rotate=0.25) | safe }};
                             var trace = {
                                 x: profile_stacked["x"],
                                 y: profile_stacked["y"],
@@ -302,6 +318,22 @@
                                     showticklabels: false,
                                     exponentformat: 'none'
                                 },
+                                shapes: [
+                                    {
+                                        type: 'line',
+                                        xref: 'x',
+                                        yref: 'paper', // Spans full height like axvline
+                                        x0: 0,         // Placed at X = 0
+                                        y0: 0,         // Bottom of plot area
+                                        x1: 0,         // Placed at X = 0
+                                        y1: 1,         // Top of plot area
+                                        line: {
+                                            color: 'black', // c="k"
+                                            width: 1.5,
+                                            dash: 'dot'     // linestyle=":"
+                                        }
+                                    }
+                                ], 
                                 showlegend: false,
                                 margin: {'t':0,'l':0,'b':0,'r':0}
                             };
@@ -319,7 +351,7 @@
                         <h6><b>LATEST</b> <small style="font-size: 0.6em;">(SINGLE-DAY)</small></h6>
                         <div id="profile_latest" style="width: 100%; height: 250px; "></div>
                         <script>
-                            var profile_latest = {{ sources[source_id].get_latest_profile(xy=True) | safe }};
+                            var profile_latest = {{ sources[source_id].get_latest_profile(xy=True, rotate=0.25) | safe }};
                             var trace = {
                                 x: profile_latest["x"],
                                 y: profile_latest["y"],
@@ -346,6 +378,22 @@
                                     showticklabels: false,
                                     exponentformat: 'none'
                                 },
+                                shapes: [
+                                    {
+                                        type: 'line',
+                                        xref: 'x',
+                                        yref: 'paper', // Spans full height like axvline
+                                        x0: 0,         // Placed at X = 0
+                                        y0: 0,         // Bottom of plot area
+                                        x1: 0,         // Placed at X = 0
+                                        y1: 1,         // Top of plot area
+                                        line: {
+                                            color: 'black', // c="k"
+                                            width: 1.5,
+                                            dash: 'dot'     // linestyle=":"
+                                        }
+                                    }
+                                ], 
                                 showlegend: false,
                                 margin: {'t':0,'l':0,'b':0,'r':0}
                             };
