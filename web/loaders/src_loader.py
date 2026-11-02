@@ -111,7 +111,11 @@ class src_loader():
                     radius=self.source_coincidences_radius, 
                     simbad=self.query_simbad
                 )
+        except Exception as e:
+            print(f"Error while loading source coincidences: {e}")
+            print(traceback.format_exc())
 
+        try:
             # Get checker warnings
             if self.checker_warnings is None:
                 self.checker_warnings = self.get_checker_warnings()
@@ -590,7 +594,7 @@ class src_loader():
 
         return stacked_data
 
-    def simbad_query(self, ra, dec, radius=0.5):
+    def simbad_query(self, ra, dec, radius=0.5, timeout=10):
         def parse_coord(coord):
             # split coord
             coord = coord.split(" ")
@@ -606,10 +610,11 @@ class src_loader():
             dec = float(dec_d) + float(dec_m)/60 + float(dec_s)/3600
 
             return ra, dec
+            
 
         api = "https://simbad.cds.unistra.fr/simbad/sim-coo?output.format=ASCII&Coord=%RA%+%DEC%&Radius=%RADIUS%&Radius.unit=deg"
         api = api.replace("%RA%", str(ra)).replace("%DEC%", str(dec)).replace("%RADIUS%", str(radius))
-        table_raw = requests.get(api, timeout=10).text
+        table_raw = requests.get(api, timeout=timeout).text
         
         table = {}
         for line in table_raw.split("\n"):
