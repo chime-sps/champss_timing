@@ -1,6 +1,7 @@
-import subprocess
 import os
 import shutil
+
+from backend.tools.template_utils import get_template_from_archive
 
 class CLINewPulsar:
     def __init__(self, sourcedir):
@@ -115,6 +116,22 @@ class CLINewPulsar:
 
     def create_psr_config(self):
         return self.__create_text_file_in_psrdir("champss_timing.config")
+
+    def center_profile_template(self):
+        template_path = os.path.join(self.get_psrdir(), "paas.std")
+        if not os.path.exists(template_path):
+            return False
+
+         # Load template
+        template = get_template_from_archive(template_path)
+    
+        # Center template
+        template.center()
+    
+        # Overwrite the original template with the centered version
+        template.to_archive(template_path)
+        
+        return True
 
     def commit(self):
         if self.psrdir_tmp and os.path.exists(self.psrdir_tmp):

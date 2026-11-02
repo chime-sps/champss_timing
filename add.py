@@ -179,7 +179,6 @@ def run_phase_coherent_search(new_pulsar):
         if choice == "abort":
             raise SetupAborted("Standard profile template creation aborted.")
 
-
 def setup_manually(new_pulsar):
     input("Press Enter to create the pulsar parfile...")
     retry_until_success(
@@ -192,6 +191,26 @@ def setup_manually(new_pulsar):
         "Enter the path to the pulsar standard profile template: ",
     )
 
+
+def center_profile_template(new_pulsar):
+    # Center template
+    print("Centering the profile template...")
+    new_pulsar.center_profile_template()
+
+    # View template
+    print("Viewing the centered profile template...")
+    os.system(f"pazi {os.path.join(new_pulsar.get_psrdir(), 'paas.std')}")
+
+    choice = ask_options(
+        "Is the centered profile template satisfactory?",
+        {
+            "yes": "Use this template",
+            "abort": "Abort the setup",
+        },
+    )
+
+    if choice == "abort":
+        raise SetupAborted("Profile template centering aborted.")
 
 def configure(new_pulsar):
     config_option = ask_options(
@@ -233,6 +252,9 @@ def setup(new_pulsar):
         setup_manually(new_pulsar)
     else:
         run_phase_coherent_search(new_pulsar)
+
+    # Center the profile template
+    center_profile_template(new_pulsar)
 
     # Configure the new pulsar
     configure(new_pulsar)
