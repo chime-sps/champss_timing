@@ -1,13 +1,66 @@
 import numpy as np
+import pint.logging
+import tqdm
 from pint.models import get_model
+from multiprocessing import Pool
+
 from ..utils.phase_coherent_search import PhaseCoherentSearch
 from ..utils.logger import logger
 
 from ..tools.ephm_install import EphmInstall
 from ..io.archive import ArchiveReader
 
+def InitialTimingSolutionOptimizer__load_archive_worker(payload):
+    """
+    Worker function to load an archive and apply the ephemeris model.
+
+    Parameters
+    ----------
+    payload : tuple
+        A tuple containing the archive file path and the model.
+
+    Returns
+    -------
+    tuple
+        A tuple containing the archive file path, the processed profile, and the epoch.
+    """
+
+    # Set logging level
+    pint.logging.setup(level="WARNING")
+
+    # Unpack the payload into archive file and model
+    archive_file, model = payload
+
+    # Load archive
+    archive = ArchiveReader(
+        archive_file, 
+        dedisperse=True, 
+        remove_baseline=True
+    )
+
+    # Get profile
+    profile = archive.get_amps(tolist=True)
+
+    # Get metadata
+    epoch = archive.get_epoch()
+    freq = archive.get_freq()
+    site = archive.get_telescope()
+
+    # Install ephemeris
+    profile = EphmInstall(
+        amps=profile, 
+        freq=freq, 
+        epoch=epoch, 
+        site=site
+    ).install_model(model)
+
+    return archive_file, profile, epoch
+
 class InitialTimingSolution:
     def __init__(self, model, best_pcs_state, logger=logger()):
+        # Set logging level
+        pint.logging.setup(level="WARNING")
+        
         self.model = model
         self.best_pcs_state = best_pcs_state
         self.logger = logger
@@ -49,11 +102,12 @@ class InitialTimingSolution:
             writer.unload()
 
 class InitialTimingSolutionOptimizer:
-    def __init__(self, parfile, archive_files, max_n_obs=None, max_duty_cycle=None, logger=logger()):
+    def __init__(self, parfile, archive_files, max_n_obs=None, max_duty_cycle=None, ncpus=1, logger=logger()):
         self.logger = logger
         self.max_n_obs = max_n_obs
         self.max_duty_cycle = max_duty_cycle
         self.max_width = None
+        self.ncpus = ncpus
 
         # Load model
         self.logger.debug(f"Loading model...")
@@ -89,46 +143,28 @@ class InitialTimingSolutionOptimizer:
 
         return m
 
-
     def __load_archives(self, archive_files, model, max_n_obs):
         """Helper function to load multiple archives."""
-        files = []
-        profiles = []
-        epochs = []
-        for i, archive_file in enumerate(archive_files):
-            if i > 14: # Show progress when too many archives to be loaded
-                self.logger.debug(f"It may take a while to load {len(archive_files)} archives ({len(archive_files) - i} left)... ", layer=1, end="\r")
 
-            # Load archive
-            archive = ArchiveReader(
-                archive_file, 
-                dedisperse=True, 
-                remove_baseline=True
+        # Use multiprocessing to load archives in parallel
+        with Pool(processes=self.ncpus) as pool:
+            results = list(
+                tqdm.tqdm(
+                    pool.imap(
+                        InitialTimingSolutionOptimizer__load_archive_worker, 
+                        [(archive_file, model) for archive_file in archive_files]
+                    ), 
+                    total=len(archive_files), 
+                    bar_format="(Loading {n_fmt}/{total_fmt} archive files, {remaining} remaining)" if len(archive_files) > 14 else "",
+                    leave=False
+                )
             )
 
-            # Get profile
-            profile = archive.get_amps(tolist=True)
-
-            # Get metadata
-            epoch = archive.get_epoch()
-            freq = archive.get_freq()
-            site = archive.get_telescope()
-
-            # Install ephemeris
-            profile = EphmInstall(
-                amps=profile, 
-                freq=freq, 
-                epoch=epoch, 
-                site=site
-            ).install_model(model)
-
-            files.append(archive_file)
-            profiles.append(profile)
-            epochs.append(epoch)
+        # Unpack the results
+        files, profiles, epochs = zip(*results)
+        files, profiles, epochs = list(files), list(profiles), list(epochs)
         
-
-        if i > 14:
-            self.logger.debug(f"\nFinished loading {len(archive_files)} archives.", layer=1)
+        self.logger.debug(f"\nFinished loading {len(archive_files)} archive files.", layer=1)
 
         # Sort the profiles and epochs by epochs
         sorted_indices = sorted(range(len(epochs)), key=lambda i: epochs[i])
@@ -144,7 +180,7 @@ class InitialTimingSolutionOptimizer:
 
         return files, profiles, epochs
 
-    def optimize(self, n_df0_trials=512, n_df1_trials=256, ncpus=1):
+    def optimize(self, n_df0_trials=512, n_df1_trials=256):
         """
         Find an initial guess for the timing solution based on the loaded profiles and the model.
         """
@@ -169,6 +205,6 @@ class InitialTimingSolutionOptimizer:
 
         # Initialize PCS
         pcs = PhaseCoherentSearch(profiles=self.profiles, epochs=self.epochs, center_epoch=pepoch, max_width=self.max_width)
-        best_pcs_state = pcs.search(df0_vals=df0_vals,df1_vals=df1_vals, ncpus=ncpus)
+        best_pcs_state = pcs.search(df0_vals=df0_vals,df1_vals=df1_vals, ncpus=self.ncpus)
 
         return InitialTimingSolution(model=self.model, best_pcs_state=best_pcs_state, logger=self.logger)

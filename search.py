@@ -22,7 +22,7 @@ parser.add_argument("--parfile", required=False, default=None, help="Parfile con
 parser.add_argument("--output", required=False, default=None, help=f"Output directory for generated diagnostics, parfile, and stacked profile (default: ./{TIMING_SOURCES_PATH}/<psrname>)")
 parser.add_argument("--max-n-obs", "-N", required=False, default=60, type=int, help=f"Maximum number of observations to use in the search (default: 60)")
 parser.add_argument("--max-duty-cycle", required=False, default=None, type=float, help=f"Maximum duty cycle of the pulsar profile (default: None)")
-parser.add_argument("--ncpus", required=False, default=1, help="Number of CPU cores to use for the search (default: 1)")
+parser.add_argument("--ncpus", required=False, default=1, type=int, help="Number of CPU cores to use for the search (default: 1)")
 args = parser.parse_args()
 
 # Check if archives is provided
@@ -43,7 +43,8 @@ cli_search = CLIInitialTimingSolutionSearch(
         "psrname": args.psr
     }, 
     max_n_obs=args.max_n_obs,
-    max_duty_cycle=args.max_duty_cycle
+    max_duty_cycle=args.max_duty_cycle, 
+    ncpus=args.ncpus
 )
 
 # Determine the output directory

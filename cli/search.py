@@ -34,6 +34,7 @@ class CLIInitialTimingSolutionSearch:
             self.archive_files, 
             max_n_obs=self.max_n_obs,
             max_duty_cycle=self.max_duty_cycle,
+            ncpus=self.ncpus, 
             logger=logger.copy()
         )
 
@@ -49,7 +50,7 @@ class CLIInitialTimingSolutionSearch:
         archive_path = f"{output_dir}/search.ar"
 
         # Optimize the initial timing solution
-        solution = self.optimizer.optimize(ncpus=self.ncpus)
+        solution = self.optimizer.optimize()
         solution.plot(savefig=plot_path)
         self.logger.success(f"Diagnostic plot -> {plot_path}. ", layer=1)
         solution.write_parfile(parfile_path)
