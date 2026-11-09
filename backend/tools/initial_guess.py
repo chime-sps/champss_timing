@@ -238,7 +238,7 @@ class InitialTimingSolutionOptimizer:
             # Apply the mask
             files = [files[i] for i in indices]
             profiles = [profiles[i] for i in indices]
-            epochs = [epochs[i] for i in indices]
+            epochs = np.array([epochs[i] for i in indices])
 
         return files, profiles, epochs
 
