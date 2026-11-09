@@ -196,6 +196,7 @@ def pulse_profiles_get_data(source_id, filename):
     return app.sources[source_id].get_profile_data(filename)
 
 @app.route('/diagnostic/<source_id>/pdf')
+@app.route('/diagnostic/<source_id>/pdf/')
 def diagnostic_pdf(source_id):
     if source_id not in app.sources:
         abort(404)
@@ -204,14 +205,8 @@ def diagnostic_pdf(source_id):
     res.headers['Content-Type'] = 'application/pdf'
     return res
 
-@app.route('/diagnostic/<source_id>/pdf/')
-def diagnostic_pdf_(source_id):
-    if source_id not in app.sources:
-        abort(404)
-
-    return diagnostic_pdf(source_id)
-
 @app.route('/diagnostic/<source_id>/parfile')
+@app.route('/diagnostic/<source_id>/parfile/')
 def parfile(source_id):
     if source_id not in app.sources:
         abort(404)
@@ -221,11 +216,8 @@ def parfile(source_id):
     res.headers['Content-Disposition'] = f'attachment; filename="champss_timing_{source_id}.par"'
     return res
 
-@app.route('/diagnostic/<source_id>/parfile/')
-def parfile_(source_id):
-    return parfile(source_id)
-
 @app.route('/diagnostic/<source_id>/timfile')
+@app.route('/diagnostic/<source_id>/timfile/')
 def timfile(source_id):
     if source_id not in app.sources:
         abort(404)
@@ -235,11 +227,8 @@ def timfile(source_id):
     res.headers['Content-Disposition'] = f'attachment; filename="champss_timing_{source_id}.tim"'
     return res
 
-@app.route('/diagnostic/<source_id>/timfile/')
-def timfile_(source_id):
-    return timfile(source_id)
-
 @app.route('/diagnostic/<source_id>/dbfile')
+@app.route('/diagnostic/<source_id>/dbfile/')
 def sqlite3(source_id):
     if source_id not in app.sources:
         abort(404)
@@ -248,10 +237,6 @@ def sqlite3(source_id):
     res.headers['Content-Type'] = 'application/octet-stream'
     res.headers['Content-Disposition'] = f'attachment; filename="champss_timing_{source_id}.sqlite3.db"'
     return res
-
-@app.route('/diagnostic/<source_id>/dbfile/')
-def sqlite3_(source_id):
-    return sqlite3(source_id)
 
 @app.route('/diagnostic/<source_id>/dealias/diagnostics')
 @app.route('/diagnostic/<source_id>/dealias/diagnostics/')
@@ -295,13 +280,18 @@ def dealias_stack_file(source_id):
     res.headers['Content-Disposition'] = f'attachment; filename="champss_timing_{source_id}_stack_file.npz"'
     return res
 
-@app.route('/diagnostic/<source_id>/dealias/stack_phase_frequency')
-@app.route('/diagnostic/<source_id>/dealias/stack_phase_frequency/')
-def dealias_stack_phase_frequency(source_id):
+@app.route('/diagnostic/<source_id>/dealias/stacked', methods=['GET'])
+def dealias_stacked_data(source_id):
     if source_id not in app.sources:
         abort(404)
 
-    stacked_data = app.sources[source_id].get_stacked_data()
+    if "axis" not in request.args:
+        abort(400)
+    axis = request.args.get("axis")
+    if axis not in ["time", "freq"]:
+        abort(400)
+
+    stacked_data = app.sources[source_id].get_stacked_data(axis=axis)
     if stacked_data is None:
         return '{"not_available": "No stacked file from the de-aliasing pipeline, or the data may have been generated from an older version of the pipeline."}'
 
@@ -310,6 +300,23 @@ def dealias_stack_phase_frequency(source_id):
         response=json.dumps(stacked_data),
         status=200,
         mimetype='application/json'
+    )
+
+@app.route('/diagnostic/<source_id>/stacked')
+def stacked(source_id, methods=['GET']):
+    if source_id not in app.sources:
+        abort(404)
+
+    return render_template(
+        'stacked.html',
+        app=app,
+        url_for=app._url_for,
+        source_id=source_id,
+        sources=app.sources,
+        request=request, 
+        show_sidebar=False, 
+        stack_file_exists=os.path.exists(app.sources[source_id].dealias_stack_file), 
+        axis=request.args.get("axis", "time")
     )
 
 @app.route('/pint')

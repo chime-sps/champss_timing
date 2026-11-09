@@ -77,6 +77,7 @@
                             <li><a class="dropdown-item" href="#" id="show_pint_editor">PINT Model Editor</a></li>
                             <li><a class="dropdown-item" href="#" id="show_pulse_profiles">Pulse Profiles Browser</a></li>
                             <li><a class="dropdown-item" href="#" id="show_dealias_info">De-aliasing Pipeline Diagnostics </a></li>
+                            <li><a class="dropdown-item" href="#" id="show_stacked_data">Stacked Data Viewer</a></li>
                             <li><hr class="dropdown-divider"></li>
                             <li><h6 class="dropdown-header">Debug</h6></li>
                             <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#processing_log_modal">Processing Log Viewer</a></li>
@@ -215,7 +216,19 @@
         <hr style="margin-top: 30px; ">
         <h4 id="sec_pulse_profiles">
             Pulse Profiles
+
             <div style="float: right; font-size: 0.5em; transform: scale(0.75, 0.75); transform-origin: right; ">
+                <div class="btn-group" role="group">
+                    <!-- on hover show underline -->
+                    <a type="button" class="btn btn-sm underline-on-hover" id="show_stacked_data_inline">
+                        Stacked data - 
+                        {% if not sources[source_id].resources_status["dealias_stack_file"]: %}
+                        unavailable
+                        {% else %}
+                        <b class="text-color-success">available</b>
+                        {% endif %}
+                    </a>
+                </div>
                 <div class="btn-group" role="group">
                     <button type="button" class="btn btn-light btn-sm" id="show_pulse_profiles_inline">Pulse Profiles Browser</button>
                 </div>
@@ -1016,6 +1029,15 @@
 
             // open the pulse profiles browser
             let newWin = window.open("{{ url_for("diagnostic", source_id=source_id) }}/pulse_profiles", "pp_browser_{{ sources[source_id].psr_id_esc }}", 'width=1920,height=1080');
+        });
+    </script>
+
+    <script>
+        $("#show_stacked_data, #show_stacked_data_inline").on("click", function() {
+            var url_time_panel = "{{ url_for('stacked', source_id=source_id) }}?axis=" + "time";
+            // var url_freq_panel = "{{ url_for('stacked', source_id=source_id) }}?axis=" + "freq";
+            window.open(url_time_panel, "stacked_time_{{ sources[source_id].psr_id_esc }}", 'width=1080,height=800');
+            // window.open(url_freq_panel, "stacked_freq_{{ sources[source_id].psr_id_esc }}", 'width=1080,height=800');
         });
     </script>
 

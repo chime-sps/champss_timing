@@ -577,7 +577,7 @@ class src_loader():
 
         return {"RAJ": raj_err, "DECJ": decj_err}
 
-    def get_stacked_data(self):
+    def get_stacked_data(self, axis):
         if not os.path.exists(self.dealias_stack_file):
             return None
 
@@ -586,8 +586,10 @@ class src_loader():
         stacked_data_raw = np.load(self.dealias_stack_file, allow_pickle=True)
 
         # Averages to get stacked phase and stacked frequencies 
-        stacked_data["phase"] = stacked_data_raw["data"].mean(axis=2).squeeze().tolist()
-        stacked_data["freq"] = stacked_data_raw["data"].mean(axis=0).squeeze().tolist()
+        if axis == "time":
+            stacked_data["data"] = stacked_data_raw["data"].mean(axis=2).squeeze().tolist()
+        elif axis == "freq":
+            stacked_data["data"] = stacked_data_raw["data"].mean(axis=0).squeeze().tolist()
 
         # Write metadata
         stacked_data["metadata"] = utils.numpy_to_native(stacked_data_raw["metadata"])
