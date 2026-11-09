@@ -20,8 +20,10 @@ parser.add_argument("--pepoch", required=False, default=None, help="Reference ep
 parser.add_argument("--psr", required=False, default=None, help="Pulsar name (e.g., J1234+5678) (optional)")
 parser.add_argument("--parfile", required=False, default=None, help="Parfile containing pulsar parameters (optional; ignore parameter inputs if provided)")
 parser.add_argument("--output", required=False, default=None, help=f"Output directory for generated diagnostics, parfile, and stacked profile (default: ./{TIMING_SOURCES_PATH}/<psrname>)")
-parser.add_argument("--max-n-obs", "-N", required=False, default=60, type=int, help=f"Maximum number of observations to use in the search (default: 60)")
+parser.add_argument("--max-n-obs", "-N", required=False, default=30, type=int, help=f"Maximum number of observations to use in the search (default: 30)")
 parser.add_argument("--max-duty-cycle", required=False, default=None, type=float, help=f"Maximum duty cycle of the pulsar profile (default: None)")
+parser.add_argument("--fine", required=False, action="store_true", help="Search finely around the initial guess (useful when the initial guess is close to the true solution)")
+parser.add_argument("--coarse", required=False, action="store_true", help="Search coarsely around the initial guess (useful when the initial guess is far from the true solution)")
 parser.add_argument("--ncpus", required=False, default=1, type=int, help="Number of CPU cores to use for the search (default: 1)")
 args = parser.parse_args()
 
@@ -43,7 +45,8 @@ cli_search = CLIInitialTimingSolutionSearch(
         "psrname": args.psr
     }, 
     max_n_obs=args.max_n_obs,
-    max_duty_cycle=args.max_duty_cycle, 
+    max_duty_cycle=args.max_duty_cycle,
+    search_mode="fine" if args.fine else "coarse" if args.coarse else "default", 
     ncpus=args.ncpus
 )
 
@@ -72,6 +75,7 @@ print(f" Max duty cycle: {args.max_duty_cycle} ({'not set' if args.max_duty_cycl
 print(f" Parfile: {args.parfile if args.parfile is not None else '(not provided)'}")
 print(f" Output: {args.output}")
 print(f" Number of CPU cores: {args.ncpus}")
+print(f" Search mode: {cli_search.search_mode}")
 print(f" Archives: ")
 for archive in cli_search.optimizer.archive_files:
     print(f"  {archive}")

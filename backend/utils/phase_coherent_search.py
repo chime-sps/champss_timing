@@ -91,7 +91,8 @@ class PulseProfilesState:
             self.epochs, 
             np.tile(self.shifted_profiles, (1, 2)), 
             shading='auto', 
-            cmap='gray_r'
+            cmap='gray_r', 
+            rasterized=True
         )
         ax[1, 0].set_xlabel("Bin")
         ax[1, 0].set_ylabel("Epoch")
@@ -119,7 +120,8 @@ class PulseProfilesState:
                     dtype=np.float64
                 ),
                 shading='auto',
-                cmap='gray_r'
+                cmap='gray_r', 
+                rasterized=True
             )
             ax[1, 1].plot(self.df1, self.df0, 'rx')
             ax[1, 1].axhline(self.df0, color='r', linestyle='--', lw=0.5, alpha=0.25)

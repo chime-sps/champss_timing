@@ -11,12 +11,13 @@ from pint import logging
 logging.setup(level="ERROR")
 
 class CLIInitialTimingSolutionSearch:
-    def __init__(self, archive_files, parfile=None, params=None, max_n_obs=60, max_duty_cycle=None, ncpus=1, logger=logger()):
+    def __init__(self, archive_files, parfile=None, params=None, max_n_obs=60, max_duty_cycle=None, search_mode="default", ncpus=1, logger=logger()):
         self.archive_files = archive_files
         self.logger = logger
         self.ncpus = ncpus
         self.max_n_obs = max_n_obs
         self.max_duty_cycle = max_duty_cycle
+        self.search_mode = search_mode
 
         if params is not None and params["ra"] is not None: # Create parfile if parameters are provided
             self.logger.info(f"Creating parfile from provided model parameters.")
@@ -28,6 +29,21 @@ class CLIInitialTimingSolutionSearch:
             self.logger.info(f"No parfile or model parameters provided. Using ephemeris from the first archive file: {archive_files[0]}. ")
             self.parfile = ArchiveReader(archive_files[0]).get_ephem()
 
+        # Setup search parameters
+        self.search_tol = 0.03
+        self.search_max_f1 = 2e-12
+        self.search_reset_f1 = True
+
+        if search_mode == "fine":
+            self.search_tol = 0.01
+            self.search_max_f1 = 1e-12
+            self.search_reset_f1 = False
+        
+        if search_mode == "coarse":
+            self.search_tol = 0.05
+            self.search_max_f1 = 1e-11
+            self.search_reset_f1 = True
+
         # Initialize optimizer
         self.optimizer = InitialTimingSolutionOptimizer(
             StringIO(self.parfile), 
@@ -35,6 +51,8 @@ class CLIInitialTimingSolutionSearch:
             max_n_obs=self.max_n_obs,
             max_duty_cycle=self.max_duty_cycle,
             ncpus=self.ncpus, 
+            max_f1=self.search_max_f1,
+            reset_f1=self.search_reset_f1,
             logger=logger.copy()
         )
 
@@ -50,7 +68,7 @@ class CLIInitialTimingSolutionSearch:
         archive_path = f"{output_dir}/search.ar"
 
         # Optimize the initial timing solution
-        solution = self.optimizer.optimize()
+        solution = self.optimizer.optimize(tol=self.search_tol)
         solution.plot(savefig=plot_path)
         self.logger.success(f"Diagnostic plot -> {plot_path}. ", layer=1)
         solution.write_parfile(parfile_path)

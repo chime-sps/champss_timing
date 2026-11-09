@@ -8,12 +8,27 @@ from pint.polycos import Polycos
 from ..utils.correlation import fourier_shifts
 
 class EphmInstall:
-    def __init__(self, amps, freq, epoch, site):
+    def __init__(self, amps, freq, epoch, site, ref_model=None):
+        """
+        amps: array-like
+            The profile amplitudes.
+        freq: float
+            The observing frequency in MHz.
+        epoch: float
+            The epoch of the observation in MJD.
+        site: str
+            The observatory site code.
+        ref_model: PINT model, optional
+            The reference model for phase alignment. Required if no AbsPhase (i.e., TZRMJD, TZRSITE, TZRFRQ) component is present in the model.
+            If None, the phase is calculated directly from the model.
+        """
+        
         # set data
         self.amps = amps
         self.freq = freq
         self.epoch = epoch
         self.site = site
+        self.ref_model = ref_model
 
         # set model variables
         self.model = None
@@ -65,8 +80,21 @@ class EphmInstall:
         amps = copy.deepcopy(self.amps)
         phase = self.calc_phase(model, DE_eph=DE_eph)
 
+
+        if self.ref_model is None:
+            if "AbsPhase" not in model.components:
+                raise ValueError("Reference model is required if no AbsPhase component is present in the model.")
+            shift = phase.frac[0]
+        else:
+            if "AbsPhase" in model.components or "AbsPhase" in model.components:
+                raise ValueError("AbsPhase component should not be present in the model when a reference model is provided.")
+            init_phase = self.calc_phase(self.ref_model, DE_eph=DE_eph)
+            dphi = (phase.int - init_phase.int) + (phase.frac - init_phase.frac)
+            shift = float(dphi.value[0]) % 1.0
+
         # roll profile with phase
-        amps = self.roll_profile_by_phase(amps, phase.frac[0])
+        amps = self.roll_profile_by_phase(amps, shift)
+        # print("epoch:", self.epoch, "shift:", shift)
 
         # commit changes
         self.model = model
