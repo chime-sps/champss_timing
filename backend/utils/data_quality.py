@@ -17,6 +17,12 @@ class data_quality_utils:
             for w in widths
         )
 
+    @staticmethod
+    def chi2(profile):
+        """Compute the chi-squared of a profile against pure noise"""
+        x = np.asarray(profile, dtype=float)
+        return ((x - x.mean())**2).sum()
+
 class MatchedFilterSNR:
     def __init__(self, profile, template, shift_meth="discrete"):
         self.profile = np.array(profile)
