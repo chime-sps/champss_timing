@@ -2,7 +2,7 @@ import os
 import argparse
 from cli.config import CLIConfig
 from backend.datastores import tmg_master
-from backend.tools.stack_utils import stack_utils
+from backend.tools.stack_utils import StackUtils
 
 # Define
 TIMING_SOURCES_PATH = "./timing_sources"
@@ -112,7 +112,7 @@ if not os.path.exists(args.tmpdir):
     os.makedirs(args.tmpdir)
 
 # Run stacking
-su = stack_utils(
+su = StackUtils(
     files=files, 
     parfile=args.parfile, 
     n_subs=args.nsubs, 

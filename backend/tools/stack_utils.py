@@ -6,37 +6,24 @@ import shutil
 import psrchive
 import traceback
 import numpy as np
+import astropy.units as u
+from collections import Counter
 from scipy.ndimage import zoom
-from multiprocessing import Pool
+from scipy.signal import resample
+from scipy.stats import circmean
+
+try:
+    from multiprocess import Pool
+except ImportError:
+    from multiprocessing import Pool
 
 from ..utils.utils import utils
 from ..utils.logger import logger
 from ..utils.data_quality import data_quality_utils
 from ..processing.dspsr_shutils import dspsr_shutils
 from ..processing.archive_shutils import archive_shutils
+from ..tools.stacked_data import StackedData, StackedDataMetadata
 
-def _normalize_data(data):
-    """
-    Normalize the data by dividing each subint, pol, and freq by its maximum value.
-    Parameters:
-        data (np.ndarray): The data to normalize.
-    Returns:
-        np.ndarray: The normalized data.
-    """
-
-    for i_sub in range(data.shape[0]):
-        for i_pol in range(data.shape[1]):
-            for i_freq in range(data.shape[2]):
-                this_mean = np.nanmean(data[i_sub, i_pol, i_freq])
-                this_std = np.nanstd(data[i_sub, i_pol, i_freq])
-                if this_std != 0:
-                    data[i_sub, i_pol, i_freq] -= (this_mean)
-                    data[i_sub, i_pol, i_freq] /= this_std
-                    # data[i_sub, i_pol, i_freq] /= this_mean
-                else:
-                    data[i_sub, i_pol, i_freq] = np.zeros_like(data[i_sub, i_pol, i_freq])
-
-    return data
 
 def _resize_array(a, new_shape):
     """
@@ -78,11 +65,12 @@ def _resize_psrchive(ar_obj, new_shape):
         ar_obj (psrchive.Archive): The PSRCHIVE archive object to resize.
         new_shape (tuple): The desired shape (must be same number of dimensions as input).
     Returns:
-        str: The path to the resized PSRCHIVE archive.
+        ar_obj (psrchive.Archive): The resized PSRCHIVE archive object.
     """
 
     # Get shapes
-    data_n_subs, data_n_pols, data_n_freqs, data_n_bins = ar_obj.get_data().shape
+    # data_n_subs, data_n_pols, data_n_freqs, data_n_bins = ar_obj.get_data().shape
+    data_n_subs, data_n_pols, data_n_freqs, data_n_bins = ar_obj.get_nsubint(), ar_obj.get_npol(), ar_obj.get_nchan(), ar_obj.get_nbin()
     new_n_subs, new_n_pols, new_n_freqs, new_n_bins = new_shape
     # subints, pols, freqs, bins
 
@@ -109,32 +97,19 @@ def _resize_psrchive(ar_obj, new_shape):
     return ar_obj
 
 def _stack_worker(args):
-    """
-    Worker function to stack the data from the input archive.
-    Parameters:
-        args (tuple): A tuple containing (file_info, normalize, config, logger).
-            file_info (dict): Information about the input file, including location and backend.
-            normalize (bool): Whether to normalize the data.
-            config (dict): Configuration dictionary containing various settings 
-                (jumps, tempdir, parfile, remove_baseline, n_subs, n_pols, n_freqs, n_bins).
-            logger (logging.Logger): Logger for logging messages.
-
-    Returns:
-        str: Path to the output stacked file.
-    """
-
-    this_outfile = ""
-    this_shape = None
+    """Worker function to stack the data from the input archive."""
 
     # Unpack arguments
-    file_info, config, logger = args
+    task_i, file_info, config, logger = args
 
-    # Check if the file info is valid
-    if "location" not in file_info or "backend" not in file_info:
-        logger.error(f"File info {file_info} does not contain location or backend information. Skipping.")
-        return this_outfile, this_shape
-
+    meta = None
+    this_workspace = None
+    this_location = None
     try:
+        # Check if the file info is valid
+        if "location" not in file_info or "backend" not in file_info:
+            raise ValueError("File info does not contain location or backend information.")
+        
         # read file info and jump
         this_location = file_info["location"]
         this_backend = file_info["backend"]
@@ -143,8 +118,8 @@ def _stack_worker(args):
             this_jump = config["jumps"][this_backend][0]
         
         # create workspace for this archive
-        this_workspace = os.path.join(config["tempdir"], os.path.basename(this_location))
-        this_outfile = os.path.join(config["tempdir"], "stackfile__" + os.path.basename(this_location) + ".npz")
+        this_workspace = os.path.join(config["tempdir"], f"{task_i:06d}__" + os.path.basename(this_location))
+        this_outfile = os.path.join(config["tempdir"], f"stackfile__{task_i:06d}__" + os.path.basename(this_location) + ".npy")
         this_ar = this_workspace + "/data"
         this_par = this_workspace + "/parfile"
         if not os.path.exists(this_workspace):
@@ -181,9 +156,8 @@ def _stack_worker(args):
         # initialize archive shutils
         ashu = archive_shutils(this_ar)
 
-        # scrunch polarization before clfd if required to save memory
-        if config["n_pols"] == 1:
-            ashu.scrunch(pol=True)
+        # scrunch polarization before clfd to save memory
+        ashu.scrunch(pol=True)
 
         # zap rfi
         ashu.clfd()
@@ -201,15 +175,31 @@ def _stack_worker(args):
         if config["remove_baseline"]:
             this_arch.remove_baseline()
 
-        # downsample using PSRCHIVE scrunch
-        _resize_psrchive(this_arch, (config["n_subs"], config["n_pols"], config["n_freqs"], config["n_bins"]))
+        # # downsample using PSRCHIVE scrunch
+        # _resize_psrchive(this_arch, (config["n_subs"], config["n_pols"], config["n_freqs"], config["n_bins"]))
 
-        # get duration
-        this_duration = (this_arch.end_time() - this_arch.start_time()).in_days()
+        # get the start time
+        this_start_mjd = this_arch.start_time().in_days()
+
+        # get subint durations
+        this_subint_durations = []
+        this_subint_epochs = []
+        this_subint_folding_periods = []
+        for i in range(this_arch.get_nsubint()):
+            integ = this_arch.get_Integration(i)
+            this_subint_durations.append(integ.get_duration() / 86400) # to days for consistency
+            this_subint_epochs.append(integ.get_epoch().in_days())
+            this_subint_folding_periods.append(integ.get_folding_period())
 
         # get frequency information
         freq_lo = this_arch.get_centre_frequency() - this_arch.get_bandwidth()/2.0
         freq_hi = this_arch.get_centre_frequency() + this_arch.get_bandwidth()/2.0
+
+        # get dm
+        this_dm = this_arch.get_dispersion_measure()
+
+        # get mean period
+        this_period = np.mean(this_subint_folding_periods)
 
         # get the data
         this_data = this_arch.get_data() # (n_subs, n_pols, n_freqs, n_bins)
@@ -235,19 +225,45 @@ def _stack_worker(args):
         this_shape = this_data.shape
 
         # save data to tempdir
-        np.savez(this_outfile, data=this_data, duration=this_duration, snr=this_snr, freq_lo=freq_lo, freq_hi=freq_hi)
+        np.save(this_outfile, this_data)
+
+        meta = {
+            "outfile": this_outfile, 
+            "shape": this_shape, 
+            "start": this_start_mjd,
+            "durations": this_subint_durations,
+            "subint_epochs": this_subint_epochs,
+            "snr": this_snr, 
+            "freq_lo": freq_lo, 
+            "freq_hi": freq_hi, 
+            "dm": this_dm,
+            "period": this_period,
+            "input_file": this_location
+        }
         
     except Exception:
         logger.warning(f"Thread {this_location} failed. Please refer to the traceback below")
         logger.warning(traceback.format_exc())
-    
-    # remove the workspace
-    shutil.rmtree(this_workspace, ignore_errors=True)
+    finally:
+        # remove the workspace
+        if this_workspace is not None:
+            shutil.rmtree(this_workspace, ignore_errors=True)
 
-    return this_outfile, this_shape
+    return meta
 
-class stack_utils():
-    def __init__(self, files, parfile, n_subs=16, n_pols=3, n_freqs=1024, n_bins=1024, n_pools=4, jumps={}, remove_baseline=False, interpolate="always", allow_inconsistent_freq=False, workspace="/tmp", logger=logger()):
+class StackUtils:
+    def __init__(
+            self, 
+            files,
+            parfile, 
+            n_pools=4, 
+            jumps={}, 
+            remove_baseline=False,
+            resample_phase_bins=False, 
+            workspace="/tmp", 
+            verbose=False, 
+            logger=logger()
+        ):
         """
         Initialize the stack_utils class.
 
@@ -261,231 +277,261 @@ class stack_utils():
         n_pools (int): Number of parallel pools.
         jumps (dict): Dictionary of jumps.
         remove_baseline (bool): Whether to remove baseline.
-        interpolate (str): Interpolation mode ("always", "minimal", "never").
-                           always: always interpolate the data to match the target shape.
-                           minimal: only interpolate when necessary to match the target shape.
-                           never: never interpolate the data.
-                           minimal or never: may result in the data not matching the target shape.
+        resample_phase_bins (bool): Whether to resample phase bins.
+        duration_tol (float): Tolerance for duration mismatch in seconds.
         workspace (str): Workspace directory.
         logger (logger): Logger instance.
         """
 
-        self.n_subs = n_subs
-        self.n_pols = n_pols
-        self.n_freqs = n_freqs
-        self.n_bins = n_bins
         self.files = files
         self.parfile = parfile
         self.logger = logger
+        self.verbose = verbose
         self.n_pools = n_pools
         self.jumps = jumps
         self.remove_baseline = remove_baseline
-        self.interpolate = interpolate
-        self.allow_inconsistent_freq = allow_inconsistent_freq
+        self.resample_phase_bins = resample_phase_bins
         self.tempdir = workspace + f"/champss_timing__stack_utils/{utils.get_time_string()}__{utils.get_rand_string()}"
-
-        # Make sure interpolation mode is valid
-        if self.interpolate not in ["always", "minimal", "never"]:
-            raise ValueError("interpolate must be one of 'always', 'minimal', or 'never'")
-
-        # Some data necessary for alias_utils
-        self.durations = []
-        self.snrs = []
-        self.freq_lo = []
-        self.freq_hi = []
-        self.n_stacked = 0
 
         if not os.path.exists(workspace):
             raise Exception(f"Workspace {workspace} does not exist. Please create it first.")
 
-        # Check if npol make sense
-        if n_pols != 1 and n_pols != 4:
-            raise ValueError("n_pols must be 1 or 4 to be physically meaningful")
+    @staticmethod
+    def load(filename):
+        """Shortcut to load a StackedData instance from a file."""
+        return StackedData.load(filename)
 
-        # Initialize the stacked data array: subints, pols, freqs, bins
-        self.stacked_data = np.array([], dtype=np.float32)
+    def __find_most_common(self, arr):
+        return Counter(
+            [tuple(a) for a in arr]
+        ).most_common(1)[0][0]
+
+    def __compute_best_binning_offset(self, subint_epochs, window_size):
+        # The distance from each subint epoch to the distance to the nearest stacked data bin
+        d = subint_epochs % window_size
+
+        # Mean of d is ~ an estimator of the offset the minimizes the distance to the nearest stacked data bin
+        best_offset = circmean(d, high=window_size, low=0)
+
+        return best_offset % window_size
+
+    def __compute_stacked_subint_epochs(self, subint_epochs):
+        # Remove the likely partial subints at the beginning and end of the observation
+        # (...to avoid they biasing the statistics)
+        subint_epochs_dropped_partial = subint_epochs.copy()
+        for i in range(subint_epochs_dropped_partial.shape[0]):
+            finite_indices = np.flatnonzero(np.isfinite(subint_epochs_dropped_partial[i]))
+            if finite_indices.size > 0:
+                subint_epochs_dropped_partial[i, finite_indices[0]] = np.nan
+                subint_epochs_dropped_partial[i, finite_indices[-1]] = np.nan
+
+        # Calculate "nominal" window size (i.e., the stacked subint size)
+        # window_size = np.nanmean(np.diff(subint_epochs_dropped_partial, axis=1).flatten())
+        # window_size = np.nanmedian(np.diff(subint_epochs_dropped_partial, axis=1).flatten())
+        window_size = np.nanmedian(
+            np.nanmean(
+                np.diff(
+                    subint_epochs_dropped_partial, 
+                    axis=1), 
+                axis=1
+            ) # mean of the gaps between subints for each obs. mean can account for jitters in psrchive subint lengths
+        ) # median to reduce the influence of outlier obs that may be folded at different subint lengths
+
+        # Compute the best binning offset
+        best_offset = self.__compute_best_binning_offset(
+            subint_epochs_dropped_partial[np.isfinite(subint_epochs_dropped_partial)].flatten(), 
+            window_size
+        )
+
+        # Generate the stacked subint epochs
+        stacked_epochs = np.arange(
+            np.round(np.nanmin(subint_epochs - best_offset) / window_size), 
+            np.round(np.nanmax(subint_epochs - best_offset) / window_size) + 1
+        ) * window_size
+
+        # Apply offset
+        stacked_epochs += best_offset
+
+        return stacked_epochs
+
+    def __stack_subints(self, metadata, expected_shape):
+        def wrap_by_sidereal_day(epochs):
+            ref = np.nanpercentile(np.ravel(epochs), 50, method="lower")
+            d = (epochs - ref) % sday
+            return np.where(d < sday / 2, d, d - sday)
+
+        # Sanity check: each data has the same sizes except for subints
+        for this_meta in metadata:
+            if this_meta["shape"][1:3] != expected_shape[1:3]:
+                raise ValueError("Inconsistent data shapes")
+
+        # Unpack subint epochs
+        subint_epochs = np.full((len(metadata), max([m["shape"][0] for m in metadata])), np.nan) # use np.nan as placeholder for shorter subints
+        for i, this_meta in enumerate(metadata):
+            subint_epochs[i, :this_meta["shape"][0]] = this_meta["subint_epochs"]
+
+        # Rewrite the epoch of each subint respect to sidereal time
+        sday = (1.0 * u.sday).to(u.day).value
+        subint_epochs = wrap_by_sidereal_day(subint_epochs)
+        subint_epochs = subint_epochs - np.nanmedian(subint_epochs)
+
+        # Determine the epochs of stacked data
+        # stacked_subint_epochs = np.nanmedian(subint_epochs, axis=0)
+        stacked_subint_epochs = self.__compute_stacked_subint_epochs(subint_epochs)
+
+        # Initialize the stacked data array
+        stacked_data = np.zeros((
+            len(stacked_subint_epochs),
+            metadata[0]["shape"][1],
+            metadata[0]["shape"][2],
+            metadata[0]["shape"][3]
+        ))
+
+        # Initialize the exposure array
+        stacked_expos = np.zeros(len(stacked_subint_epochs))
+
+        # Stack subints
+        for i, this_meta in enumerate(metadata):
+            # Load the actual data
+            this_data = np.load(this_meta["outfile"])
+
+            # Resample phsae bins
+            if this_meta["shape"][3] != expected_shape[3]:
+                self.logger.info(f"Resampling phase bins from {this_meta['shape'][3]} to {expected_shape[3]}")
+                this_data = resample(
+                    this_data, 
+                    expected_shape[3],
+                    axis=3
+                )
+
+            # Loop over the subint
+            for j, this_subint in enumerate(this_data):
+                # Find the stacked subint that has the closest epoch
+                nearest_idx = np.argmin(
+                    np.abs(stacked_subint_epochs - subint_epochs[i, j])
+                )
+
+                # Stack the subint
+                stacked_data[nearest_idx] += this_subint
+
+                # Add the durations
+                stacked_expos[nearest_idx] += this_meta["durations"][j]
+
+            # Remove this_data from memory
+            del this_data
+            gc.collect()
+
+        return stacked_data, stacked_subint_epochs, stacked_expos, subint_epochs
 
     def stack(self): 
-        # Create tempdir
-        os.makedirs(self.tempdir)
-
-        # Create worker config
-        worker_config = {
-            "jumps": self.jumps,
-            "tempdir": self.tempdir,
-            "parfile": self.parfile,
-            "remove_baseline": self.remove_baseline,
-            "interpolate": self.interpolate,
-            "n_subs": self.n_subs,
-            "n_pols": self.n_pols,
-            "n_freqs": self.n_freqs,
-            "n_bins": self.n_bins,
-            "logger": self.logger
-        }
-
-        # Run stacking
         try:
+            # Create tempdir
+            os.makedirs(self.tempdir)
+
+            # Prepare worker payload
+            worker_payload = {
+                "jumps": self.jumps,
+                "tempdir": self.tempdir,
+                "parfile": self.parfile,
+                "remove_baseline": self.remove_baseline,
+                "resample_phase_bins": self.resample_phase_bins,
+                "logger": self.logger
+            }
+
             # Prepare data
-            tasks = [(file_info, worker_config, self.logger.copy()) for file_info in self.files]
-            with Pool(self.n_pools) as pool:
-                stack_files_res = list(tqdm.tqdm(
-                    pool.imap(_stack_worker, tasks),
-                    total=len(tasks),
-                    desc="Preparing archives",
-                ))
+            tasks = [(i, file_info, worker_payload, self.logger.copy()) for i, file_info in enumerate(self.files)]
+            with Pool(self.n_pools, maxtasksperchild=1) as pool:
+                sf_meta = np.array(
+                    list(
+                        tqdm.tqdm(
+                            pool.imap(_stack_worker, tasks),
+                            total=len(tasks),
+                            desc="Preparing archives",
+                        )
+                    ), 
+                    dtype=object
+                )
+            self.logger.debug(f"Number of files processed: {len(sf_meta)}")
 
-            # Unpack the results
-            n_subs, n_pols, n_freqs, n_bins = [], [], [], []
-            for res in stack_files_res:
-                if res[1] is None:
-                    continue
-                
-                n_subs.append(res[1][0])
-                n_pols.append(res[1][1])
-                n_freqs.append(res[1][2])
-                n_bins.append(res[1][3])
+            # Create a mask to keep track of valid files
+            mask = np.ones(len(sf_meta), dtype=bool)
 
-            if len(n_subs) == 0:
-                raise Exception("No valid stack files found.")
+            # Filter out files that are failed to prepare
+            for i, meta in enumerate(sf_meta):
+                if meta is None:
+                    mask[i] = False
+            self.logger.debug(f"Number of files successfully prepared: {np.sum(mask)}")
 
-            # Get the most common shape among the stack files
-            most_common_shape = (
-                max(set(n_subs), key=n_subs.count),
-                max(set(n_pols), key=n_pols.count),
-                max(set(n_freqs), key=n_freqs.count),
-                max(set(n_bins), key=n_bins.count)
+            # Sanity check if data were folding at the same dm
+            for meta in sf_meta[mask]:
+                if not np.isclose(meta["dm"], sf_meta[mask][0]["dm"]):
+                    raise ValueError("Data were not folding at the same dm.")
+
+            # Find the expected size of the data
+            expected_shape = self.__find_most_common([meta["shape"] for meta in sf_meta])
+
+            # Make sure all the data has the expected shape
+            for i, meta in enumerate(sf_meta):
+                if not self.resample_phase_bins:
+                    mask[i] = (meta["shape"][1:] == expected_shape[1:])
+                else:
+                    mask[i] = (meta["shape"][1:3] == expected_shape[1:3])
+            self.logger.debug(f"Number of files with consistent shape: {np.sum(mask)} (shape={expected_shape})")
+            self.logger.debug(f"Resampling phase bins? {"yes" if self.resample_phase_bins else "no"}", layer=1)
+
+            # Unpack frequency ranges
+            freq_lo_vals = np.array([meta["freq_lo"] for meta in sf_meta])
+            freq_hi_vals = np.array([meta["freq_hi"] for meta in sf_meta])
+
+            # Find the most common frequency ranges
+            most_common_freqs = self.__find_most_common(
+                list(zip(freq_lo_vals[mask], freq_hi_vals[mask]))
             )
 
-            # If always interpolate, override the most common shape with the target shape
-            if self.interpolate == "always":
-                most_common_shape = (self.n_subs, self.n_pols, self.n_freqs, self.n_bins)
-                self.logger.debug(f"Interpolating all stack files to the most common shape {most_common_shape} since interpolate=always.")
+            # Filter out data with frequency ranges that deviate significantly from the median
+            mask &= np.isclose(freq_lo_vals, most_common_freqs[0])
+            mask &= np.isclose(freq_hi_vals, most_common_freqs[1])
+            self.logger.debug(f"Number of files with consistent frequency ranges: {np.sum(mask)} (freq_lo={most_common_freqs[0]}, freq_hi={most_common_freqs[1]})")
 
-            # Initialize the stacked data array
-            self.stacked_data = np.zeros(most_common_shape, dtype=np.float32)
+            # Sanity check on the mask to ensure there is data to stack
+            if not np.any(mask):
+                raise ValueError("No data to stack. ")
 
-            # Stack
-            for this_res in tqdm.tqdm(stack_files_res, desc="Stacking archives"):
-                # Make sure stack file exists before proceeding
-                f = this_res[0]
-                if not os.path.exists(f):
-                    self.logger.warning(f"Stack file {f} does not exist. The processing thread might be failed or OOM killed. ")
-                    continue
+            # Run stacking
+            stacked_data, stacked_epochs, stacked_expos, per_file_subint_epochs = self.__stack_subints(sf_meta[mask], expected_shape=expected_shape)
 
-                # Load the data
-                this_data = dict(np.load(f))
+            # Put together stacked metadata
+            stacked_metadata = StackedDataMetadata(
+                freq_lo=most_common_freqs[0], 
+                freq_hi=most_common_freqs[1],
+                dm=np.mean([meta["dm"] for meta in sf_meta[mask]]), 
+                period=np.mean([meta["period"] for meta in sf_meta[mask]]),
+                model=open(self.parfile, "r").read(), 
+                resample_phase_bins=self.resample_phase_bins,
+                remove_baseline=self.remove_baseline, 
+                input_files=[]
+            )
+            
+            for i, meta in enumerate(sf_meta[mask]):
+                stacked_metadata.input_files.append({
+                    "location": meta["input_file"],
+                    "subint_epochs": per_file_subint_epochs[i], 
+                    "snr": meta["snr"]
+                })
 
-                # Get frequency information
-                this_freq_lo, this_freq_hi = this_data["freq_lo"], this_data["freq_hi"]
-
-                # Check if frequency information is consistent with the first stack file
-                if len(self.freq_lo) > 0 and (this_freq_lo != self.freq_lo[0] or this_freq_hi != self.freq_hi[0]):
-                    self.logger.debug(f"Frequency information in stack file {f} ({this_freq_lo}-{this_freq_hi}) is inconsistent with the first stack file ({self.freq_lo[0]}-{self.freq_hi[0]}).")
-                    if not self.allow_inconsistent_freq:
-                        self.logger.debug(f"Skipping stack file {f} due to inconsistent frequency information.")
-                        continue
-
-                self.freq_lo.append(this_freq_lo)
-                self.freq_hi.append(this_freq_hi)
-
-                # Ensure the data has the most common shape
-                if this_data["data"].shape != most_common_shape:
-                    if self.interpolate == "never":
-                        self.logger.debug(f"Stack file {f} has shape {this_data['data'].shape}, expected {most_common_shape}. Skipping.")
-                        continue
-                    else:
-                        this_data["data"] = _resize_array(this_data["data"], most_common_shape)
-                        if self.interpolate == "minimal":
-                            self.logger.debug(f"Stack file {f} has been resized from {this_data['data'].shape} to {most_common_shape} despite trying to avoid interpolation as much as possible.")
-
-                # Stack the data
-                self.stacked_data += this_data["data"]
-
-                # Get the duration and snr
-                self.durations.append(this_data["duration"])
-                self.snrs.append(this_data["snr"])
-
-                # Remove this_data from memory
-                del this_data
-                gc.collect()
-
-                # Remove the stack file
-                os.remove(f)
-
-                # Increment the number of stacked files
-                self.n_stacked += 1
-
-            # Update the size
-            self.n_subs, self.n_pols, self.n_freqs, self.n_bins = self.stacked_data.shape
+            return StackedData(
+                data=stacked_data, 
+                epochs=stacked_epochs,
+                expos=stacked_expos,
+                meta=stacked_metadata
+            )
+            
         except Exception:
             # Tempdir can still be cleanned up when task failed. 
             self.logger.warning(traceback.format_exc())
-
-        # Clean up tempdir
-        shutil.rmtree(self.tempdir)
-
-        # Print the results
-        self.logger.info(f"Stacked {self.n_stacked} out of {len(self.files)} files.")
-        self.logger.info(f"Stacked data shape: {self.stacked_data.shape}")
-    
-    def get_data(self, fscrunch=False, tscrunch=False, normalize=False, keepdims=False):
-        data_copy = copy.deepcopy(self.stacked_data)
-
-        if fscrunch:
-            data_copy = data_copy.mean(axis=2, keepdims=keepdims)
-
-        if tscrunch:
-            data_copy = data_copy.mean(axis=0, keepdims=keepdims)
-
-        if normalize:
-            data_copy = _normalize_data(data_copy)
+            raise
+        finally:
+            # Clean up tempdir
+            if not self.verbose:
+                shutil.rmtree(self.tempdir, ignore_errors=True)
             
-        return data_copy
-
-    def get_stacked_snr(self):
-        if self.n_bins <= 1:
-            return 0.0
-
-        return data_quality_utils.boxcar_snr(
-            self.get_data().sum(axis=(0, 1, 2))
-        )
-
-    def save(self, filename, format="npz"):
-        """
-        Save the stacked data and metadata to a file.
-
-        Args:
-            filename (str): The name of the file to save the data to.
-            format (str): The format to save the data in (options: npz, pkl, json).
-        """
-        # Gather metadata
-        metadata = {
-            "n_subs": self.n_subs,
-            "n_pols": self.n_pols,
-            "n_freqs": self.n_freqs,
-            "n_bins": self.n_bins,
-            "n_stacked": self.n_stacked,
-            "durations": self.durations,
-            "snrs": self.snrs, 
-            "freq_lo": self.freq_lo, 
-            "freq_hi": self.freq_hi,
-            "model": open(self.parfile, "r").read(), 
-            "interpolate": self.interpolate,
-            "remove_baseline": self.remove_baseline, 
-            "allow_inconsistent_freq": self.allow_inconsistent_freq,
-            "input_files": self.files
-        }
-
-        # Save the data and metadata
-        if format == "npz":
-            np.savez(filename, data=self.stacked_data, metadata=metadata)
-        elif format == "pkl":
-            with open(filename, "wb") as f:
-                import pickle
-                pickle.dump(utils.numpy_to_native({"data": self.stacked_data, "metadata": metadata}), f)
-        elif format == "json":
-            with open(filename, "w") as f:
-                import json
-                json.dump(utils.numpy_to_native({"data": self.stacked_data, "metadata": metadata}), f)
-        else: 
-            raise ValueError(f"Unsupported format: {format}. Supported formats are: npz, pkl, json.")

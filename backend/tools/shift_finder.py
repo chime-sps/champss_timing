@@ -10,15 +10,16 @@ class ShiftFinder:
         self.arr1 = arr1
         self.arr2 = arr2
 
-        # Interpolate arr2 to match the length of arr1 if necessary
-        if len(arr2) != len(arr1):
-            self.arr2 = np.interp(np.linspace(0, len(arr2)-1, len(arr1)), np.arange(len(arr2)), arr2)
+        # Resample arr2 onto arr1's grid if necessary
+        n1, n2 = len(arr1), len(arr2)
+        if n2 != n1:
+            k = np.arange(n2 // 2 + 1)
+            spec = np.fft.rfft(arr2) * (n1 / n2) * np.exp(2j * np.pi * k * (0.5 / n1 - 0.5 / n2))
+            spec[min(n1, n2) // 2:] = 0.0 # drop Nyquist / harmonics arr1 can't hold
+            self.arr2 = np.fft.irfft(spec, n1)
 
         # Compute the initial guess for shift and amplitude
         self.shift, self.amplitude, self.sigma = self.compute_initial_guess()
-
-        # Compute initial worker positions
-        self.initial_pos = self.compute_initial_walker_positions()
 
         # Initialize the sampler
         self.sampler = None
@@ -30,19 +31,23 @@ class ShiftFinder:
         shift = fourier_shifts.find_shift(self.arr1, self.arr2)
         # shift = discrete_shifts.find_shift(self.arr1, self.arr2)
 
-        # Estimate amplitude
-        amplitude = np.std(self.arr1) / np.std(self.arr2) if np.std(self.arr2) > 0 else 1.0
+        # Estimate amplitude: least-squares value at the guessed shift
+        # (std(arr1)/std(arr2) is inflated by noise and ignores the alignment)
+        t = self.shift_and_resize(shift, 1.0)
+        t = t - np.mean(t)
+        amplitude = np.dot(self.arr1 - np.mean(self.arr1), t) / np.dot(t, t)
 
-        # Estimate noise level
+        # Estimate noise level (diagnostic only; sigma is marginalised in the likelihood)
+        # dof: n points minus shift, amplitude and the offset removed by the mean
         residuals = self.compute_residuals(shift, amplitude)
-        sigma = np.std(residuals) if np.std(residuals) > 0 else 1.0
+        sigma = np.sqrt(np.sum(residuals**2) / (len(residuals) - 3))
 
         return shift, amplitude, sigma
     
     def compute_initial_walker_positions(self, n_walkers=50):
-        spread = np.array([0.5, 0.01])
+        spread = np.array([0.5, 0.01 * abs(self.amplitude)])   # amplitude spread relative to its scale
         initial_pos = np.array([self.shift, self.amplitude]) + spread * np.random.randn(n_walkers, 2)
-        initial_pos[:, 1] = np.abs(initial_pos[:, 1]) + 0.01
+        initial_pos[:, 1] = np.abs(initial_pos[:, 1])
 
         return initial_pos
     
@@ -59,9 +64,10 @@ class ShiftFinder:
     def log_likelihood(self, params):
         shift, amplitude = params
         residuals = self.compute_residuals(shift, amplitude)
-        n = len(residuals)
-        # sigma = np.std(residuals)
-        return -0.5 * np.sum(residuals**2) / self.sigma**2 - n * np.log(self.sigma)
+        # The noise level is unknown: marginalise it analytically (Jeffreys prior) instead
+        # of freezing it at the initial guess. Equivalent to fitting sigma at the best fit.
+        dof = len(residuals) - 3
+        return -0.5 * dof * np.log(np.sum(residuals**2))
     
     def log_prior(self, params):
         shift, amplitude = params

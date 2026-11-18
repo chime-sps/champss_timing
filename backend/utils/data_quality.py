@@ -1,27 +1,88 @@
 import numpy as np
-from scipy.stats import normaltest
+from scipy.stats import normaltest, sigmaclip
+from scipy.signal import peak_widths
 from scipy.ndimage import uniform_filter1d
 from .correlation import fourier_shifts, discrete_shifts, subsample_shifts
 
 class data_quality_utils:
     @staticmethod
-    def boxcar_snr(profile, max_width=None):
-        """Helper function to compute the boxcar SNR of a profile"""
-        x = np.asarray(profile, dtype=float)
-        n = x.size
-        baseline = np.median(x)
-        sigma = np.std(np.sort(x)[: 3 * n // 4])
+    def boxcar(profile, max_width=None):
+        """
+        Helper function to compute the boxcar SNR of a profile (returns best SNR and corresponding width)
+        """
+
+        # Ensure profile is a numpy array
+        profile = np.asarray(profile, dtype=float)
+
+        # Estimate baseline and noise level
+        n = profile.size
+        baseline = np.median(profile)
+        sigma = np.std(np.sort(profile)[: 3 * n // 4])
+
+        # Generate widths
         widths = 2 ** np.arange(int(np.log2((max_width or n // 4))) + 1)
-        return max(
-            (uniform_filter1d(x, w, mode="wrap").max() - baseline) / (sigma / np.sqrt(w))
-            for w in widths
-        )
+
+        # Try different boxcar widths and compute snr
+        snrs = [(uniform_filter1d(profile, w, mode="wrap").max() - baseline) / (sigma / np.sqrt(w)) for w in widths]
+
+        # Find the width that maximizes the SNR
+        best_i = np.argmax(snrs)
+        best_width = widths[best_i]
+        best_snr = snrs[best_i]
+
+        return best_snr, best_width
+    
+    @staticmethod
+    def boxcar_snr(profile, max_width=None):
+        """Helper function to compute the boxcar SNR of a profile (returns the best SNR)"""
+        return data_quality_utils.boxcar(profile, max_width)[0]
 
     @staticmethod
     def chi2(profile):
         """Compute the chi-squared of a profile against pure noise"""
         x = np.asarray(profile, dtype=float)
         return ((x - x.mean())**2).sum()
+
+    @staticmethod
+    def remove_baseline(profile):
+        """Remove the baseline from a profile"""
+
+        # Ensure profile is a numpy array
+        profile = np.asarray(profile, dtype=float)
+
+        # Find noise baseline
+        noise = sigmaclip(profile, low=3, high=3)[0]
+        
+        return profile - np.mean(noise)
+
+    @staticmethod
+    def pulse_width(profile, frac=0.5):
+        """
+        Measure pulse width of a profile (return width in *bins*). 
+        """
+
+        # Remove baseline
+        profile = data_quality_utils.remove_baseline(profile)
+
+        # Center profile to make sure it's not wrapping around the edges
+        # (note: this may be still problematic for highly scatter pulsars?)
+        n = profile.size
+        profile = np.roll(profile, n // 2 - np.argmax(profile))
+
+        # Find width above frac * peak
+        i_peak = n // 2
+        width = peak_widths(
+            profile,
+            peaks=[i_peak],
+            rel_height=1 - frac,
+            prominence_data=(
+                np.array([profile[i_peak]]), 
+                np.array([0]), 
+                np.array([n - 1])
+            ), # make sure height relative to 0 instead of local minima
+        )[0][0]
+
+        return width
 
 class MatchedFilterSNR:
     def __init__(self, profile, template, shift_meth="discrete"):
