@@ -1,9 +1,13 @@
 import copy
 import numpy as np
 import matplotlib.pyplot as plt
+import astropy.units as u
 from dataclasses import dataclass
 from ..utils.utils import utils
 from ..utils.data_quality import data_quality_utils
+from ..utils.correlation import fourier_shifts
+
+K_DM = 1.0 / 2.41e-4 # use the DM constant consistent with PINT
 
 def normalize_data(data):
     """
@@ -28,8 +32,6 @@ def normalize_data(data):
 
     return data
 
-
-
 def downsample(arr, axis, n, method="mean"):
     # Move the axis to be downsample to the end
     arr = np.moveaxis(arr, axis, -1)
@@ -53,6 +55,31 @@ def downsample(arr, axis, n, method="mean"):
 
     return arr
 
+
+def compute_dispersive_delay(freq, ddm, ref_freq, k_dm=K_DM):
+    """
+    Calculate the time delay for a given frequency and DM step.
+
+    Parameters
+    ----------
+    freq : float
+        Frequency of the channel.
+    ddm : float
+        DM step.
+
+    Returns
+    -------
+    float
+        Time delay for the given frequency and DM step.
+
+    Returns
+    -------
+    float
+        Time delay for the given frequency and DM step.
+    """
+    
+    return k_dm * ddm * (freq ** -2 - ref_freq ** -2)
+
 @dataclass
 class StackedDataMetadata:
     freq_lo: float
@@ -60,6 +87,7 @@ class StackedDataMetadata:
     dm: float
     period: float
     model: str
+    ref_epoch: float
     resample_phase_bins: bool
     remove_baseline: bool
     input_files: list
@@ -95,11 +123,8 @@ class StackedData:
         self.freqs = None
         self.__generate_freqs()
 
-        # Validate the stacked data
+        # Validate
         self.validate()
-
-        # Validate metadata
-        self.meta.validate()
 
     @staticmethod
     def load(stackfile, format=None):
@@ -170,12 +195,19 @@ class StackedData:
         if not isinstance(self.meta, StackedDataMetadata):
             raise ValueError("Metadata must be an instance of StackedDataMetadata.")
 
+        # Validate metadata
+        self.meta.validate()
+
     def __generate_freqs(self):
         self.freqs = np.linspace(
             self.meta.freq_lo,
             self.meta.freq_hi,
             self.data.shape[2]
         )
+
+    ####################################
+    # Downsampling and resizing
+    ####################################
 
     def normalize(self):
         """Normalize the data."""
@@ -234,6 +266,10 @@ class StackedData:
             axis=axis
         )
 
+    ####################################
+    # Getting information
+    ####################################
+
     def get_metadata(self):
         return self.meta
 
@@ -246,14 +282,62 @@ class StackedData:
                 scrunch=(1, 2), keepdims=True
             )[:, 0, 0, :]
         ]
+    
+    def get_subint_metric(self, metric):
+        """Get the subintegration metric for the given metric type."""
 
-    def get_stacked_snr(self):
         if self.data.shape[3] <= 1:
             return 0.0
 
-        return data_quality_utils.boxcar_snr(
+        if metric == "snr":
+            method = data_quality_utils.boxcar_snr
+        elif metric == "chi2":
+            method = data_quality_utils.chi2
+        else:
+            raise ValueError(f"Unsupported metric: {metric}")
+
+        return method(
             self.get_data(scrunch=(0, 1, 2), keepdims=True)[0, 0, 0, :]
         )
+
+    def get_stacked_snr(self):
+        """Shortcut to get the stacked SNR."""
+        return self.get_subint_metric("snr")
+
+    def get_subint_chi2(self):
+        """Shortcut to get the subintegration chi-squared."""
+        return self.get_subint_metric("chi2")
+
+    def get_stacked_metric(self, metric):
+        """Get the stacked metric for the given metric type."""
+
+        if self.data.shape[3] <= 1:
+            return 0.0
+
+        if metric == "snr":
+            method = data_quality_utils.boxcar_snr
+        elif metric == "chi2":
+            method = data_quality_utils.chi2
+        else:
+            raise ValueError(f"Unsupported metric: {metric}")
+
+        return method(
+            self.get_data(scrunch=(0, 1, 2), keepdims=True)[0, 0, 0, :]
+        )
+    
+    def get_stacked_chi2(self):
+        """Shortcut to get the stacked chi-squared."""
+        return self.get_stacked_metric("chi2")
+
+    def get_stacked_snr(self):
+        """Shortcut to get the stacked SNR."""
+        return self.get_stacked_metric("snr")
+
+    def get_period(self):
+        return self.meta.period
+
+    def get_dm(self):
+        return self.meta.dm
 
     def get_data(
             self, 
@@ -295,6 +379,130 @@ class StackedData:
             self_copy.data = np.squeeze(self_copy.data)
             
         return self_copy.data
+
+    def get_profile(self, normalize=False):
+        """Helper function to get pulse profile."""
+        return self.get_data(scrunch=(0, 1, 2), keepdims=True, normalize=normalize)[0, 0, 0, :]
+
+    def get_waterfall(self, normalize=False):
+        """Helper function to get the waterfall data."""
+        return self.get_data(scrunch=(0, 1), keepdims=True, normalize=normalize)[0, 0, :, :]
+
+    def get_subints(self, normalize=False):
+        """Helper function to get the subintegration data."""
+        return self.get_data(scrunch=(1, 2), keepdims=True, normalize=normalize)[:, 0, 0, :]
+
+    ####################################
+    # Dedispersion and dealiasing
+    ####################################
+
+    def __calc_dispersion_dt(self, freq, ddm): 
+        # Use the middle of the band as the reference frequency for DM correction
+        ref_freq = (self.meta.freq_lo + self.meta.freq_hi) / 2
+        
+        return compute_dispersive_delay(freq, ddm, ref_freq)
+
+    def refine_dm(self, ddm):
+        """
+        Dedisperse the data array by applying the specified dDM step.
+
+        Parameters
+        ----------
+        ddm : float
+            DM step to apply.
+        """
+
+        if ddm == 0:
+            return
+
+        # Apply the dDM steps
+        for i, freq in enumerate(self.freqs):
+            self.data[:, :, i, :] = fourier_shifts.roll(
+                self.data[:, :, i, :], 
+                shift=-self.__calc_dispersion_dt(freq, ddm) / self.meta.period * self.data.shape[3], # in phase bins
+                axis=-1 # in phase axis
+            )
+            
+        self.meta.dm += ddm # update ddm to metadata
+
+        # Validate
+        self.validate()
+
+    def dedisperse(self, dm):
+        """Shortcut to refine the DM to the specified value."""
+        self.refine_dm(dm - self.meta.dm)
+
+    def dededisperse(self):
+        """Shortcut to dedisperse with dDM = - folding DM."""
+        self.refine_dm(-self.meta.dm)
+
+    def __calc_aliasing_drifts(self, alias_factor):
+        """
+        Calculate the expected aliasing drifts and change in period due to aliasing.
+
+        Parameters
+        ----------
+        alias_factor : float
+            The aliasing factor.
+
+        Returns
+        -------
+        tuple
+            A tuple containing the expected shifts (numpy array) and the change in period (float).
+        """
+        
+        if alias_factor == 0:
+            return np.zeros_like(self.epochs), 0
+        
+        # Get sidereal day from astropy
+        sidereal_day = (1 * u.sday).to(u.day).value
+
+        # Compute slope in the unit of phase/day
+        slope = 1 / (sidereal_day / alias_factor)
+
+        # Compute shifts
+        shifts = slope * self.epochs
+
+        # Compute change in period due to aliasing
+        dp = self.meta.period / ((u.sday.to(u.s) * (1/alias_factor)) / self.meta.period)
+
+        return shifts, dp
+
+    def dealiasing(self, alias_factor):
+        """
+        Correct the data for aliasing given an aliasing factor.
+
+        Parameters
+        ----------
+        alias_factor : float
+            The aliasing factor to apply.
+        """
+
+        if not isinstance(alias_factor, int):
+            raise ValueError("Alias factor must be an integer.")
+        
+        if alias_factor == 0:
+            return
+        
+        # Calculate expected shifts
+        this_expected_shifts, dp = self.__calc_aliasing_drifts(alias_factor)
+
+        # Apply correction of the data
+        for i, shift in enumerate(this_expected_shifts):
+            self.data[i, :, :, :] = fourier_shifts.roll(
+                self.data[i, :, :, :],
+                shift=-shift * self.data.shape[3], # in phase bins
+                axis=-1 # in phase axis
+            )
+
+        self.meta.period += dp # update period due to aliasing
+
+        # Validate after dealiasing
+        self.validate()
+
+    ####################################
+    # IO
+    ####################################
 
     def save(self, filename, format=None):
         """
@@ -359,6 +567,7 @@ class StackedData:
         ax[0].set_title('Frequencies')
         ax[0].set_ylabel('Phase Bin')
         ax[0].set_xlabel('Frequency (MHz)')
+        ax[0].invert_yaxis()
 
         ax[1].pcolormesh(
             epochs_seconds, 
@@ -370,6 +579,7 @@ class StackedData:
         ax[1].set_title('Subints')
         ax[1].set_ylabel('Phase Bin')
         ax[1].set_xlabel('Time since transit (s)')
+        ax[1].invert_yaxis()
 
         ax[2].plot(
             epochs_seconds, 
@@ -398,4 +608,6 @@ class StackedData:
         if savefig:
             plt.savefig(savefig)
         plt.show()
-        
+
+    def copy(self):
+        return copy.deepcopy(self)

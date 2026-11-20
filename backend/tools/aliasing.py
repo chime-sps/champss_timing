@@ -46,7 +46,7 @@ def get_aliasing_finder_from_stackfile(stackfile, n_subs=None, **kwargs):
 
     return AliasingFinder(
         data=stacked_data.get_data(normalize=True)[:, 0, :, :], 
-        duration=np.ptp(stacked_data.epochs), 
+        epochs=stacked_data.epochs, 
         metadata=stacked_data.meta,
         **kwargs
     )
@@ -551,20 +551,20 @@ class AliasingFinderResultsBySNR:
         plt.show()
 
 class AliasingFinder():
-    def __init__(self, data, duration, metadata={}, ncpus=1, logger=logger()):
+    def __init__(self, data, epochs, metadata={}, ncpus=1, logger=logger()):
         """
         Initialize the alias_utils class.
 
         Parameters:
         data (np.ndarray): Pulsar data array with shape (n_subs, n_freqs, n_bins).
-        duration (float): Duration of the observation in days.
+        epochs (np.ndarray): Array of subint epochs in days.
         ncpus (int): Number of CPUs to use.
         logger (logger): Logger instance.
         metadata (dict): Additional metadata (from stack file) for the observation.
         """
 
         self.data = data
-        self.duration = duration
+        self.epochs = epochs
         self.ncpus = ncpus
         self.logger = logger
         self.metadata = metadata
@@ -616,11 +616,16 @@ class AliasingFinder():
             logger=self.logger
         )
 
+    def __compute_expected_shifts(self, alias_factor):
+        # Compute slope in the unit of phase/day
+        slope = 1 / (self.sidereal_day / alias_factor)
+
+        # Compute shifts
+        shifts = slope * self.epochs
+
+        return shifts
+
     def find_aliasing_by_shifts(self, af_min=-30, af_max=30, smooth_sigma=None, ignore_subints=[]):
-        # Calculate "effective duration" from the center of the first subint to the center of the last subint
-        effective_duration = self.duration * (self.n_subints - 1) / self.n_subints
-        self.logger.debug(f"Number of subints: {self.n_subints}")
-        self.logger.debug(f"Corrected duration: {self.duration} -> {effective_duration} days")
         
         # Generate template
         template = self.generate_template(smooth_sigma=smooth_sigma)
@@ -644,49 +649,47 @@ class AliasingFinder():
             )
 
             # unpack results
-            shifts = np.array([])
-            shifts_unc = np.array([])
+            measured_shifts = np.array([])
+            measured_shifts_unc = np.array([])
             subint_snrs = np.array([])
             for res in get_shift_res:
-                shifts = np.append(shifts, res["shift"])
-                shifts_unc = np.append(shifts_unc, res["shift_unc"])
+                measured_shifts = np.append(measured_shifts, res["shift"])
+                measured_shifts_unc = np.append(measured_shifts_unc, res["shift_unc"])
                 subint_snrs = np.append(subint_snrs, res["subint_snr"])
 
         # Create a mask for subints
-        mask = np.ones(len(shifts), dtype=bool)
+        mask = np.ones(len(measured_shifts), dtype=bool)
         if len(ignore_subints) > 0:
             mask[ignore_subints] = False
 
         # Find outlier indices based on shifts_unc
-        mask = mask & (np.array(shifts_unc) < np.quantile(shifts_unc, 0.997))
+        mask = mask & (measured_shifts_unc - np.median(measured_shifts_unc) < 3 * np.std(measured_shifts_unc))
 
         # calcualte weights
-        weight = 1 / shifts_unc**2 # calculate weight
+        weight = 1 / measured_shifts_unc**2 # calculate weight
 
         # search for alias factor
         self.logger.debug(f"Searching for alias factor in range [{af_min}, {af_max})")
         trials = np.arange(af_min, af_max)
         rms = []
-        shifts_expected = []
-        subint_idxes = np.arange(len(shifts))
+        expected_shifts = []
         for trial in trials:
-            # get expected shifts
-            # the time drifts over the effective_duration: AF * effective_duration / sday
-            # the slope in the unit of subint index: time drift / (number of subints - 1) <- "-1" since we used center to center duration
-            this_slope = (trial * effective_duration) / (self.sidereal_day * (self.n_subints - 1))
-            this_shifts_expected = subint_idxes * this_slope
+            # compute expected shifts
+            this_expected_shifts = self.__compute_expected_shifts(trial)
 
-            # get residuals
-            this_residuals = np.array(shifts)[mask] - this_shifts_expected[mask]
-            # this_offset = np.mean(this_residuals)
-            this_offset = np.sum(weight[mask] * this_residuals) / np.sum(weight[mask])
-            this_residuals = this_residuals - this_offset # remove mean to normalise
+            # compute residuals
+            this_residuals = measured_shifts[mask] - this_expected_shifts[mask]
+
+            # subtract residuals by mean
+            # this_residuals -= np.mean(this_residuals)
+            this_mean = np.sum(weight[mask] * this_residuals) / np.sum(weight[mask])
+            this_residuals -= this_mean
 
             # get rms
             this_rms = np.sqrt(np.sum(np.array(weight)[mask] * (this_residuals)**2) / np.sum(np.array(weight)[mask]))
 
             rms.append(this_rms)
-            shifts_expected.append(this_shifts_expected + this_offset) # add offset back for diagnostic plot
+            expected_shifts.append(this_expected_shifts + this_mean) # add offset back for diagnostic plot
 
         # measure a few more metrics on the stacked data
         stacked_snr = data_quality_utils.boxcar_snr(self.data.sum(axis=0))
@@ -707,9 +710,9 @@ class AliasingFinder():
         n_day_stacked = len(self.metadata.input_files)
 
         return AliasingFinderResultsByShifts(
-            shifts_expected=shifts_expected,  
-            shifts_measured_vals=shifts, 
-            shifts_measured_errs=shifts_unc, 
+            shifts_expected=expected_shifts,  
+            shifts_measured_vals=measured_shifts, 
+            shifts_measured_errs=measured_shifts_unc, 
             mask=mask, 
             af_trials=trials, 
             rms=rms, 

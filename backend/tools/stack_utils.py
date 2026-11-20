@@ -358,7 +358,7 @@ class StackUtils:
         def wrap_by_sidereal_day(epochs):
             ref = np.nanpercentile(np.ravel(epochs), 50, method="lower")
             d = (epochs - ref) % sday
-            return np.where(d < sday / 2, d, d - sday)
+            return np.where(d < sday / 2, d, d - sday), ref
 
         # Sanity check: each data has the same sizes except for subints
         for this_meta in metadata:
@@ -372,7 +372,7 @@ class StackUtils:
 
         # Rewrite the epoch of each subint respect to sidereal time
         sday = (1.0 * u.sday).to(u.day).value
-        subint_epochs = wrap_by_sidereal_day(subint_epochs)
+        subint_epochs, ref_epoch = wrap_by_sidereal_day(subint_epochs)
         subint_epochs = subint_epochs - np.nanmedian(subint_epochs)
 
         # Determine the epochs of stacked data
@@ -421,7 +421,7 @@ class StackUtils:
             del this_data
             gc.collect()
 
-        return stacked_data, stacked_subint_epochs, stacked_expos, subint_epochs
+        return stacked_data, stacked_subint_epochs, stacked_expos, subint_epochs, ref_epoch
 
     def stack(self): 
         try:
@@ -498,7 +498,7 @@ class StackUtils:
                 raise ValueError("No data to stack. ")
 
             # Run stacking
-            stacked_data, stacked_epochs, stacked_expos, per_file_subint_epochs = self.__stack_subints(sf_meta[mask], expected_shape=expected_shape)
+            stacked_data, stacked_epochs, stacked_expos, per_file_subint_epochs, ref_epoch = self.__stack_subints(sf_meta[mask], expected_shape=expected_shape)
 
             # Put together stacked metadata
             stacked_metadata = StackedDataMetadata(
@@ -507,6 +507,7 @@ class StackUtils:
                 dm=np.mean([meta["dm"] for meta in sf_meta[mask]]), 
                 period=np.mean([meta["period"] for meta in sf_meta[mask]]),
                 model=open(self.parfile, "r").read(), 
+                ref_epoch=ref_epoch,
                 resample_phase_bins=self.resample_phase_bins,
                 remove_baseline=self.remove_baseline, 
                 input_files=[]

@@ -155,7 +155,7 @@ class fourier_shifts:
         return best_shift
 
     @staticmethod
-    def roll(arr, shift):
+    def roll(arr, shift, axis=-1):
         """
         Roll the array using Fourier Transform with a non-integer shift.
         Parameters
@@ -173,14 +173,30 @@ class fourier_shifts:
         if shift == 0:
             return arr
 
-        # Compute the Fourier Transform
-        fft_arr = np.fft.fft(arr)
-        # Apply the Fourier shift
-        shifted_fft = fourier_shift(fft_arr, shift)
-        # Inverse Fourier Transform
-        shifted_arr = np.fft.ifft(shifted_fft)
+        # Fall back to regular np.roll for integers
+        if float(shift).is_integer():
+            return np.roll(arr, int(shift), axis=axis)
 
-        return np.real(shifted_arr)
+        # Handling for negative axis
+        axis = axis % arr.ndim
+
+        # Create an array of shifts for each axis
+        shifts = [0.0] * arr.ndim
+        shifts[axis] = shift
+
+        # Get the length of the axis to be rolled
+        n = arr.shape[axis]
+
+        # Compute the Fourier Transform
+        spec = np.fft.rfft(arr, axis=axis)
+
+        # Apply the Fourier shift
+        spec = fourier_shift(spec, shifts, n=n, axis=axis)
+
+        # Inverse Fourier Transform
+        shifted_arr = np.fft.irfft(spec, n=n, axis=axis)
+
+        return shifted_arr
 
 class subsample_shifts():
     """

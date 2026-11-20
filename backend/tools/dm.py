@@ -6,6 +6,7 @@ from uncertainties import ufloat
 from astropy.time import Time
 from ..tools.template_utils import StackTemplate
 from ..tools.aliasing import generate_template_from_stacked_data
+from ..tools.stacked_data import K_DM
 from ..utils.data_quality import data_quality_utils
 from ..utils.correlation import fourier_shifts
 from ..utils.logger import logger
@@ -15,9 +16,29 @@ try:
 except ImportError:
     from multiprocessing import Pool
 
-K_DM = 1.0 / 2.41e-4 # use the DM constant consistent with PINT
+def get_dm_optimizer_from_stackfile(stackfile, n_subs=None, n_freqs=None, inj_ddm=None, **kwargs):
+    """
+    Get a DMOptimizer instance from a stackfile.
 
-def get_dm_optimizer_from_stackfile(stackfile, n_subs=None, n_freqs=None, **kwargs):
+    Parameters
+    ----------
+    stackfile : str
+        Path to the stackfile.
+    n_subs : int, optional
+        Number of subintegrations to downsample to, by default None.
+    n_freqs : int, optional
+        Number of frequency channels to downsample to, by default None.
+    inj_ddm : float, optional
+        Injected DM offset to apply (for testing purposes), by default None.
+    **kwargs : dict
+        Additional keyword arguments to pass to the DMOptimizer.
+
+    Returns
+    -------
+    DMOptimizer
+        DMOptimizer instance initialized with the stacked data.
+    """
+    
     from ..tools.stacked_data import StackedData
     
     # read stackfile
@@ -26,6 +47,13 @@ def get_dm_optimizer_from_stackfile(stackfile, n_subs=None, n_freqs=None, **kwar
     # scrunch polarisation
     stacked_data.scrunch(axis=1)
 
+    # Dedisperse if an injected DM is provided
+    if inj_ddm is not None:
+        print(f"!!!Folding DM before injection: {stacked_data.meta.dm}!!!")
+        print(f"!!!Injecting DM offset: {inj_ddm}!!!")
+        stacked_data.refine_dm(ddm=inj_ddm)
+        print(f"!!!Folding DM after injection: {stacked_data.meta.dm}!!!")
+
     # downsample
     if n_subs is not None:
         stacked_data.downsample_to_length(n_subs, axis=0)
@@ -33,245 +61,14 @@ def get_dm_optimizer_from_stackfile(stackfile, n_subs=None, n_freqs=None, **kwar
         stacked_data.downsample_to_length(n_freqs, axis=2)
 
     return DMOptimizer(
-        data=stacked_data.get_data(normalize=True)[:, 0, :, :], 
-        freq_lo=stacked_data.meta.freq_lo, 
-        freq_hi=stacked_data.meta.freq_hi, 
-        folding_period=stacked_data.meta.period, 
-        folding_dm=stacked_data.meta.dm, 
+        stacked_data=stacked_data, 
         **kwargs
     )
 
-def compute_dispersive_delay(freq, ddm, ref_freq, k_dm):
-    """
-    Calculate the time delay for a given frequency and DM step.
-
-    Parameters
-    ----------
-    freq : float
-        Frequency of the channel.
-    ddm : float
-        DM step.
-
-    Returns
-    -------
-    float
-        Time delay for the given frequency and DM step.
-
-    Returns
-    -------
-    float
-        Time delay for the given frequency and DM step.
-    """
-    
-    return k_dm * ddm * (freq ** -2 - ref_freq ** -2)
-
-class DMOptimizerState:
-    def __init__(self, data, folding_period, freqs, ref_freq, folding_dm, k_dm, ddm=0):
-        """
-        Initialize a DMOptimizerState instance.
-
-        Parameters
-        ----------
-        data : np.ndarray
-            Data array with shape (n_subs, n_freqs, n_bins).
-        folding_period : float
-            Folding period of the pulsar.
-        freqs : np.ndarray
-            Array of frequency channels.
-        ref_freq : float
-            Reference frequency for DM correction.
-        folding_dm : float
-            Folding DM value for the pulsar.
-        ddm : float, optional
-            Initial DM step to apply, by default 0.
-        """
-        
-        self.data = np.asarray(data, dtype=np.float64) # ensure data is float64 for precision
-        self.folding_period = folding_period
-        self.freqs = freqs
-        self.ref_freq = ref_freq
-        self.folding_dm = folding_dm
-        self.k_dm = k_dm
-
-        if self.data.ndim != 3:
-            raise ValueError("Data array must have three dimensions (n_subs, n_freqs, n_bins).")
-
-        self.ddm = 0
-        self.snr = None
-        self.chi2 = None
-        self.nsubs = self.data.shape[0]
-        self.nfreqs = self.data.shape[1]
-        self.nbins = self.data.shape[2]
-
-        if self.nfreqs != len(self.freqs):
-            raise ValueError("Number of frequency channels must match the second dimension of the waterfall data.")
-
-        # Take step
-        self.__take_step(ddm)
-
-    def __calc_dt(self, freq, ddm): 
-        return compute_dispersive_delay(freq, ddm, self.ref_freq, self.k_dm)
-
-    def __take_step(self, ddm):
-        """
-        Apply a DM step to the data array in the current step.
-
-        Parameters
-        ----------
-        ddm : float
-            DM step to apply.
-        """
-
-        # Apply the dDM steps
-        if ddm != 0:
-            for i, freq in enumerate(self.freqs):
-                self.data[:, i, :] = fourier_shifts.roll(
-                    self.data[:, i, :], 
-                    -self.__calc_dt(freq, ddm) / self.folding_period * self.nbins
-                )
-                
-            self.ddm += ddm
-
-        # Compute SNR and chi2
-        profile = self.get_pulse_profile()
-        self.snr = data_quality_utils.boxcar_snr(profile)
-        # self.snr = snr(profile)[0]
-        self.chi2 = data_quality_utils.chi2(profile)
-
-    def take_step(self, ddm):
-        """
-        Apply a DM step to the data array and return an updated step. 
-
-        Parameters
-        ----------
-        ddm : float
-            DM step to apply.
-
-        Returns
-        -------
-        DMOptimizerState
-            Updated DMOptimizerState instance after applying the DM step.
-        """
-
-        new_step = copy.deepcopy(self)
-        new_step.__take_step(ddm)
-
-        return new_step
-
-    def bootstrap(self, indices):
-        """
-        Bootstrap the data array by selecting a subset of indices along the first axis (subints).
-
-        Parameters
-        ----------
-        indices : array-like
-            Indices of the subints to select.
-
-        Returns
-        -------
-        DMOptimizerState
-            New DMOptimizerState instance with the bootstrapped data.
-        """
-
-        new_step = copy.deepcopy(self)
-        new_step.data = new_step.data[indices, :, :] # select the specified subints
-        new_step.__take_step(ddm=0) # take a fake step to update SNR and chi2
-
-        return new_step
-
-    def get_data(self):
-        """
-        Get the current data array.
-
-        Returns
-        -------
-        np.ndarray
-            Current data array.
-        """
-        return self.data
-
-    def get_waterfall(self):
-        """
-        Get the current waterfall data.
-
-        Returns
-        -------
-        np.ndarray
-            Waterfall data array with shape (n_freqs, n_bins).
-        """
-        return self.data.sum(axis=0)
-
-    def get_pulse_profile(self):
-        """
-        Get the current pulse profile by averaging the waterfall data over frequency.
-
-        Returns
-        -------
-        np.ndarray
-            Pulse profile array with shape (n_bins,).
-        """
-        return self.data.sum(axis=0).sum(axis=0)
-
-    def get_ddm(self):
-        """
-        Get the current DM step.
-
-        Returns
-        -------
-        float
-            Current DM step.
-        """
-        return self.ddm
-
-    def get_dm(self):
-        """
-        Get the current DM value.
-
-        Returns
-        -------
-        float
-            Current DM value (folding DM + dDM).
-        """
-        return self.folding_dm + self.ddm
-
-    def get_snr(self):
-        """
-        Get the signal-to-noise ratio (SNR) of the current waterfall data.
-
-        Returns
-        -------
-        float
-            SNR of the current waterfall data.
-        """
-        return self.snr
-
-    def plot_waterfall(self, ax=None):
-        """
-        Plot the waterfall data.
-
-        Returns
-        -------
-        None
-        """
-
-        this_ax = ax
-        if this_ax is None:
-            this_ax = plt.gca()
-        
-        this_ax.pcolormesh(np.linspace(0, 1, self.nbins), self.freqs, self.get_waterfall(), shading='auto', cmap='gray_r')
-        this_ax.text(0.05, 0.95, f"SNR = {self.get_snr():.2f}", transform=this_ax.transAxes, verticalalignment='top', c="k")
-        this_ax.set_ylabel("Frequency (MHz)")
-        this_ax.set_xlabel("Phase")
-        this_ax.set_title(f"dDM = {round(self.ddm, 2)}")
-
-        if ax is None:
-            plt.show()
-
 class DMOptimizerResults:
-    def __init__(self, steps, initial_state, folding_dm, metric, logger):
+    def __init__(self, steps, stacked_data, metric, logger):
         self.steps = steps
-        self.initial_state = initial_state
-        self.folding_dm = folding_dm
+        self.stacked_data = stacked_data
         self.metric = metric
         self.logger = logger
 
@@ -286,21 +83,22 @@ class DMOptimizerResults:
         self.value = self.best_state.get_dm()
 
         # Bootstrap to estimate DM uncertainty
-        self.uncertainty = self.__bootstrap()
+        self.uncertainty = self.__get_uncertainty()
 
-    def __add__(self, other):
-        """Combine two DMOptimizerResults objects."""
-        
-        if not isinstance(other, DMOptimizerResults):
-            raise ValueError("Can only combine with another DMOptimizerResult object.")
+    #########################################
+    # Measuring DM and its uncertainty
+    #########################################
 
-        return DMOptimizerResults(
-            steps=self.steps + other.steps,
-            initial_state=self.initial_state,
-            folding_dm=self.folding_dm,
-            metric=self.metric,
-            logger=self.logger
-        )
+    def get_dm_vals(self):
+        """
+        Get the list of DM steps corresponding to the stored steps.
+
+        Returns
+        -------
+        list of float
+            List of DM steps.
+        """
+        return [step.dm for step in self.steps]
 
     def __get_best_state(self):
         """Helper function to get the best state based on the metric."""
@@ -316,12 +114,20 @@ class DMOptimizerResults:
         self.logger.debug(f"Refined best DM: {best_dm}, correction: {correction}")
 
         # Create a new state at the refined DM
-        best_state = self.steps[best_idx].take_step(ddm=correction)
+        # best_state = self.steps[best_idx].take_step(ddm=correction)
+        best_state = self.stacked_data.copy()
+        best_state.dedisperse(dm=best_dm)
         self.logger.debug(f"Created best state at DM: {best_state.get_dm()}")
 
+        # Create a state with old DM for comparison
+        prev_state = self.stacked_data.copy()
+        prev_state.dedisperse(dm=self.get_dm_vals()[best_idx])
+
+        # Get metric values before and after refinement
+        metric_val_before = prev_state.get_stacked_metric(metric=self.metric)
+        metric_val_after = best_state.get_stacked_metric(metric=self.metric)
+
         # Check if the metric value improved after refinement
-        metric_val_before = getattr(self.steps[best_idx], self.metric)
-        metric_val_after = getattr(best_state, self.metric)
         if metric_val_after < metric_val_before:
             self.logger.warning(f"Metric ({self.metric}) decreased from {metric_val_before} to {metric_val_after} after peak refinement.")
 
@@ -343,58 +149,35 @@ class DMOptimizerResults:
 
         return dm_vals[i_best] + correction, correction
 
-    def __bootstrap(self, n_boot=64, seed=0):
-        """DM uncertainty from bootstrapping over subintegrations."""
+    def __get_uncertainty(self):
+        """Measure uncertainty from bootstraping"""
 
-        # Initialize random seed
-        rng = np.random.default_rng(seed)
+        # Unpack metric values from the steps
+        bs_metric_vals = np.zeros((len(self.steps), self.steps[0].n_bootstrap))
+        for i, step in enumerate(self.steps):
+            bs_metric_vals[i, :] = getattr(step, f"bootstrap_{self.metric}")
 
-        if self.steps[0].nsubs < 8:
-            self.logger.warning("Number of subintegrations is less than 8, bootstrapping may be unreliable.")
-
+        # Measure DM values for each bootstrap trial
         best_dm_vals = []
-        for _ in tqdm.tqdm(
-            range(n_boot), 
-            bar_format="Bootstrapping: {percentage:.1f}% ({elapsed}<{remaining})",
-            leave=False
-        ):
-            metric_vals = []
-            dm_vals = np.array([], dtype=float)
+        trial_dm_vals = self.get_dm_vals()
+        for j in range(self.steps[0].n_bootstrap):
+            # Get metric values
+            this_metric_vals = bs_metric_vals[:, j]
 
-            # Generate random indices for subints
-            idx = rng.integers(0, self.steps[0].nsubs, self.steps[0].nsubs)
+            # Find the best index
+            i_best = np.argmax(this_metric_vals)
 
-            for step in self.steps:
-                # Bootstrap
-                step_bs = step.bootstrap(indices=idx)
+            # Refine the best DM for this bootstrap trial
+            best_dm, _ = self.__refine_best_dm(trial_dm_vals, this_metric_vals, i_best)
 
-                if self.metric == "snr":
-                    metric_vals.append(step_bs.snr)
-                else:
-                    metric_vals.append(step_bs.chi2)
+            best_dm_vals.append(best_dm)
 
-                dm_vals = np.append(dm_vals, step_bs.get_dm())
+        return np.std(best_dm_vals) # measure uncertainty from the scatter of the best DM values across bootstrap trials
 
-            # Find the best dm index
-            i_best = np.argmax(metric_vals)
 
-            # Refine around i_best
-            dm_best, _ = self.__refine_best_dm(dm_vals, metric_vals, i_best)
-
-            best_dm_vals.append(dm_best)
-
-        return np.std(best_dm_vals)
-
-    def get_dm_vals(self):
-        """
-        Get the list of DM steps corresponding to the stored steps.
-
-        Returns
-        -------
-        list of float
-            List of DM steps.
-        """
-        return [self.folding_dm + step.get_ddm() for step in self.steps]
+    #########################################
+    # Helper functions for metric values
+    #########################################
 
     def get_snr_vals(self):
         """
@@ -405,7 +188,7 @@ class DMOptimizerResults:
         list of float
             List of SNR values.
         """
-        return [step.get_snr() for step in self.steps]
+        return [step.snr for step in self.steps]
 
     def get_chi2_vals(self):
         """
@@ -434,7 +217,11 @@ class DMOptimizerResults:
         else:
             raise ValueError(f"Unsupported metric: {self.metric}")
 
-    def get_data(self):
+    #########################################
+    # Other helper functions
+    #########################################
+
+    def get_data(self, *args, **kwargs):
         """
         Get the list of data arrays corresponding to the stored steps.
 
@@ -443,7 +230,7 @@ class DMOptimizerResults:
         list of ndarray
             List of data arrays.
         """
-        return self.best_state.get_data()
+        return self.best_state.get_data(*args, **kwargs)
 
     def as_ufloat(self):
         """
@@ -477,12 +264,12 @@ class DMOptimizerResults:
 
         init_profile = fig.add_subplot(left[0])
         init_profile.plot(
-            np.linspace(0, 1, self.initial_state.nbins),
-            self.initial_state.get_pulse_profile(), 
+            np.linspace(0, 1, self.stacked_data.data.shape[3]),
+            self.stacked_data.get_profile(), 
             c='k', 
             lw=1
         )
-        init_profile.text(0.98, 0.98, f"DM: {self.folding_dm:.2f}\nSNR: {self.initial_state.get_snr():.2f}", ha='right', va='top', transform=init_profile.transAxes)
+        init_profile.text(0.98, 0.98, f"DM: {self.stacked_data.meta.dm:.2f}\nSNR: {self.stacked_data.get_stacked_snr():.2f}", ha='right', va='top', transform=init_profile.transAxes)
         init_profile.set_xlim(0, 1)
         init_profile.set_xticks([])
         init_profile.set_yticks([])
@@ -492,14 +279,14 @@ class DMOptimizerResults:
 
         init_waterfall = fig.add_subplot(left[1])
         init_waterfall.pcolormesh(
-            np.linspace(0, 1, self.initial_state.nbins), 
-            self.initial_state.freqs, 
-            self.initial_state.get_waterfall(),
+            np.linspace(0, 1, self.stacked_data.data.shape[3]), 
+            self.stacked_data.freqs, 
+            self.stacked_data.get_waterfall(normalize=True),
             cmap='gray_r', 
             rasterized=True
         )
         init_waterfall.axvline(
-            get_phase_of_peak_amplitude(self.initial_state.get_pulse_profile()), 
+            get_phase_of_peak_amplitude(self.stacked_data.get_profile()), 
             color='r', 
             linestyle=':', 
             lw=1
@@ -513,8 +300,8 @@ class DMOptimizerResults:
 
         best_profile = fig.add_subplot(right[0])
         best_profile.plot(
-            np.linspace(0, 1, self.best_state.nbins),
-            self.best_state.get_pulse_profile(), 
+            np.linspace(0, 1, self.best_state.data.shape[3]),
+            self.best_state.get_profile(), 
             c='k', 
             lw=1
         )
@@ -523,19 +310,19 @@ class DMOptimizerResults:
         best_profile.set_yticks([])
         for spine in best_profile.spines.values():
             spine.set_visible(False)
-        best_profile.text(0.98, 0.98, f"DM: {self.folding_dm + self.best_state.get_ddm():.2f}\nSNR: {self.best_state.get_snr():.2f}", ha='right', va='top', transform=best_profile.transAxes)
+        best_profile.text(0.98, 0.98, f"DM: {self.best_state.meta.dm:.2f}\nSNR: {self.best_state.get_stacked_snr():.2f}", ha='right', va='top', transform=best_profile.transAxes)
         best_profile.set_title("Best State")
 
         best_waterfall = fig.add_subplot(right[1])
         best_waterfall.pcolormesh(
-            np.linspace(0, 1, self.best_state.nbins), 
+            np.linspace(0, 1, self.best_state.data.shape[3]), 
             self.best_state.freqs, 
-            self.best_state.get_waterfall(),
+            self.best_state.get_waterfall(normalize=True),
             cmap='gray_r', 
             rasterized=True
         )
         best_waterfall.axvline(
-            get_phase_of_peak_amplitude(self.best_state.get_pulse_profile()), 
+            get_phase_of_peak_amplitude(self.best_state.get_profile()), 
             color='r', 
             linestyle=':', 
             lw=1
@@ -554,7 +341,7 @@ class DMOptimizerResults:
             marker=',',
             lw=0.1
         )
-        snr_dms.axvline(self.folding_dm, color='k', linestyle=':', lw=1, label="Folding DM")
+        snr_dms.axvline(self.stacked_data.get_dm(), color='k', linestyle=':', lw=1, label="Folding DM")
         snr_dms.axvline(self.best_state.get_dm(), color='r', linestyle='-', lw=1, label="Best DM")
         snr_dms.axvspan(
             self.value - self.uncertainty, 
@@ -570,55 +357,55 @@ class DMOptimizerResults:
         if savefig is not None:
             fig.savefig(savefig)
 
+class DMOptimizerStep:
+    def __init__(self, dm, n_bootstrap):
+        self.dm = dm
+        self.n_bootstrap = n_bootstrap
+
+        # Initialize data
+        self.chi2 = None
+        self.snr = None
+
+        # Initialize bootstrap data
+        self.bootstrap_chi2 = []
+        self.bootstrap_snr = []
+        self.bootstrap_indices = []
+
+    def add_trial(self, chi2, snr, subint_indices, is_bootstrap):
+        if is_bootstrap:
+            self.bootstrap_chi2.append(chi2)
+            self.bootstrap_snr.append(snr)
+            self.bootstrap_indices.append(subint_indices)
+        else:
+            self.chi2 = chi2
+            self.snr = snr
+
+    def validate(self):
+        if self.chi2 is None or self.snr is None:
+            raise ValueError("Non-bootstrap trial data is not set.")
+        
+        if not self.bootstrap_chi2 or not self.bootstrap_snr or not self.bootstrap_indices:
+            raise ValueError("Bootstrap trial data is not set.")
+        
+        if len(self.bootstrap_chi2) != len(self.bootstrap_snr) or len(self.bootstrap_chi2) != len(self.bootstrap_indices):
+            raise ValueError("Bootstrap trial data lengths are inconsistent.")
+
+        if len(self.bootstrap_chi2) != self.n_bootstrap:
+            raise ValueError("Number of bootstrap trials does not match n_bootstrap.")
 
 class DMOptimizer:
     def __init__(
             self, 
-            data, 
-            freq_lo, 
-            freq_hi, 
-            folding_period, 
-            folding_dm,
-            ref_freq=None, 
+            stacked_data, 
             metric='chi2',  
             ncpus=1, 
             logger=logger()
         ):
-
-        self.freq_lo = freq_lo
-        self.freq_hi = freq_hi
-        self.data = data
-        self.folding_period = folding_period
-        self.folding_dm = folding_dm
+        
         self.metric = metric
         self.logger = logger
         self.ncpus = ncpus
-
-        # Set the DM constant
-        self.k_dm = K_DM
-
-        # Generate linearly spaced frequency array for the waterfall data
-        self.freqs = np.linspace(freq_lo, freq_hi, data.shape[1])
-
-        # Default reference frequency is the midpoint
-        self.ref_freq = ref_freq
-        if self.ref_freq is None:
-            self.ref_freq = (freq_lo + freq_hi) / 2
-
-        # Number of bins and frequencies in data array
-        self.nbins = data.shape[2]
-        self.nfreqs = len(self.freqs)
-        self.ddm = 0
-
-        # Initialize DM optimizer step
-        self.initial_state = DMOptimizerState(
-            data=self.data, 
-            folding_period=self.folding_period,
-            freqs=self.freqs,
-            ref_freq=self.ref_freq,
-            folding_dm=self.folding_dm, 
-            k_dm=self.k_dm
-        )
+        self.stacked_data = stacked_data
 
     def __calc_step_size(self, tol):
         """
@@ -634,11 +421,48 @@ class DMOptimizer:
         float
             Calculated DM step size.
         """
-        return np.abs(tol * self.folding_period / self.k_dm / (
-            self.freq_lo ** -2 - self.freq_hi ** -2
+        return np.abs(tol * self.stacked_data.meta.period / K_DM / (
+            self.stacked_data.meta.freq_lo ** -2 - self.stacked_data.meta.freq_hi ** -2
         ))
 
-    def __take_trials(self, ddm_values):
+    def __take_step(self, ddm):
+        # Unpack payload
+        ddm, bootstrap_idx = ddm
+
+        # Make a copy of the stacked data for this trial
+        state = self.stacked_data.copy()
+
+        # Apply the DM step
+        state.refine_dm(ddm=ddm)
+
+        # Scrunch frequency and pol axes to reduce data size
+        state.scrunch(axis=1)
+        state.scrunch(axis=2) # we don't need frequency for bootstrapping
+        
+        # Initialize step instance
+        step = DMOptimizerStep(state.get_dm(), n_bootstrap=len(bootstrap_idx)-1)
+
+        # Bootstrap over the selected indices
+        for i, bs_idx in enumerate(bootstrap_idx):
+            # Make a copy of the state
+            this_state = state.copy()
+
+            # Select the desired subints
+            this_state.data = this_state.data[bs_idx]
+
+            step.add_trial(
+                chi2=this_state.get_stacked_chi2(), 
+                snr=this_state.get_stacked_snr(), 
+                subint_indices=bs_idx, 
+                is_bootstrap=(i != 0) # the first trial is not a bootstrap (see __take_trials)
+            )
+
+        # Validate the step
+        step.validate()
+
+        return step
+
+    def __take_trials(self, ddm_values, n_bootstrap=64, seed=0):
         """
         Take multiple DM trials.
 
@@ -649,16 +473,36 @@ class DMOptimizer:
 
         Returns
         -------
-        list of DMOptimizerState
-            List of updated DMOptimizerState instances after applying each DM step.
+        list of DMOptimizerStep
+            List of updated DMOptimizerStep instances after applying each DM step.
         """
 
+        # Generate bootstrap indices for the DM trials
+        bootstrap_indices = np.random.default_rng(seed).integers(
+            0, 
+            self.stacked_data.data.shape[0], # number of subints
+            self.stacked_data.data.shape[0] * n_bootstrap
+        )
+
+        # Add the original indices at the front, so the first trial always uses the original data
+        bootstrap_indices = np.concatenate([
+            np.arange(self.stacked_data.data.shape[0]), 
+            bootstrap_indices
+        ])
+
+        # Reshape the bootstrap indices into a 2D array where each row corresponds to a trial
+        bootstrap_indices = bootstrap_indices.reshape(n_bootstrap + 1, self.stacked_data.data.shape[0])
+
+        # Prepare payload for multiprocessing
+        payload = [(this_ddm, bootstrap_indices) for this_ddm in ddm_values]
+        
+        # Run trials
         with Pool(self.ncpus) as pool:
-            trial_steps = list(
+            steps = list(
                 tqdm.tqdm(
                     pool.imap(
-                        self.initial_state.take_step, 
-                        ddm_values
+                        self.__take_step, 
+                        payload
                     ), 
                     total=len(ddm_values), 
                     bar_format="Taking {n}/{total} DM trials: {percentage:.1f}% ({elapsed}<{remaining})", 
@@ -666,7 +510,7 @@ class DMOptimizer:
                 )
             )
 
-        return trial_steps
+        return steps
 
     def optimize(self, dm_range=[-1, 1], tol=1e-3):
         """
@@ -694,7 +538,7 @@ class DMOptimizer:
         self.logger.debug(f"Taking {len(ddm_values)} DM trials")
 
         # take steps
-        trial_steps = self.__take_trials(ddm_values)
+        steps = self.__take_trials(ddm_values)
 
-        return DMOptimizerResults(trial_steps, self.initial_state, self.folding_dm, metric=self.metric, logger=self.logger)
+        return DMOptimizerResults(steps, self.stacked_data, metric=self.metric, logger=self.logger)
 
