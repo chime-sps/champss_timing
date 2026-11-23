@@ -559,7 +559,7 @@ class AliasingFinderResultsByShifts:
         axs_subints.set_title("Subint Powers")
         axs_subints.legend(frameon=False, fontsize=8)
         axs_subints.set_xlabel("Phase")
-        axs_subints.set_ylabel("Sample")
+        axs_subints.set_ylabel("Time since reference epoch (s)")
         axs_subints.set_xticks(np.arange(0, len(self.subint_powers[0]) + 1, len(self.subint_powers[0]) / 2))
         axs_subints.set_xticklabels(["0", "0.5", "1"])
         axs_subints2 = axs_subints.twiny()
@@ -600,7 +600,7 @@ class AliasingFinderResultsByShifts:
             axs_subints_corr.set_title(f"Subint Powers")
             axs_subints_corr.legend(frameon=False, fontsize=8)
             axs_subints_corr.set_xlabel("Phase")
-            axs_subints_corr.set_ylabel("Sample")
+            axs_subints_corr.set_ylabel("Time since reference epoch (s)")
             axs_subints_corr.set_xticks(np.arange(0, len(self.subint_powers_corr[0]) + 1, len(self.subint_powers_corr[0]) / 2))
             axs_subints_corr.set_xticklabels(["0", "0.5", "1"])
             axs_subints_corr2 = axs_subints_corr.twiny()
@@ -617,6 +617,8 @@ class AliasingFinderResultsByShifts:
                 va="center", 
                 transform=axs_subints_corr.transAxes
             )
+            axs_subints_corr.set_xticks([])
+            axs_subints_corr.set_yticks([])
         
         # plot info
         fig.text(
