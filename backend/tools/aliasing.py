@@ -8,7 +8,6 @@ import tqdm
 import numpy as np
 import astropy.units as u
 import pandas as pd
-import multiprocessing
 import matplotlib.pyplot as plt
 import datetime
 import traceback
@@ -17,7 +16,13 @@ from pint.fitter import WLSFitter
 from pint.models import get_model, get_model_and_toas
 from scipy.ndimage import gaussian_filter
 from pint.residuals import Residuals
+from scipy.stats import median_abs_deviation
 from io import StringIO
+
+try:
+    from multiprocess import Pool
+except ImportError:
+    from multiprocessing import Pool
 
 from ..utils.utils import utils
 # from ..utils.exec import exec
@@ -30,11 +35,18 @@ from ..tools.shift_finder import ShiftFinder
 from ..datastores.database import database
 # from ..datastores.archive_cache import archive_cache
 
-def get_aliasing_finder_from_stackfile(stackfile, n_subs=None, **kwargs):
+def get_aliasing_finder_from_stackfile(stackfile, n_subs=None, inj_af=None, **kwargs):
     from ..tools.stacked_data import StackedData
     
     # read stackfile
     stacked_data = StackedData.load(stackfile)
+
+    # inject aliasing if specified
+    if inj_af is not None:
+        stacked_data.dealiasing(-inj_af)
+
+    # drop partially filled subintegrations
+    stacked_data.drop_partial_subints()
 
     # scrunch polarisation, frequencies
     stacked_data.scrunch(axis=1)
@@ -45,9 +57,7 @@ def get_aliasing_finder_from_stackfile(stackfile, n_subs=None, **kwargs):
         stacked_data.downsample_to_length(n_subs, axis=0)
 
     return AliasingFinder(
-        data=stacked_data.get_data(normalize=True)[:, 0, :, :], 
-        epochs=stacked_data.epochs, 
-        metadata=stacked_data.meta,
+        stacked_data=stacked_data,
         **kwargs
     )
 
@@ -55,10 +65,9 @@ def get_smooth_sigma(template):
     width = data_quality_utils.pulse_width(template)
     return width * 0.2
 
-def generate_template_from_stacked_data(data, smooth_sigma=None, logger=logger()):
-    # Sanity check on the size of the data
-    if data.ndim != 2 or data.shape[1] < 1:
-        raise ValueError("Data must be a 2D array with at least one bin per profile")
+def generate_template_from_stacked_data(stacked_data, smooth_sigma=None, logger=logger()):
+    # Get subint data
+    data = stacked_data.get_data(scrunch=(1, 2), normalize=True)[:, 0, 0, :]
     
     # Generate a profile template
     logger.debug("Optimizing stacked profile to create a template...")
@@ -266,62 +275,74 @@ class DealiasedTimingSolution:
         plt.show()
 
 class AliasingFinderResultsByShifts:
-    def __init__(
-            self, 
-            shifts_expected,  
-            shifts_measured_vals, 
-            shifts_measured_errs, 
-            mask, 
-            af_trials, 
-            rms, 
-            data,
-            template, 
-            stacked_snr, 
-            avg_snr_per_subints, 
-            psr_id, 
-            n_day_stacked, 
-            logger
-        ):
-        self.shifts_expected = shifts_expected
-        self.shifts_measured_vals = shifts_measured_vals
-        self.shifts_measured_errs = shifts_measured_errs
-        self.mask = mask
-        self.af_trials = af_trials
-        self.rms = rms
-        self.stacked_snr = stacked_snr
-        self.data = data
+    def __init__(self, stacked_data, trials, subint_powers, template, logger):
+        self.epochs = stacked_data.epochs
+        self.trials = trials
+        self.subint_powers = subint_powers
         self.template = template
-        self.avg_snr_per_subints = avg_snr_per_subints
-        self.psr_id = psr_id
-        self.n_day_stacked = n_day_stacked
         self.logger = logger
 
-        # Generate subint indices
-        self.subint_idxs = np.arange(self.data.shape[0])
+        # Get stack and subint snrs
+        self.stacked_snr = stacked_data.get_stacked_snr()
+        self.subint_snrs = stacked_data.get_subint_snrs()
 
-        # Get af_max and af_min
-        self.af_max = np.max(self.af_trials)
-        self.af_min = np.min(self.af_trials)
+        # Get pulsar name
+        self.psr_id = None
+        try:
+            model = get_model(StringIO(stacked_data.meta.model))
+            if hasattr(model, "PSR"):
+                self.psr_id = model.PSR.value
+            elif hasattr(model, "PSRJ"):
+                self.psr_id = model.PSRJ.value
+        except Exception as e:
+            self.psr_id = "unknown"
 
-        # Find the trial that minimizes the rms
-        self.best_i = np.where(self.rms == np.min(self.rms))[0][0]
-        self.best_af = self.af_trials[self.best_i]
+        # Get number of days stacked
+        self.n_day_stacked = len(stacked_data.meta.input_files)
 
-        # Get expected shifts
-        self.best_expected_shifts = self.shifts_expected[self.best_i]
+        # Find the best trial
+        self.best_idx, self.nearby_trials_idx = self.__get_best_trial()
 
-        # Get shifts and nearby the expected shifts
-        self.nearby_expected_shifts = []
-        if self.best_af > self.af_min:
-            self.nearby_expected_shifts.append(self.shifts_expected[self.best_i - 1])
-        if self.best_af < self.af_max:
-            self.nearby_expected_shifts.append(self.shifts_expected[self.best_i + 1])
+        # Get best and nearby shifts as shortcuts
+        self.best_trial = self.trials[self.best_idx]
+        self.nearby_trials = [self.trials[i] for i in self.nearby_trials_idx]
 
-    def __normalize_power(self, power):
-        power = power - np.mean(power)
-        power = power / np.max(power)
+    ############################################
+    # Helper functions
+    ############################################
 
-        return power
+    def __get_best_trial(self):
+        # Get rms values
+        rms_values = self.get_rms_values()
+
+        # # Get alias factors
+        # alias_factors = self.get_alias_factors()
+
+        # Find the best index
+        best_idx = np.argmin(rms_values)
+
+        # Get nearby trials
+        nearby_trials_idx = []
+        if best_idx > 0:
+            nearby_trials_idx.append(best_idx - 1)
+        if best_idx < len(rms_values) - 1:
+            nearby_trials_idx.append(best_idx + 1)
+
+        return best_idx, nearby_trials_idx
+
+    def get_alias_factors(self):
+        return [trial.alias_factor for trial in self.trials]
+
+    def get_rms_values(self):
+        return [trial.rms for trial in self.trials]
+
+    def validate(self):
+        if len(self.trials) == 0:
+            raise ValueError("No trials have been added.")
+
+    ############################################
+    # Dealiasing
+    ############################################
 
     def dealias(self, par_or_model, tim_or_toas):
         """
@@ -350,17 +371,27 @@ class AliasingFinderResultsByShifts:
         return DealiasedTimingSolution(
             model=model,
             toas=toas,
-            best_af=self.best_af,
+            best_af=self.best_trial.alias_factor,
             logger=self.logger
         )
 
+    ############################################
+    # Diagnostic functions
+    ############################################
+
+    def __normalize_power(self, power):
+        power = power - np.mean(power)
+        power = power / np.max(power)
+
+        return power
+    
     def get_summary(self):
         return {
             "psr_id": str(self.psr_id),
             "n_stacked": int(self.n_day_stacked),
-            "alias_factor": int(self.best_af),
+            "alias_factor": int(self.get_alias_factors()[self.best_idx]),
             "snr_stacked": float(self.stacked_snr),
-            "avg_snr_per_subints": float(self.avg_snr_per_subints),
+            "avg_snr_per_subints": float(np.mean(self.subint_snrs)),
             "timestamp": datetime.datetime.now().isoformat()
         }
 
@@ -373,8 +404,13 @@ class AliasingFinderResultsByShifts:
         fig, axs = plt.subplots(3, 2, figsize=(12, 8),  gridspec_kw={'width_ratios': [3, 1]})
 
         # plot rms
-        axs[0, 0].plot(self.af_trials, self.rms, c="k", lw=1)
-        axs[0, 0].axvline(self.best_af, label=f"Best fit: aliasing by {self.best_af} phase(s) per day", c="r", lw=1)
+        axs[0, 0].plot(self.get_alias_factors(), self.get_rms_values(), c="k", lw=1)
+        axs[0, 0].axvline(
+            self.best_trial.alias_factor, 
+            label=f"Best fit: aliasing by {self.best_trial.alias_factor} phase(s) per day", 
+            c="r", 
+            lw=1
+        )
         axs[0, 0].set_title(f"RMS vs Alias Factor")
         axs[0, 0].set_xlabel("Alias Factor")
         axs[0, 0].set_ylabel("RMS")
@@ -383,9 +419,9 @@ class AliasingFinderResultsByShifts:
 
         # plot shifts
         axs[1, 0].errorbar(
-            self.subint_idxs[self.mask], 
-            self.shifts_measured_vals[self.mask], 
-            self.shifts_measured_errs[self.mask], 
+            self.epochs[self.best_trial.mask] * 86400, 
+            self.best_trial.get_values(masked=True), 
+            self.best_trial.get_uncertainties(masked=True), 
             c="k", 
             lw=1, 
             label="Measured TOAs", 
@@ -393,17 +429,17 @@ class AliasingFinderResultsByShifts:
             fmt="x"
         )
         axs[1, 0].errorbar(
-            self.subint_idxs, 
-            self.best_expected_shifts, 
+            self.epochs[self.best_trial.mask] * 86400, 
+            self.best_trial.get_expected_shifts(masked=False), 
             c="r", 
             lw=1, 
             linestyle="-", 
-            label=f"Best fit: aliasing by {self.best_af} phase(s) per day"
+            label=f"Best fit: aliasing by {self.best_trial.alias_factor} phase(s) per day"
         )
-        for i, this_nearby_expected_shifts in enumerate(self.nearby_expected_shifts):
+        for i, this_nearby_shift in enumerate(self.nearby_trials):
             axs[1, 0].errorbar(
-                self.subint_idxs, 
-                this_nearby_expected_shifts,  
+                self.epochs * 86400, 
+                this_nearby_shift.get_expected_shifts(masked=False),  
                 c="k", 
                 lw=1, 
                 linestyle="--", 
@@ -411,15 +447,53 @@ class AliasingFinderResultsByShifts:
                 alpha=0.5
             )
         axs[1, 0].set_title("Shifts")
-        axs[1, 0].set_xlabel("Subints")
+        axs[1, 0].set_xlabel("Time since reference epoch (s)")
         axs[1, 0].set_ylabel("Shift (phase)")
         axs[1, 0].legend(frameon=False, fontsize=8)
 
         # plot powers
-        axs[2, 0].plot(self.__normalize_power(self.template), c="k", lw=1, label="Std Profile")
-        axs[2, 0].plot(self.__normalize_power(np.sum(self.data, axis=0)), c="k", lw=1, label=f"Sum of subints 0-{int(len(self.data))-1}", alpha=0.75, linestyle=":")
-        axs[2, 0].plot(self.__normalize_power(np.sum(self.data[:int(len(self.data)/2)], axis=0)), c="r", lw=1, label=f"Sum of subints 0-{int((len(self.data))/2)-1}", alpha=0.75)
-        axs[2, 0].plot(self.__normalize_power(np.sum(self.data[int(len(self.data)/2):], axis=0)), c="b", lw=1, label=f"Sum of subints {int((len(self.data))/2)}-{len(self.data)-1}", alpha=0.75)
+        axs[2, 0].plot(
+            self.__normalize_power(self.template), 
+            c="k", 
+            lw=1, 
+            label="Std Profile"
+        )
+        axs[2, 0].plot(
+            self.__normalize_power(
+                np.sum(
+                    self.subint_powers, 
+                    axis=0
+                )
+            ), 
+            c="k", 
+            lw=1, 
+            label=f"Sum of subints 0-{int(len(self.subint_powers))-1}", 
+            alpha=0.75, 
+            linestyle=":"
+        )
+        axs[2, 0].plot(
+            self.__normalize_power(
+                np.sum(
+                    self.subint_powers[:int(self.best_trial.n_subints/2)], 
+                    axis=0
+                )
+            ), 
+            c="r", 
+            lw=1, 
+            label=f"Sum of subints 0-{int(self.best_trial.n_subints/2)-1}", 
+            alpha=0.75
+        )
+        axs[2, 0].plot(
+            self.__normalize_power(
+                np.sum(self.subint_powers[int(self.best_trial.n_subints/2):], 
+                       axis=0
+                )
+            ), 
+            c="b", 
+            lw=1, 
+            label=f"Sum of subints {int(self.best_trial.n_subints/2)}-{self.best_trial.n_subints-1}", 
+            alpha=0.75
+        )
         axs[2, 0].set_title(f"Powers")
         axs[2, 0].set_xlabel("Samples")
         axs[2, 0].set_ylabel("Power")
@@ -431,20 +505,20 @@ class AliasingFinderResultsByShifts:
         #     self.data[i] = np.array(self.data[i]) / max(self.data[i])
 
         # find the peack of the stacked profiles
-        peak_index = np.argmax(np.sum(self.data, axis=0))
+        peak_index = np.argmax(np.sum(self.subint_powers, axis=0))
 
         # calculate the shifts in phase
         shifts_phase = []
-        for shift in self.best_expected_shifts:
-            this_shift = peak_index + (shift / 1) * len(self.data[0])
-            if this_shift > len(self.data[0]):
-                this_shift -= len(self.data[0])
+        for shift in self.best_trial.get_expected_shifts(masked=False):
+            this_shift = peak_index + (shift / 1) * len(self.subint_powers[0])
+            if this_shift > len(self.subint_powers[0]):
+                this_shift -= len(self.subint_powers[0])
             elif this_shift < 0:
-                this_shift += len(self.data[0])
+                this_shift += len(self.subint_powers[0])
             shifts_phase.append(this_shift)
 
         # plot stacked profile
-        axs[0, 1].plot(np.sum(self.data, axis=0), lw=0.5, c="k")
+        axs[0, 1].plot(np.sum(self.subint_powers, axis=0), lw=0.5, c="k")
         axs[0, 1].set_title("Stacked Profile")
         axs[0, 1].set_xticks([])
         axs[0, 1].set_yticks([])
@@ -454,20 +528,35 @@ class AliasingFinderResultsByShifts:
         axs[2, 1].remove()
         n_params_gs = axs[0, 1].get_gridspec()
         axs_subints = fig.add_subplot(n_params_gs[1:3, 1])
-        axs_subints.matshow(self.data, cmap="gray_r", aspect="auto", rasterized=True)
-        axs_subints.plot(shifts_phase, self.subint_idxs, color="r", lw=1, ls=":", label="Best fit")
-        axs_subints.plot([peak_index - 0.015 * len(self.data[0])] * len(self.subint_idxs), self.subint_idxs, "r-", label="No aliasing", lw=0.5, alpha=0.75)
+        axs_subints.matshow(self.subint_powers, cmap="gray_r", aspect="auto", rasterized=True)
+        axs_subints.plot(shifts_phase, self.epochs, color="r", lw=1, ls=":", label="Best fit")
+        axs_subints.plot(
+            [peak_index - 0.015 * len(self.subint_powers[0])] * len(self.epochs), 
+            self.epochs, 
+            "r-", 
+            label="No aliasing", 
+            lw=0.5, 
+            alpha=0.75
+        )
         axs_subints.set_title("Subint Profiles")
         axs_subints.legend(frameon=False, fontsize=8)
         axs_subints.set_xlabel("Phase")
         axs_subints.set_ylabel("Sample")
-        axs_subints.set_xticks(np.arange(0, len(self.data[0]) + 1, len(self.data[0]) / 2))
+        axs_subints.set_xticks(np.arange(0, len(self.subint_powers[0]) + 1, len(self.subint_powers[0]) / 2))
         axs_subints.set_xticklabels(["0", "0.5", "1"])
         axs_subints2 = axs_subints.twiny()
         axs_subints2.set_xlim(axs_subints.get_xlim())
         
         # plot info
-        fig.text(0.001, 0.000, f"CHAMPSS Timing Pipeline alias_utils ({utils.get_version_hash()}) | {self.psr_id} | {self.n_day_stacked} observations stacked | {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", fontsize=9, ha="left", va="bottom", family="monospace")
+        fig.text(
+            0.001, 
+            0.000, 
+            f"CHAMPSS Timing Pipeline alias_utils ({utils.get_version_hash()}) | {self.psr_id} | {self.n_day_stacked} observations stacked | {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", 
+            fontsize=9, 
+            ha="left", 
+            va="bottom", 
+            family="monospace"
+        )
 
         fig.tight_layout()
 
@@ -479,18 +568,25 @@ class AliasingFinderResultsByShifts:
 class AliasingFinderResultsBySNR:
     def __init__(
             self, 
+            stacked_data,
             af_vals, 
-            snrs, 
+            metric_name,
+            metric_vals, 
             logger
         ):
+        self.stacked_data = stacked_data.copy()
         self.af_vals = af_vals
-        self.snrs = snrs
+        self.metric_name = metric_name
+        self.metric_vals = metric_vals
         self.logger = logger
 
         # Find the best shift based on SNR
-        max_snr_idx = np.argmax(self.snrs)
-        self.best_af = self.af_vals[max_snr_idx]
-        self.best_snr = self.snrs[max_snr_idx]
+        max_metric_idx = np.argmax(self.metric_vals)
+        self.best_af = self.af_vals[max_metric_idx]
+        self.best_metric = self.metric_vals[max_metric_idx]
+
+        # Dealias the stacked data
+        self.stacked_data.dealiasing(alias_factor=self.best_af)
 
     def dealias(self, par_or_model, tim_or_toas):
         """
@@ -526,7 +622,8 @@ class AliasingFinderResultsBySNR:
     def get_summary(self):
         summary = {
             "best_af": self.best_af,
-            "best_snr": self.best_snr,
+            "metric_name": self.metric_name,
+            "best_metric": self.best_metric,
             "n_trials": len(self.af_vals)
         }
         return summary
@@ -535,23 +632,128 @@ class AliasingFinderResultsBySNR:
         summary = self.get_summary()
         self.logger.info("Aliasing Finder Results Summary:")
         self.logger.info(f"Best AF: {summary['best_af']}")
-        self.logger.info(f"Best SNR: {summary['best_snr']}")
+        self.logger.info(f"Metric Name: {summary['metric_name']}")
+        self.logger.info(f"Best Metric: {summary['best_metric']}")
         self.logger.info(f"Number of Trials: {summary['n_trials']}")
 
     def plot(self, savefig=None):
         plt.figure(figsize=(8, 4))
-        plt.plot(self.af_vals, self.snrs, 'kx')
-        plt.axvline(self.best_af, color='r', linestyle='--', label=f"Best SNR at {self.best_af} phase(s) per day")
+        plt.plot(self.af_vals, self.metric_vals, 'kx')
+        plt.axvline(self.best_af, color='r', linestyle='--', label=f"Best {self.metric_name.upper()} at {self.best_af} phase(s) per day")
         plt.xlabel("Shift")
-        plt.ylabel("SNR")
+        plt.ylabel(self.metric_name.upper())
         plt.title("Aliasing Finder Results by SNRs")
         plt.legend()
         if savefig:
             plt.savefig(savefig)
         plt.show()
 
+class AliasingFinderMeasuredShifts:
+    def __init__(self, measured_shifts):
+        self.values = np.array([])
+        self.uncertainties = np.array([])
+        self.snrs = np.array([])
+        self.subint_idx = np.array([])
+
+        for measured_shift in list(measured_shifts):
+            self.values = np.append(self.values, measured_shift["value"])
+            self.uncertainties = np.append(self.uncertainties, measured_shift["uncertainty"])
+            self.snrs = np.append(self.snrs, measured_shift["snr"])
+            self.subint_idx = np.append(self.subint_idx, measured_shift["subint_idx"])
+
+    def validate(self):
+        # Check for same lengths
+        if len(self.values) != len(self.uncertainties) or len(self.values) != len(self.snrs) or len(self.values) != len(self.subint_idx):
+            raise ValueError("Measured shifts arrays must have the same length.")
+
+        # Check for any non-real values
+        if not np.all(np.isreal(self.values)):
+            raise ValueError("All measured shift values must be real numbers.")
+        if not np.all(np.isreal(self.uncertainties)):
+            raise ValueError("All measured shift uncertainties must be real numbers.")
+        if not np.all(np.isreal(self.snrs)):
+            raise ValueError("All measured shift SNRs must be real numbers.")
+
+class AliasingFinderShiftTrials:
+    def __init__(self, alias_factor, measured_shifts, expected_shifts, mask, n_subints):
+        self.alias_factor = alias_factor
+        self.mask = mask
+        self.n_subints = n_subints
+
+        # Initialize shifts
+        self.subint_idx = np.asarray(measured_shifts.subint_idx)
+        self.values = np.asarray(measured_shifts.values)
+        self.uncertainties = np.asarray(measured_shifts.uncertainties)
+        self.snrs = np.asarray(measured_shifts.snrs)
+        self.expected_shifts = np.asarray(expected_shifts)
+
+        # Initialize rms etc
+        self.rms = None
+        self.mean = None
+
+    ##############################################
+    # Helper functions
+    ##############################################
+
+    def get_values(self, masked=True):
+        if masked:
+            return self.values[self.mask]
+        return self.values
+
+    def get_uncertainties(self, masked=True):
+        if masked:
+            return self.uncertainties[self.mask]
+        return self.uncertainties
+
+    def get_expected_shifts(self, masked=True):
+        if masked:
+            return self.expected_shifts[self.mask]
+        return self.expected_shifts
+
+    ##############################################
+    # Creating and managing subint shifts
+    ##############################################
+
+    def compute_rms(self):
+        # Calcualte weights
+        weight = 1 / self.uncertainties**2 # calculate weight
+
+        # Get residuals for masked subints
+        residuals = self.values[self.mask] - self.expected_shifts[self.mask]
+
+        # Subtract residuals by mean
+        # this_residuals -= np.mean(this_residuals)
+        self.mean = np.sum(weight[self.mask] * residuals) / np.sum(weight[self.mask])
+        residuals -= self.mean
+
+        # Calculate rms
+        self.rms = np.sqrt(np.sum(np.array(weight)[self.mask] * (residuals)**2) / np.sum(np.array(weight)[self.mask]))
+
+    def validate(self):
+        if self.subint_idx.size == 0:
+            raise ValueError("No subints added.")
+        
+        if not (len(self.subint_idx) == len(self.values) == len(self.uncertainties) == len(self.snrs)):
+            raise ValueError("Mismatch in lengths of subint data.")
+        
+        if len(self.expected_shifts) != 0 and len(self.expected_shifts) != len(self.subint_idx):
+            raise ValueError("Mismatch in lengths of expected shifts and subint data.")
+        
+        if len(self.mask) != 0 and len(self.mask) != len(self.subint_idx):
+            raise ValueError("Mismatch in lengths of mask and subint data.")
+        
+        if len(self.subint_idx) != self.n_subints:
+            raise ValueError("Number of subints added does not match n_subints.")
+
+        if self.rms is None or self.mean is None:
+            raise ValueError("RMS and mean have not been computed.")
+
+        if np.diff(self.subint_idx).min() <= 0:
+            raise ValueError("Subint indices are not strictly increasing.")
+        
+
 class AliasingFinder():
-    def __init__(self, data, epochs, metadata={}, ncpus=1, logger=logger()):
+    def __init__(self, stacked_data, ncpus=1, logger=logger()):
         """
         Initialize the alias_utils class.
 
@@ -563,36 +765,20 @@ class AliasingFinder():
         metadata (dict): Additional metadata (from stack file) for the observation.
         """
 
-        self.data = data
-        self.epochs = epochs
+        self.stacked_data = stacked_data.copy()
         self.ncpus = ncpus
         self.logger = logger
-        self.metadata = metadata
 
         # Get sidereal day constant from astropy
         self.sidereal_day = (1 * u.sday).to(u.day).value
 
-        # Sanity check on the data dimension
-        if self.data.ndim != 3:
-            raise ValueError("Data array must have three dimensions (n_subs, n_freqs, n_bins).")
+    def __find_shift(self, payload):
 
-        # Srunch frequency: (n_subs, n_freqs, n_bins) -> (n_subs, n_bins)
-        self.data = np.nanmean(self.data, axis=1)  # Average over frequency channels
-
-        # Get size of the data
-        self.n_subints, self.n_bins = self.data.shape
-
-    @staticmethod
-    def _find_shift(payload):
-
-        if len(payload) == 3:
-            template, power, n_steps = payload
-        else:
-            template, power = payload
-            n_steps = 2000  # default value
+        # Unpack payload
+        n_steps, template, subint, subint_idx = payload
 
         # Initialize shift finder
-        shift_finder = ShiftFinder(template, power)
+        shift_finder = ShiftFinder(template, subint)
 
         # Find shift
         shift_finder.compute(n_steps=n_steps, burn_in=int(n_steps/2), progress=False)
@@ -601,46 +787,68 @@ class AliasingFinder():
         measured_shift = shift_finder.result.shift
 
         # Measure subint SNR
-        subint_snr = data_quality_utils.boxcar_snr(power)
+        subint_snr = data_quality_utils.boxcar_snr(subint)
 
         return {
-            "shift": measured_shift.n / len(template), 
-            "shift_unc": measured_shift.s / len(template), 
-            "subint_snr": subint_snr
+            "value": measured_shift.n / len(template),
+            "uncertainty": measured_shift.s / len(template),
+            "snr": subint_snr,
+            "subint_idx": subint_idx
         }
-
-    def generate_template(self, smooth_sigma=None):
-        return generate_template_from_stacked_data(
-            self.data, 
-            smooth_sigma=smooth_sigma, 
-            logger=self.logger
-        )
 
     def __compute_expected_shifts(self, alias_factor):
         # Compute slope in the unit of phase/day
         slope = 1 / (self.sidereal_day / alias_factor)
 
         # Compute shifts
-        shifts = slope * self.epochs
+        shifts = slope * self.stacked_data.epochs
 
         return shifts
 
-    def find_aliasing_by_shifts(self, af_min=-30, af_max=30, smooth_sigma=None, ignore_subints=[]):
-        
-        # Generate template
-        template = self.generate_template(smooth_sigma=smooth_sigma)
+    def find_aliasing_by_shifts(self, af_min=-30, af_max=30, smooth_sigma=None, n_steps=1000, ignore_subints=[]):
+
+        # Generate template by maximizing SNR
+        template = self.find_aliasing_by_snr(
+            af_min=af_min,
+            af_max=af_max,
+            smooth_sigma=smooth_sigma,
+            ignore_subints=ignore_subints
+        ).stacked_data.get_profile()
+
+        # Smooth the template
+        if smooth_sigma is None:
+            smooth_sigma = get_smooth_sigma(template)
+        self.logger.debug(f"Smoothing template with sigma={smooth_sigma}")
+        template = gaussian_filter(template, sigma=smooth_sigma, mode="wrap")
+
+        # # Generate template
+        # template = generate_template_from_stacked_data(
+        #     stacked_data=self.stacked_data,
+        #     smooth_sigma=smooth_sigma, 
+        #     logger=self.logger
+        # )
+
+        # Get subint powers from stacked data
+        subint_powers = self.stacked_data.get_data(scrunch=(1, 2), normalize=True)[:, 0, 0, :]
+
+        # Get subint count
+        n_subints = len(subint_powers)
+
+        # Generate aliasing factor trials
+        af_trials = np.arange(af_min, af_max)
 
         # Find shifts for each subintegration
-        with multiprocessing.Pool(self.ncpus) as pool:
-            self.logger.debug(f"Calculating shifts for {self.n_subints} subintegration...")
+        with Pool(self.ncpus) as pool:
+            self.logger.debug(f"Calculating shifts for {self.stacked_data.get_shape()[0]} subintegration...")
                 
             # run get shifts
-            get_shift_res = list(
+            measured_shifts = AliasingFinderMeasuredShifts(
                 tqdm.tqdm(
                     pool.imap(
-                        self._find_shift, 
-                        [(template, this_subint_powers) for this_subint_powers in self.data]
+                        self.__find_shift, 
+                        [(n_steps, template, subint, i) for i, subint in enumerate(subint_powers)]
                     ),
+                    total=n_subints,
                     desc="Calculating shifts", 
                     unit="subint", 
                     bar_format="{l_bar}{bar:10}{r_bar}{bar:-10b}",
@@ -648,356 +856,114 @@ class AliasingFinder():
                 )
             )
 
-            # unpack results
-            measured_shifts = np.array([])
-            measured_shifts_unc = np.array([])
-            subint_snrs = np.array([])
-            for res in get_shift_res:
-                measured_shifts = np.append(measured_shifts, res["shift"])
-                measured_shifts_unc = np.append(measured_shifts_unc, res["shift_unc"])
-                subint_snrs = np.append(subint_snrs, res["subint_snr"])
+            # validate shifts
+            measured_shifts.validate()
 
-        # Create a mask for subints
-        mask = np.ones(len(measured_shifts), dtype=bool)
+        # Create a mask for shift measurements
+        mask = np.ones(n_subints, dtype=bool)
         if len(ignore_subints) > 0:
             mask[ignore_subints] = False
 
-        # Find outlier indices based on shifts_unc
-        mask = mask & (measured_shifts_unc - np.median(measured_shifts_unc) < 3 * np.std(measured_shifts_unc))
+        # Mask out subints with uncertainties greater than 3 sigma from the median
+        mask = mask & (measured_shifts.uncertainties - np.median(measured_shifts.uncertainties) < 3 * (median_abs_deviation(measured_shifts.uncertainties) * 1.4826))
 
-        # calcualte weights
-        weight = 1 / measured_shifts_unc**2 # calculate weight
+        # Mask out subints with snr below 3 sigma from the median
+        mask = mask & (measured_shifts.snrs >= np.median(measured_shifts.snrs) - 3 * (median_abs_deviation(measured_shifts.snrs) * 1.4826))
 
-        # search for alias factor
-        self.logger.debug(f"Searching for alias factor in range [{af_min}, {af_max})")
-        trials = np.arange(af_min, af_max)
-        rms = []
-        expected_shifts = []
-        for trial in trials:
-            # compute expected shifts
-            this_expected_shifts = self.__compute_expected_shifts(trial)
+        # Loop over aliasing factor trials
+        trial_instances = []
+        for this_af in tqdm.tqdm(af_trials, desc="Taking trials", unit="trial", bar_format="{l_bar}{bar:10}{r_bar}{bar:-10b}", leave=False):
 
-            # compute residuals
-            this_residuals = measured_shifts[mask] - this_expected_shifts[mask]
+            # Initialize shifts container
+            trial = AliasingFinderShiftTrials(
+                alias_factor=this_af, 
+                measured_shifts=measured_shifts,
+                expected_shifts=self.__compute_expected_shifts(this_af), 
+                mask=mask,
+                n_subints=len(subint_powers)
+            )
 
-            # subtract residuals by mean
-            # this_residuals -= np.mean(this_residuals)
-            this_mean = np.sum(weight[mask] * this_residuals) / np.sum(weight[mask])
-            this_residuals -= this_mean
+            # Compute residuals and rms between measured and expected shifts
+            trial.compute_rms()
 
-            # get rms
-            this_rms = np.sqrt(np.sum(np.array(weight)[mask] * (this_residuals)**2) / np.sum(np.array(weight)[mask]))
+            # Validate shifts instance
+            trial.validate()
 
-            rms.append(this_rms)
-            expected_shifts.append(this_expected_shifts + this_mean) # add offset back for diagnostic plot
+            trial_instances.append(trial)
 
-        # measure a few more metrics on the stacked data
-        stacked_snr = data_quality_utils.boxcar_snr(self.data.sum(axis=0))
-        avg_snr_per_subints = np.mean(subint_snrs)
+            # # initialize shifts container
+            # shifts = list(
+            #     tqdm.tqdm(
+            #         pool.imap(
+            #             self.__initialize_shift_instance, 
+            #             [(this_af, len(subint_powers), measured_shifts) for this_af in af_trials]
+            #         ),
+            #         total=len(af_trials),
+            #         desc="Taking trials", 
+            #         unit="trial", 
+            #         bar_format="{l_bar}{bar:10}{r_bar}{bar:-10b}",
+            #         leave=False
+            #     )
+            # )
 
-        # gather additional metadata
-        psr_id = "unknown"
-        try:
-            model = get_model(StringIO(self.metadata.model))
-            if hasattr(model, "PSR"):
-                psr_id = model.PSR.value
-            elif hasattr(model, "PSRJ"):
-                psr_id = model.PSRJ.value
-        except Exception as e:
-            self.logger.warning(f"Failed to parse model to get pulsar name: {e}")
-
-        n_day_stacked = "unknown"
-        n_day_stacked = len(self.metadata.input_files)
-
-        return AliasingFinderResultsByShifts(
-            shifts_expected=expected_shifts,  
-            shifts_measured_vals=measured_shifts, 
-            shifts_measured_errs=measured_shifts_unc, 
-            mask=mask, 
-            af_trials=trials, 
-            rms=rms, 
-            data=self.data,
-            template=template, 
-            stacked_snr=stacked_snr, 
-            avg_snr_per_subints=avg_snr_per_subints,
-            psr_id=psr_id,
-            n_day_stacked=n_day_stacked, 
+        # Loop over measured shifts to compare with the expected shifts
+        results = AliasingFinderResultsByShifts(
+            stacked_data=self.stacked_data,
+            trials=trial_instances, 
+            subint_powers=subint_powers,
+            template=template,
             logger=self.logger
         )
+
+        # Validate results
+        results.validate()
+
+        return results
     
-    def find_aliasing_by_snr(self, af_min=-30, af_max=30, smooth_sigma=None, ignore_subints=[]):
+    def find_aliasing_by_snr(self, af_min=-30, af_max=30, smooth_sigma=None, ignore_subints=[], metric="chi2"):
         from ..utils.correlation import fourier_shifts
         from ..utils.data_quality import MatchedFilterSNR, data_quality_utils
 
         # Generate template
-        template = self.generate_template(smooth_sigma=smooth_sigma)
-
-        # Loop over trials and measure SNR for each
-        snrs = []
-        af_vals = np.arange(af_min, af_max)
-        for this_af in af_vals:
-            # get expected shifts as a function of subint index relative to the start of the observation
-            this_slope = (this_af * self.duration) / (self.sidereal_day * self.n_subints)
-
-            # apply mask
-            this_corrected_data = copy.deepcopy(self.data)
-            for subint_idx in ignore_subints:
-                this_corrected_data[subint_idx, :] = 0
-
-            # correct for the shifts
-            for subint_idx in range(self.n_subints):
-                shift = subint_idx * this_slope
-                this_corrected_data[subint_idx, :] = fourier_shifts.roll(this_corrected_data[subint_idx, :], -shift*self.n_bins)
-
-            # create profile
-            this_profile = np.sum(this_corrected_data, axis=0)
-            # plt.plot(this_profile)
-
-            # calculate matched filter snr
-            snrs.append(
-                MatchedFilterSNR(this_profile, template, shift_meth="fourier").compute()
-            )
-
-        return AliasingFinderResultsBySNR(
-            af_vals=af_vals,
-            snrs=snrs, 
+        template = generate_template_from_stacked_data(
+            stacked_data=self.stacked_data,
+            smooth_sigma=smooth_sigma, 
             logger=self.logger
         )
 
-        # # find where rms is minimum
-        # best_i = np.where(rms == np.min(rms))[0][0]
-        # best_alias_factor = trials[best_i]
-        # best_expected_shifts = shifts_expected[best_i]
+        # Make a copy of the stacked data
+        stacked_data = self.stacked_data.copy()
 
-        # # get expected shifts for nearby alias factors for diagnostic plot
-        # nearby_expected_shifts = []
-        # if best_alias_factor > af_min:
-        #     nearby_expected_shifts.append(shifts_expected[best_i - 1])
-        # if best_alias_factor < af_max:
-        #     nearby_expected_shifts.append(shifts_expected[best_i + 1])
+        # Scrunch polarisation and frequency to save computation and RAM
+        stacked_data.scrunch(axis=1)
+        stacked_data.scrunch(axis=2)
 
-        # # plot diagnostic
-        # self.cf_plot_diagnostic(
-        #     trials = trials,
-        #     rms = rms,
-        #     good_i = mask,
-        #     shifts_x = subint_idxes,
-        #     shifts = shifts,
-        #     shifts_unc = shifts_unc, 
-        #     shifts_expected = best_expected_shifts,
-        #     nearby_expected_shifts = nearby_expected_shifts,
-        #     best_af = best_alias_factor,
-        #     std_profile = std_profile,
-        #     data_stacked = data_stacked, 
-        #     n_stacked = self.su.n_stacked
-        # )
+        # Apply mask
+        for subint_idx in ignore_subints:
+            stacked_data.data[subint_idx, :, :, :] = 0
 
-        # # print summary
-        # self.logger.success(
-        #     pd.DataFrame({
-        #         "Alias Factor": [best_alias_factor], 
-        #         "Stacked S/N": [stacked_snr],
-        #         "Avg S/N Per Obs": [avg_snr],
-        #         "Avg S/N Per Subints": [avg_snr_per_subints]
-        #     })
-        # )
+        # Loop over trials and measure SNR for each
+        metric_vals = []
+        af_vals = np.arange(af_min, af_max)
+        for this_af in af_vals:
+            # Make a copy of the reduced stacked data
+            this_data = copy.deepcopy(stacked_data)
 
-        # self.alias_factor = float(best_alias_factor) # ensure it is stored as a float instead of np.float64
-        # self.snr_stacked = float(stacked_snr)
-        # self.avg_snr_per_obs = float(avg_snr)
-        # self.avg_snr_per_subints = float(avg_snr_per_subints)
+            # Apply dealiasing shifts
+            this_data.dealiasing(alias_factor=this_af)
 
-        # return best_alias_factor
+            # Get SNR
+            if metric == "snr":
+                metric_vals.append(
+                    MatchedFilterSNR(this_data.get_profile(), template, shift_meth="fourier").compute()
+                )
+            elif metric == "chi2":
+                metric_vals.append(this_data.get_stacked_chi2())
 
-
-
-
-
-
-
-
-    
-    
-    # def calc_dealias_factor(self, obs_phase_shift, obs_length, obs_interval=1):
-    #     return (obs_interval / obs_length) * obs_phase_shift
-
-    # def get_stacked_powers_and_duration(self):
-    #     # Reducing data dimensions: (time, pol, freq, phase) -> (time, freq, phase) -> (time, phase)
-    #     return self.su.get_data(fscrunch=True, keepdims=True)[:, 0, 0, :], np.mean(self.su.durations), np.mean(self.su.snrs)
-
-    # def dealias(self, save_pkl=False):
-    #     if self.alias_factor is None:
-    #         raise ValueError("Alias factor not available. Run tp_get_alias_factor or cf_get_alias_factor first.")
-
-    #     # Initialize dealias_utils instance
-    #     self.logger.debug(f"Initializing dealias_utils...")
-    #     du = dealias_utils(
-    #         psrdir=self.psrdir,
-    #         parfile=self.parfile,
-    #         workspace=self.workspace,
-    #         outdir=self.outdir,
-    #         logger=self.logger.copy()
-    #     )
-
-    #     # Try to dealias
-    #     self.logger.debug(f"Dealiasing with alias_factor={self.alias_factor}...")
-    #     du_res = du.dealias(self.alias_factor)
-
-    #     # # Save diagnostic plots
-    #     # if os.path.exists(f"{self.workspace}/diagnostic.pdf"):
-    #     #     self.logger.info(f"Find alias diagnostic plot > {du.psrdir_dealias}")
-    #     #     shutil.move(self.workspace + "/diagnostic.pdf", f"{du.psrdir_dealias}/diagnostic.pdf")
-
-    #     # Generate summary
-    #     self.summary = {
-    #         "psr_id": self.psrdir.split("/")[-1],
-    #         "n_stacked": self.su.n_stacked, 
-    #         "alias_factor": self.alias_factor, 
-    #         "snr_stacked": self.snr_stacked,
-    #         "avg_snr_per_obs": self.avg_snr_per_obs,
-    #         "avg_snr_per_subints": self.avg_snr_per_subints,
-    #         "notes": {"remark": "DEALIAS_FITTING_OK" if du_res else "DEALIAS_FITTING_FAILED"}
-    #     }
-
-    #     # Include dealias result in the summary
-    #     for key, value in du.info.items():
-    #         self.summary[key] = value
-
-    #     return self.summary
-
-    # def weighted_mean(self, vals, errs):
-    #     weights = 1 / errs**2
-    #     return np.sum(weights * vals) / np.sum(weights)
-
-    # def save_outfiles(self, filename="auto", pickle_only=False):
-    #     # Get filename
-    #     if filename == "auto":
-    #         filename = self.psrdir + "/dealias"
-            
-    #     # Check if outdir exists
-    #     if (not os.path.exists(self.outdir) or glob.glob(self.outdir) == []) and not pickle_only:
-    #         raise Exception(f"Directory does not exist / empty: {self.outdir}. Was the alias_utils initialized or loaded from a pickle file?")
-
-    #     # Save pickle
-    #     with open(self.outdir + "/alias_utils.pkl", "wb") as f:
-    #         pickle.dump(self, f)
-    #         self.logger.success(f"Pickle saved to {self.outdir}/alias_utils.pkl")
-    #         if pickle_only:
-    #             return
-
-    #     # Save stacked data
-    #     self.su.save(
-    #         filename=os.path.join(self.outdir, "stacked_data.npz"), 
-    #         format="npz"
-    #     )
-
-    #     # Save summary to json 
-    #     with open(os.path.join(self.outdir, "summary.json"), "w") as f:
-    #         # Make sure everything is serializable
-    #         summary_json = {}
-    #         for key, value in self.summary.items():
-    #             # np float 
-    #             if isinstance(value, np.floating):
-    #                 value = float(value)
-    #             elif isinstance(value, np.integer):
-    #                 value = int(value)
-
-    #             summary_json[key] = value
-    #         json.dump(summary_json, f, indent=4)
-            
-    #     # Copy everything in outdir to filename
-    #     if not os.path.isdir(filename):
-    #         if os.path.exists(filename):
-    #             raise Exception(f"Directory already exists and is not writable: {filename}. Is there a file with the same name?")
-    #     else:
-    #         # Remove the directory
-    #         shutil.rmtree(filename)
-
-    #     # Create the directory
-    #     os.makedirs(filename)
-
-    #     # Copy the contents of outdir to filename
-    #     for f in glob.glob(self.outdir + "/*"):
-    #         self.logger.debug(f"Copying {f} to {filename}", layer=1)
-    #         if os.path.isdir(f):
-    #             shutil.copytree(f, os.path.join(filename, os.path.basename(f)))
-    #         else:
-    #             shutil.copy2(f, filename)
-    #     self.logger.success(f"Save outputs to {filename}")
-        
-    #     # self.cleanup_workspace = False
-
-    # def write_db(self, db_path="auto", db_hdl=None):
-    #     # Check if summary is available
-    #     if not self.summary:
-    #         raise ValueError("No summary available. Please run dealias() first.")
-
-    #     # Check if a database handle is provided
-    #     if db_hdl is None:
-    #         # Get db_path
-    #         if db_path == "auto":
-    #             db_path = f"{self.psrdir}/champss_timing.sqlite3.db"
-            
-    #         # Create a new database
-    #         self.logger.debug(f"Creating new database at {db_path}")
-    #         loaded_db_hdl = database(db_path)
-    #     else: 
-    #         loaded_db_hdl = db_hdl
-
-    #     # Write database
-    #     loaded_db_hdl.insert_dealias_history(
-    #         n_stacked=float(self.summary["n_stacked"]), # ensure they are not np.float64
-    #         alias_factor=float(self.summary["alias_factor"]),
-    #         snr_stacked=float(self.summary["snr_stacked"]),
-    #         notes=self.summary["notes"]
-    #     )
-
-    #     # Close db_hdl
-    #     if db_hdl is None:
-    #         self.logger.debug(f"Closing database at {db_path}")
-    #         loaded_db_hdl.close()
-
-    #     self.logger.success(f"Database updated: {db_path}")
-
-    # def cleanup(self):
-    #     if self.cleanup_workspace:
-    #         self.logger.debug("Cleaning up workspace")
-    #         shutil.rmtree(self.workspace)
-    #     else:
-    #         self.logger.debug(f"Workspace will NOT be removed at {self.workspace} due to cleanup=False")
-
-    # def commit(self, db_hdl=None):
-    #     '''
-    #     Commit the changes to the psrdir and database
-
-    #     Parameters:
-    #     - db_hdl: Optional database handle. If not provided, a new database connection will be created and closed within the method.
-    #     '''
-
-    #     # Commit changes to psrdir
-    #     self.logger.debug(f"Committing changes to psrdir: {self.psrdir}")
-    #     self.logger.level_up()
-    #     self.save_outfiles()
-    #     self.logger.level_down()
-
-    #     # Commit changes to database
-    #     self.logger.debug(f"Committing changes to database: {self.psrdir}")
-    #     self.logger.level_up()
-    #     self.write_db(db_hdl=db_hdl)
-    #     self.logger.level_down()
-
-    # def __enter__(self):
-    #     self.initialize()
-    #     return self
-
-    # def __exit__(self, exc_type, exc_value, traceback):
-    #     if exc_type is not None:
-    #         self.logger.error(f"Error while running find_alias. Workspace will NOT be removed at {self.workspace}")
-    #         try:
-    #             self.save(self.workspace + "/alias_utils.pkl")
-    #             self.logger.error(f"Alias_utils object saved to {self.workspace}/alias_utils.pkl")
-    #         except:
-    #             self.logger.error(f"Error while saving alias_utils object to {self.workspace}/alias_utils.pkl")
-    #         raise exc_type(exc_value).with_traceback(traceback)
-    #     else:
-    #         self.cleanup()
+        return AliasingFinderResultsBySNR(
+            stacked_data=self.stacked_data,
+            af_vals=af_vals,
+            metric_name=metric,
+            metric_vals=metric_vals, 
+            logger=self.logger
+        )

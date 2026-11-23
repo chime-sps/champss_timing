@@ -266,12 +266,40 @@ class StackedData:
             axis=axis
         )
 
+    def drop_partial_subints(self, threshold=0.5):
+        """Drop subintegrations that are partially filled."""
+
+        if self.data.shape[0] <= 1:
+            return
+
+        # Calculate the median exposure
+        median_exposure = np.median(self.expos)
+
+        # Find subints that are significantly below the median exposure
+        good_i = self.expos >= median_exposure * threshold
+
+        # Find start and end indices to only mask out subints at the beginning and end of the observation
+        good_i = np.flatnonzero(good_i)
+        if len(good_i) == 0:
+            return
+        start = good_i[0]
+        end = good_i[-1] + 1
+
+        self.data = self.data[start:end, :, :, :]
+        self.epochs = self.epochs[start:end]
+        self.expos = self.expos[start:end]
+
+        self.validate()
+
     ####################################
     # Getting information
     ####################################
 
     def get_metadata(self):
         return self.meta
+
+    def get_shape(self):
+        return self.data.shape
 
     def get_subint_snrs(self):
         if self.data.shape[0] <= 1:
@@ -477,12 +505,12 @@ class StackedData:
         alias_factor : float
             The aliasing factor to apply.
         """
-
-        if not isinstance(alias_factor, int):
-            raise ValueError("Alias factor must be an integer.")
         
         if alias_factor == 0:
             return
+
+        if not alias_factor.is_integer():
+            raise ValueError(f"Alias factor must be an integer: got {alias_factor}")
         
         # Calculate expected shifts
         this_expected_shifts, dp = self.__calc_aliasing_drifts(alias_factor)

@@ -51,7 +51,7 @@ def get_dm_optimizer_from_stackfile(stackfile, n_subs=None, n_freqs=None, inj_dd
     if inj_ddm is not None:
         print(f"!!!Folding DM before injection: {stacked_data.meta.dm}!!!")
         print(f"!!!Injecting DM offset: {inj_ddm}!!!")
-        stacked_data.refine_dm(ddm=inj_ddm)
+        stacked_data.refine_dm(ddm=-inj_ddm)
         print(f"!!!Folding DM after injection: {stacked_data.meta.dm}!!!")
 
     # downsample
