@@ -10,7 +10,7 @@ import datetime
 from cli.config import CLIConfig
 from backend.datastores.database import database
 from backend.datastores.tmg_master import tmg_master
-from backend.tools.alias_utils import alias_utils
+from backend.tools.dealiasing import Dealiasing
 from backend.utils.logger import logger
 from backend.utils.utils import utils
 
@@ -32,14 +32,12 @@ mdb_hdl = tmg_master(MASTER_DB_PATH)
 parser = argparse.ArgumentParser(description=f"Run the de-aliasing pipeline for a timing source. The pipeline will also automatically run after the main pipeline processing regularly once the signal-to-noise ratio of the stacked data reaches a certain threshold. \nThe pipeline will generate dealiasing diagnostics under {TIMING_SOURCES_PATH}/<psr_id>/dealias. If the pulsar's timing solution is likely aliased, the pipeline will attempt to create an unaliased timing solution and write it as pulsar.dealiased.par. \nTo accept the new unaliased timing solution, replace {TIMING_SOURCES_PATH}/<psr_id>/pulsar.par with {TIMING_SOURCES_PATH}/<psr_id>/dealias/pulsar.dealiased.par. \nTo trigger the dealiasing pipeline run automatically after the next main pipeline process (so you don't have to manually re-run the de-aliasing pipeline), remove the {TIMING_SOURCES_PATH}/<psr_id>/dealias directory. \nTo refit the new timing solution, run `python champss_timing pintk --psr <psr_id> --dealiased-par`.")
 parser.add_argument("-p", "--psr", type=str, help="Pulsar name.", default=None, required=True)
 parser.add_argument("-n", "--ncpus", type=int, help="Number of pools.", default=1)
-parser.add_argument("-o", "--pickle-output", type=str, help="Output directory of pickle for debug purpose.", default=None, required=False)
 parser.add_argument("-N", "--n-files", type=int, help="Maximum number of archives to use.", default=None, required=False)
 parser.add_argument("--parfile", type=str, help="Specify the path to timing model (default: ./timing_sources/<psr_id>/pulsar.par).", default=None, required=False)
-parser.add_argument("--subints", type=str, help="Subint range to use for alias factor calculation (e.g., 20:128). Subint converted to data point index by [int(np.floor(subint_range[0] / bin_size)), int(np.ceil(subint_range[1] / bin_size))]", default=None, required=False)
+parser.add_argument("--ignore-subints", type=str, help="Subint indices to ignore for alias factor calculation (e.g., 0,1,2).", default=None, required=False)
 parser.add_argument("--n-subints", type=int, help="Binsize for alias factor calculation.", default=8, required=False)
-parser.add_argument("--n-bins", type=int, help="Number of bins for alias factor calculation.", default=128, required=False)
+parser.add_argument("--n-bins", type=int, help="Number of bins for alias factor calculation.", default=256, required=False)
 parser.add_argument("--n-freqs", type=int, help="Number of frequency channels (frequencies are averaged during de-aliasing, but multi-frequency stacked data are produced as a by-product for other purposes).", default=256, required=False)
-parser.add_argument("--smoothing", type=int, help="Smoothing factor for alias factor calculation.", default=0, required=False)
 parser.add_argument("--mjd-range", type=str, help="MJD range to use for alias factor calculation (e.g., 59000:60000, inclusive).", default=None, required=False)
 parser.add_argument("--backend", type=str, help="Use the data from the specified backend.", default=None, required=False)
 parser.add_argument("--show-history", action="store_true", help="Show dealias history and skip processing.", required=False, default=False)
@@ -52,12 +50,10 @@ args = parser.parse_args()
 # Sanity checks                                  #
 ##################################################
 
-# Subint range
-subint_range = []
-if args.subints is not None:
-    subint_range = list(map(int, args.subints.split(":")))
-    if len(subint_range) != 2:
-        raise ValueError("Invalid subint range.")
+# Ignore subints
+ignore_subints = []
+if args.ignore_subints is not None:
+    ignore_subints = list(map(int, args.ignore_subints.split(",")))
 
 # MJD range
 mjd_range = []
@@ -110,11 +106,9 @@ if args.show_history:
 # Print arguments
 logger.info(f"Pulsar: {args.psr}")
 logger.info(f"Number of pools: {args.ncpus}")
-logger.info(f"Output directory: {args.pickle_output}")
 logger.info(f"Maximum number of archives: {args.n_files}")
-logger.info(f"Subint range: {subint_range}")
+logger.info(f"Ignore subints: {args.ignore_subints}")
 logger.info(f"Number of subints: {args.n_subints}")
-logger.info(f"Smoothing: {args.smoothing}")
 logger.info(f"MJD range: {mjd_range}")
 
 
@@ -123,7 +117,6 @@ logger.info(f"MJD range: {mjd_range}")
 ##################################################
 
 # Process pulsars
-dealias_results = []
 logger.debug(f"Processing pulsar {args.psr}")
 
 # Get psrdir
@@ -131,11 +124,6 @@ psrdir = f"./{TIMING_SOURCES_PATH}/{args.psr}"
 logger.info(f"PsrDir: {psrdir}")
 if not os.path.exists(psrdir):
     raise ValueError(f"Pulsar directory not found: {psrdir}")
-
-# Check output directory
-if args.pickle_output is not None:
-    if not os.path.exists(args.pickle_output):
-        raise ValueError(f"Output directory not found: {args.pickle_output}")
 
 # Get parfile
 if args.parfile is not None:
@@ -206,29 +194,38 @@ for ar in ar_list:
     logger.info(f"{ar['location']} (backend: {ar['backend']})", layer=1)
 
 # Find alias
-with alias_utils(f"./{TIMING_SOURCES_PATH}/{args.psr}", ar_list, parfile, n_subints=args.n_subints, n_bins=args.n_bins, n_freqs=args.n_freqs, jumps=JUMPS, workspace=TEMPDIR, n_pools=args.ncpus, logger=logger.copy()) as au:
-    # Get alias factor
-    au.cf_get_alias_factor(subint_range=subint_range, smooth_sigma=args.smoothing)
+with Dealiasing(
+    psrdir=f"./{TIMING_SOURCES_PATH}/{args.psr}", 
+    ar_list=ar_list, 
+    parfile=parfile, 
+    n_subints=args.n_subints, 
+    n_bins=args.n_bins, 
+    n_freqs=args.n_freqs, 
+    jumps=JUMPS, 
+    workspace=TEMPDIR, 
+    ncpus=args.ncpus, 
+    logger=logger.copy()
+) as adg:
+    
+    # Optimize DM
+    adg.optimize_dm()
 
-    # Dealias
-    au_summary = au.dealias()
+    # Resolve aliasing
+    adg.resolve_aliasing(
+        ignore_subints=ignore_subints
+    )
 
     # Get dealias results
-    dealias_results.append({
-        "n_stacked": au_summary["n_stacked"],
-        "alias_factor": au_summary["alias_factor"],
-        "snr_stacked": au_summary["snr_stacked"],
-        "remark": au_summary["notes"]["remark"],
-    })
+    dealias_results = {
+        "n_stacked": adg.payload.af_res_summary["n_stacked"],
+        "alias_factor": adg.payload.af_res_summary["alias_factor"],
+        "snr_stacked": adg.payload.af_res_summary["snr_stacked"],
+        "remark": adg.payload.get_remark()
+    }
 
     # Commit changes
     if not args.no_commit:
-        au.commit()
-
-    if args.pickle_output is not None:
-        # Save dealias information to user specified directory
-        au.save_outfiles(args.pickle_output)
-        logger.info(f"Dealias information saved to {args.pickle_output} (user specified)")
+        adg.commit()
 
 
 ##################################################
@@ -236,7 +233,7 @@ with alias_utils(f"./{TIMING_SOURCES_PATH}/{args.psr}", ar_list, parfile, n_subi
 ##################################################
 
 # print summary
-dealias_results = pd.DataFrame(dealias_results)
+dealias_results = pd.DataFrame([dealias_results])
 dealias_results_txt = (
         "====================== DEALIAS RESULTS ======================" + "\n" +
         pd.DataFrame(dealias_results).to_string() + "\n" +

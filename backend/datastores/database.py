@@ -651,6 +651,9 @@ class database:
             # Append to timfile
             timfile += this_toa["raw_tim"] + f" -rcvr {this_toa['notes']['rcvr']} " + "\n"
 
+        if timfile.strip() == "":
+            raise Exception("No valid TOAs found for the given ar_list and mjd_range.")
+
         return timfile
     
     def db_check_valid_toa(self, archive):
