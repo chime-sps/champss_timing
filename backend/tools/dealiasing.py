@@ -74,6 +74,25 @@ class DealiasingPayload:
     def get_remark(self):
         return "DEALIAS_FITTING_OK" if self.sol.status else "DEALIAS_FITTING_FAILED"
 
+    def get_dm_info(self):
+        return {
+            "optimized": True if self.dmo is not None else False,
+            "val": float(self.best_dm_val),
+            "err": float(self.best_dm_err)
+        }
+
+    def get_summary(self):
+        return {
+            "psr_id": self.af_res_summary["psr_id"],
+            "n_stacked": self.af_res_summary["n_stacked"],
+            "alias_factor": self.af_res_summary["alias_factor"],
+            "snr_stacked": self.af_res_summary["snr_stacked"],
+            "avg_snr_per_subints": self.af_res_summary["avg_snr_per_subints"],
+            "timestamp": self.af_res_summary["timestamp"],
+            "remark": self.get_remark(),
+            "best_dm": self.get_dm_info()
+        }
+
     def unpack(self, outdir, overwrite=False):
         # Remove existing directory if requested
         if os.path.exists(outdir):
@@ -90,7 +109,7 @@ class DealiasingPayload:
 
         # Dealiasing summary
         with open(os.path.join(outdir, "summary.json"), "w") as f:
-            f.write(json.dumps(self.af_res_summary))
+            f.write(json.dumps(self.get_summary(), indent=4))
 
         # Aliasing finder plot
         self.af_res.plot(os.path.join(outdir, "diagnostics.pdf"))
@@ -116,7 +135,10 @@ class DealiasingPayload:
             n_stacked=float(self.af_res_summary["n_stacked"]), # ensure they are not np.float64
             alias_factor=float(self.af_res_summary["alias_factor"]),
             snr_stacked=float(self.af_res_summary["snr_stacked"]),
-            notes={"remark": self.get_remark()}
+            notes={
+                "remark": self.get_remark(), 
+                "best_dm": self.get_dm_info()
+            }
         )
 
 class Dealiasing:

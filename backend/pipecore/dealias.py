@@ -3,7 +3,7 @@ import time
 import random
 import numpy as np
 
-from ..tools.alias_utils import alias_utils
+from ..tools.dealiasing import Dealiasing
 from ..utils.logger import logger
 from ..utils.utils import utils
 
@@ -144,36 +144,33 @@ class dealias:
 
         # Run dealiasing pipeline
         self.logger.debug(f"Starting dealiasing with {len(self.archive_files)} archive files.")
-        with alias_utils(
-            psrdir = self.psr_dir, 
-            ar_list = [{"location": f_info["path"], "backend": f_info["rcvr"]} for f_info in self.archive_files],
-            parfile = os.path.join(self.psr_dir, "pulsar.par"),
+        with Dealiasing(
+            psrdir=self.psr_dir, 
+            ar_list=[{"location": f_info["path"], "backend": f_info["rcvr"]} for f_info in self.archive_files],
+            parfile=os.path.join(self.psr_dir, "pulsar.par"),
             jumps=self.jumps, 
             n_subints=self.n_subints, 
             n_bins=self.n_bins, 
             n_freqs=self.n_freqs, 
-            workspace=self.workspace, 
-            cleanup=self.cleanup, 
-            mode="auto", 
-            n_pools=self.n_pools, 
+            workspace=self.workspace,
+            ncpus=self.n_pools, 
             logger=self.logger
-        ) as au:
-            # Get alias factor
-            au.cf_get_alias_factor(smooth_sigma=self.smooth)
+        ) as adg:
+            # Optimize DM
+            adg.optimize_dm()
 
-            # Dealias
-            au_summary = au.dealias()
+            # Resolve aliasing
+            adg.resolve_aliasing()
 
             # Get dealias results
             dealias_results = {
-                "psr_id": au_summary["psr_id"],
-                "n_stacked": au_summary["n_stacked"],
-                "alias_factor": au_summary["alias_factor"],
-                "snr_stacked": au_summary["snr_stacked"],
-                "remark": au_summary["notes"]["remark"],
+                "n_stacked": adg.payload.af_res_summary["n_stacked"],
+                "alias_factor": adg.payload.af_res_summary["alias_factor"],
+                "snr_stacked": adg.payload.af_res_summary["snr_stacked"],
+                "remark": adg.payload.get_remark()
             }
 
-            # Commit changes to database
-            au.commit(db_hdl=self.db_hdl)
+            # Commit changes
+            adg.commit(db=self.db_hdl)
             
         return dealias_results

@@ -173,6 +173,8 @@ class fourier_shifts:
         if shift == 0:
             return arr
 
+        arr = np.asarray(arr)
+
         # Fall back to regular np.roll for integers
         if float(shift).is_integer():
             return np.roll(arr, int(shift), axis=axis)

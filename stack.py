@@ -2,7 +2,7 @@ import os
 import argparse
 from cli.config import CLIConfig
 from backend.datastores import tmg_master
-from backend.tools.stack_utils import StackUtils
+from backend.tools.stacking import Stacking
 
 # Define
 TIMING_SOURCES_PATH = "./timing_sources"
@@ -17,12 +17,10 @@ parser.add_argument("--psr", type=str, required=True, help="Pulsar name to stack
 parser.add_argument("--output", type=str, required=True, help="Output file for stacked data.")
 parser.add_argument("--nobs", type=int, required=False, default=32, help="Number of observations to stack (default: all).")
 parser.add_argument("--mjd-range", type=str, required=False, help="MJD range to stack (START:FINISH).")
-parser.add_argument("--npols", type=int, required=False, default=1, help="Number of polarizations to scrunch (4 or 1, default: 1).")
-parser.add_argument("--nsubs", type=int, required=False, default=16, help="Number of frequency channels to scrunch (default: 16).")
-parser.add_argument("--nfreqs", type=int, required=False, default=1024, help="Number of frequency bins to stack into (default: 1024).")
-parser.add_argument("--nbins", type=int, required=False, default=1024, help="Number of phase bins to stack into (default: 1024).")
+parser.add_argument("--nsubs", type=int, required=False, default=None, help="Number of frequency channels to scrunch (default: 16).")
+parser.add_argument("--nfreqs", type=int, required=False, default=None, help="Number of frequency bins to stack into (default: 1024).")
+parser.add_argument("--nbins", type=int, required=False, default=None, help="Number of phase bins to stack into (default: 1024).")
 parser.add_argument("--ncpus", type=int, default=1, help="Number of parallel pools to use (default: 1).")
-parser.add_argument("--interpolate", type=str, default="minimal", help="Interpolation method to use during stacking (default: minimal; options: minimal, always, never).")
 parser.add_argument("--remove-baseline", action="store_true", default=False, help="Enable baseline removal in stacking.")
 parser.add_argument("--backend", type=str, required=False, default="all", help="Backend to use for stacking (default: all).")
 parser.add_argument("--parfile", type=str, required=False, help="Parfile to use for stacking (default: pipeline output parfile).")
@@ -94,7 +92,6 @@ for bknd in config['backends']:
 # Print info
 print(f"Stacking data for pulsar: {args.psr}")
 print(f"Number of files to stack: {len(files)}")
-print(f"Number of polarizations: {args.npols}")
 print(f"Number of frequency channels: {args.nsubs}")
 print(f"Number of frequency bins: {args.nfreqs}")
 print(f"Number of phase bins: {args.nbins}")
@@ -112,31 +109,24 @@ if not os.path.exists(args.tmpdir):
     os.makedirs(args.tmpdir)
 
 # Run stacking
-su = StackUtils(
+stacked_data = Stacking(
     files=files, 
     parfile=args.parfile, 
-    n_subs=args.nsubs, 
-    n_pols=args.npols, 
-    n_freqs=args.nfreqs, 
-    n_bins=args.nbins, 
-    n_pools=args.ncpus, 
+    ncpus=args.ncpus, 
     jumps=jumps, 
-    interpolate=args.interpolate, 
     remove_baseline=args.remove_baseline, 
     workspace=args.tmpdir
-)
-su.stack()
+).stack()
+
+# Scrunch stacked data to the desired shape
+stacked_data.scrunch(axis=1)
+if args.nsubs is not None:
+    stacked_data.downsample_to_length(args.nsubs, axis=0)
+if args.nfreqs is not None:
+    stacked_data.downsample_to_length(args.nfreqs, axis=2)
+if args.nbins is not None:
+    stacked_data.downsample_to_length(args.nbins, axis=3)
 
 # Save output
-# data = su.get_data()
-# if args.output_format == "npy":
-#     import numpy as np
-#     np.save(args.output, data)
-# elif args.output_format == "pkl":
-#     import pickle
-#     with open(args.output, 'wb') as f:
-#         pickle.dump(data, f)
-# else:
-#     raise ValueError("Unsupported output format. Use 'npy' or 'pkl'.")
-su.save(args.output, format=args.output_format)
+stacked_data.save(args.output, format=args.output_format)
 print(f"Stacked data saved to {args.output}.")

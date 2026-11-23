@@ -407,7 +407,7 @@ class Stacking:
                 else:
                     mask[i] = (meta["shape"][1:3] == expected_shape[1:3])
             self.logger.debug(f"Number of files with consistent shape: {np.sum(mask)} (shape={expected_shape})")
-            self.logger.debug(f"Resampling phase bins? {"yes" if self.resample_phase_bins else "no"}", layer=1)
+            self.logger.debug(f"Resampling phase bins? {'yes' if self.resample_phase_bins else 'no'}", layer=1)
 
             # Unpack frequency ranges
             freq_lo_vals = np.array([meta["freq_lo"] for meta in sf_meta])
