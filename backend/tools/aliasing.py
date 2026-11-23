@@ -307,6 +307,11 @@ class AliasingFinderResultsByShifts:
         self.best_trial = self.trials[self.best_idx]
         self.nearby_trials = [self.trials[i] for i in self.nearby_trials_idx]
 
+        # Get the subint powers after correcting for aliasing at the best trial
+        stacked_data_corr = stacked_data.copy()
+        stacked_data_corr.dealiasing(alias_factor=self.best_trial.alias_factor)
+        self.subint_powers_corr = stacked_data_corr.get_subints(normalize=True)
+
     ############################################
     # Helper functions
     ############################################
@@ -401,7 +406,7 @@ class AliasingFinderResultsByShifts:
             self.logger.info(f"{key}: {value}", layer=1)
 
     def plot(self, savefig=None):
-        fig, axs = plt.subplots(3, 2, figsize=(12, 8),  gridspec_kw={'width_ratios': [3, 1]})
+        fig, axs = plt.subplots(3, 3, figsize=(16, 8),  gridspec_kw={'width_ratios': [3, 1, 1]}, constrained_layout=True)
 
         # plot rms
         axs[0, 0].plot(self.get_alias_factors(), self.get_rms_values(), c="k", lw=1)
@@ -429,7 +434,7 @@ class AliasingFinderResultsByShifts:
             fmt="x"
         )
         axs[1, 0].errorbar(
-            self.epochs[self.best_trial.mask] * 86400, 
+            self.epochs * 86400, 
             self.best_trial.get_expected_shifts(masked=False), 
             c="r", 
             lw=1, 
@@ -517,8 +522,20 @@ class AliasingFinderResultsByShifts:
                 this_shift += len(self.subint_powers[0])
             shifts_phase.append(this_shift)
 
+        # generate x-axis for plotting
+        subint_power_x = np.arange(len(self.subint_powers[0]))
+
         # plot stacked profile
         axs[0, 1].plot(np.sum(self.subint_powers, axis=0), lw=0.5, c="k")
+        axs[0, 1].text(
+            0.95, 
+            0.95, 
+            f"Observed", 
+            ha="right", 
+            va="top", 
+            fontsize=8,
+            transform=axs[0, 1].transAxes
+        )
         axs[0, 1].set_title("Stacked Profile")
         axs[0, 1].set_xticks([])
         axs[0, 1].set_yticks([])
@@ -528,17 +545,18 @@ class AliasingFinderResultsByShifts:
         axs[2, 1].remove()
         n_params_gs = axs[0, 1].get_gridspec()
         axs_subints = fig.add_subplot(n_params_gs[1:3, 1])
-        axs_subints.matshow(self.subint_powers, cmap="gray_r", aspect="auto", rasterized=True)
-        axs_subints.plot(shifts_phase, self.epochs, color="r", lw=1, ls=":", label="Best fit")
+        # axs_subints.matshow(self.subint_powers, cmap="gray_r", aspect="auto", rasterized=True)
+        axs_subints.pcolormesh(subint_power_x, self.epochs * 86400, self.subint_powers, cmap="gray_r", rasterized=True)
+        axs_subints.plot(shifts_phase, self.epochs * 86400, color="r", lw=1, ls=":", label="Best fit")
         axs_subints.plot(
             [peak_index - 0.015 * len(self.subint_powers[0])] * len(self.epochs), 
-            self.epochs, 
+            self.epochs * 86400, 
             "r-", 
             label="No aliasing", 
             lw=0.5, 
             alpha=0.75
         )
-        axs_subints.set_title("Subint Profiles")
+        axs_subints.set_title("Subint Powers")
         axs_subints.legend(frameon=False, fontsize=8)
         axs_subints.set_xlabel("Phase")
         axs_subints.set_ylabel("Sample")
@@ -546,6 +564,59 @@ class AliasingFinderResultsByShifts:
         axs_subints.set_xticklabels(["0", "0.5", "1"])
         axs_subints2 = axs_subints.twiny()
         axs_subints2.set_xlim(axs_subints.get_xlim())
+
+        if self.best_trial.alias_factor != 0:
+            # plot stacked profile after correction for aliasing
+            axs[0, 2].plot(np.sum(self.subint_powers_corr, axis=0), lw=0.5, c="k")
+            axs[0, 2].text(
+                0.95, 
+                0.95, 
+                f"De-aliased", 
+                ha="right", 
+                va="top", 
+                fontsize=8,
+                transform=axs[0, 2].transAxes
+            )
+            axs[0, 2].set_title(f"Stacked Profile")
+            axs[0, 2].set_xticks([])
+            axs[0, 2].set_yticks([])
+
+            # plot stacked data after correction for aliasing
+            axs[1, 2].remove()
+            axs[2, 2].remove()
+            n_params_gs = axs[0, 2].get_gridspec()
+            axs_subints_corr = fig.add_subplot(n_params_gs[1:3, 2])
+            # axs_subints_corr.matshow(self.subint_powers_corr, cmap="gray_r", aspect="auto", rasterized=True)
+            axs_subints_corr.pcolormesh(subint_power_x, self.epochs * 86400, self.subint_powers_corr, cmap="gray_r", rasterized=True)
+            axs_subints_corr.plot(shifts_phase, self.epochs * 86400, color="r", lw=1, ls=":", label="Best fit")
+            axs_subints_corr.plot(
+                [peak_index - 0.015 * len(self.subint_powers_corr[0])] * len(self.epochs), 
+                self.epochs * 86400, 
+                "r-", 
+                label="No aliasing", 
+                lw=0.5, 
+                alpha=0.75
+            )
+            axs_subints_corr.set_title(f"Subint Powers")
+            axs_subints_corr.legend(frameon=False, fontsize=8)
+            axs_subints_corr.set_xlabel("Phase")
+            axs_subints_corr.set_ylabel("Sample")
+            axs_subints_corr.set_xticks(np.arange(0, len(self.subint_powers_corr[0]) + 1, len(self.subint_powers_corr[0]) / 2))
+            axs_subints_corr.set_xticklabels(["0", "0.5", "1"])
+            axs_subints_corr2 = axs_subints_corr.twiny()
+            axs_subints_corr2.set_xlim(axs_subints_corr.get_xlim())
+        else:
+            for ax in axs[:, 2]:
+                ax.remove()
+
+            axs_subints_corr = fig.add_subplot(n_params_gs[:, 2])
+            axs_subints_corr.text(
+                0.5, 0.5, 
+                "No aliasing correction required", 
+                ha="center", 
+                va="center", 
+                transform=axs_subints_corr.transAxes
+            )
         
         # plot info
         fig.text(
