@@ -113,7 +113,7 @@ class archive_shutils:
 
         return self.__format_return(outfile, return_format)
     
-    def install_parfile(self, parfile, jump=0.0, ext=None, return_format="filename"):
+    def install_parfile(self, parfile, jump=0.0, update_dm=False, ext=None, return_format="filename"):
         '''
         Install a parfile from the archive (pam -E). 
 
@@ -124,6 +124,8 @@ class archive_shutils:
         jump : float
             Phase jump to be applied to the archive. (default: 0.0)
             *Note the this function do not read jump from the parfile.*
+        update_dm : bool, optional
+            Whether to update the DM in the archive based on the parfile. (default: False)
         ext : str, optional
             Extension of the output archive. If None, the file will be overwritten.
         return_format : str, optional
@@ -149,6 +151,8 @@ class archive_shutils:
 
         # Set up the command to install the parfile
         cmd = ['pam', '-E', parfile + "." + tmp_id, "-e", tmp_id, self.archive]
+        if update_dm:
+            cmd.insert(1, "--update_dm")
 
         # Execute the command
         self.__run(cmd, logfile=logfile)

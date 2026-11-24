@@ -93,7 +93,7 @@ def _stack_worker(args):
         ashu.clfd()
 
         # install parfile
-        ashu.install_parfile(this_par, jump=this_jump)
+        ashu.install_parfile(this_par, jump=this_jump, update_dm=True)
 
         # load the archive
         this_arch = psrchive.Archive_load(this_ar)
