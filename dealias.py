@@ -10,9 +10,13 @@ import datetime
 from cli.config import CLIConfig
 from backend.datastores.database import database
 from backend.datastores.tmg_master import tmg_master
-from backend.tools.dealiasing import Dealiasing
 from backend.utils.logger import logger
 from backend.utils.utils import utils
+from backend.tools.dealiasing import (
+    Dealiasing, 
+    estimate_minimal_obs_for_subint_snr_from_database, 
+    get_files_for_dealiasing_pipeline
+)
 
 ##################################################
 # Initialize parameters                          #
@@ -32,7 +36,8 @@ mdb_hdl = tmg_master(MASTER_DB_PATH)
 parser = argparse.ArgumentParser(description=f"Run the de-aliasing pipeline for a timing source. The pipeline will also automatically run after the main pipeline processing regularly once the signal-to-noise ratio of the stacked data reaches a certain threshold. \nThe pipeline will generate dealiasing diagnostics under {TIMING_SOURCES_PATH}/<psr_id>/dealias. If the pulsar's timing solution is likely aliased, the pipeline will attempt to create an unaliased timing solution and write it as pulsar.dealiased.par. \nTo accept the new unaliased timing solution, replace {TIMING_SOURCES_PATH}/<psr_id>/pulsar.par with {TIMING_SOURCES_PATH}/<psr_id>/dealias/pulsar.dealiased.par. \nTo trigger the dealiasing pipeline run automatically after the next main pipeline process (so you don't have to manually re-run the de-aliasing pipeline), remove the {TIMING_SOURCES_PATH}/<psr_id>/dealias directory. \nTo refit the new timing solution, run `python champss_timing pintk --psr <psr_id> --dealiased-par`.")
 parser.add_argument("-p", "--psr", type=str, help="Pulsar name.", default=None, required=True)
 parser.add_argument("-n", "--ncpus", type=int, help="Number of pools.", default=1)
-parser.add_argument("-N", "--n-files", type=int, help="Maximum number of archives to use.", default=None, required=False)
+parser.add_argument("-s", "--subint-snr", type=float, help="Desired SNR per subintegration (default: 15.0).", default=15.0, required=False)
+parser.add_argument("-N", "--n-files", type=int, help="Maximum number of archives to use (set N=0 to use all available files; default=200).", default=200, required=False)
 parser.add_argument("--parfile", type=str, help="Specify the path to timing model (default: ./timing_sources/<psr_id>/pulsar.par).", default=None, required=False)
 parser.add_argument("--ignore-subints", type=str, help="Subint indices to ignore for alias factor calculation (e.g., 0,1,2).", default=None, required=False)
 parser.add_argument("--n-subints", type=int, help="Binsize for alias factor calculation.", default=8, required=False)
@@ -44,6 +49,9 @@ parser.add_argument("--show-history", action="store_true", help="Show dealias hi
 parser.add_argument("--no-commit", action="store_true", help="Do not commit changes to the psrdir and database.", required=False, default=False)
 parser.add_argument("--no-beep", action="store_true", help="Do not beep when the process is finished.", required=False, default=False)
 args = parser.parse_args()
+
+# Get the path to the source database
+db_path = f"{TIMING_SOURCES_PATH}/{args.psr}/champss_timing.sqlite3.db"
 
 
 ##################################################
@@ -70,7 +78,7 @@ if args.mjd_range is not None:
 # Print dealias histories
 if args.show_history:
     # Fetech history
-    with database(f"{TIMING_SOURCES_PATH}/{args.psr}/champss_timing.sqlite3.db", readonly=True) as db_hdl:
+    with database(db_path, readonly=True) as db_hdl:
         dealias_histories = db_hdl.get_all_dealias_history()
 
     # Format dealias history
@@ -100,20 +108,19 @@ if args.show_history:
 
 
 ##################################################
-# More steps to repare processing                #
+# Print user input                               #
 ##################################################
 
 # Print arguments
 logger.info(f"Pulsar: {args.psr}")
 logger.info(f"Number of pools: {args.ncpus}")
-logger.info(f"Maximum number of archives: {args.n_files}")
 logger.info(f"Ignore subints: {args.ignore_subints}")
 logger.info(f"Number of subints: {args.n_subints}")
 logger.info(f"MJD range: {mjd_range}")
 
 
 ##################################################
-# Dealias                                        #
+# Gather useful information                      #
 ##################################################
 
 # Process pulsars
@@ -136,62 +143,89 @@ if mjd_range == []:
     mjd_range = utils.read_start_end_from_parfile(parfile, raise_exception=False)
     logger.info(f"Auto-detected MJD range: {mjd_range}")
 
-# Get the list of time to process
-ar_list = []
-backend_stats = {}
-for f_info in mdb_hdl.get_raw_data_by_mjd_range(args.psr, mjd_range=mjd_range):
-    if f_info["status"] != "good":
-        logger.info(f"Skipping archive {f_info['location']} due to bad status.")
-        continue
-
-    # Append to backend stats
-    if f_info["backend"] not in backend_stats:
-        backend_stats[f_info["backend"]] = 0
-    backend_stats[f_info["backend"]] += 1
-
-    ar_list.append({
-        "location": f_info["location"],
-        "backend": f_info["backend"], 
-        "mjd": f_info["mjd"]
-    })
-
-# Determine backend to use
-this_backend = None
-if args.backend is None: 
-    # Use the backend that has the most observations
-    if len(backend_stats) == 0:
-        raise ValueError(f"No good archives found for pulsar {args.psr} in the specified MJD range.")
-    this_backend = max(backend_stats, key=backend_stats.get)
-    logger.info(f"Auto-detected backend: {this_backend}")
-else:
-    this_backend = args.backend
-    logger.info(f"Using user specified backend: {this_backend}")
-
-# Select archives from the specified backend
-ar_list = [ar for ar in ar_list if ar["backend"] == this_backend]
-mjds = [ar["mjd"] for ar in ar_list]
-logger.info(f"Number of archives from backend {this_backend}: {len(ar_list)}", layer=1)
-
-# Check if there are archives to process
-if len(ar_list) == 0:
-    raise ValueError(f"No archives found for pulsar {args.psr}")
-
 # Check if parfile exists
 if not os.path.exists(parfile):
     raise ValueError(f"Parfile not found for pulsar {args.psr}")
 
-# Cut the list of archives if needed
-if args.n_files is not None:
-    # Sort the list of archives by mjd (newest to oldest)
-    ar_list = sorted(ar_list, key=lambda ar: ar["mjd"], reverse=True)
+# Compute the desired number of archives required
+min_obs_by_rcvr = estimate_minimal_obs_for_subint_snr_from_database(db_path, args.n_subints, args.subint_snr)
 
-    # Cut the list to the specified number of files (always the newest ones)
-    ar_list = ar_list[:args.n_files]
+
+##################################################
+# Find what data to use                          #
+##################################################
+
+# Get the list all available files
+ar_list_by_backend = {}
+for f_info in mdb_hdl.get_raw_data_by_mjd_range(args.psr, mjd_range=mjd_range):
+    # Skip bad files
+    if f_info["status"] != "good":
+        logger.info(f"Skipping archive {f_info['location']} due to bad status.")
+        continue
+
+    if f_info["backend"] not in ar_list_by_backend:
+        ar_list_by_backend[f_info["backend"]] = []
+
+    ar_list_by_backend[f_info["backend"]].append({
+        "location": f_info["location"],
+        "backend": f_info["backend"],
+        "mjd": f_info["mjd"]
+    })
+
+# Determine backend data to use
+this_backend = None
+if args.backend is None: 
+    this_backend, ar_list, min_n_obs = get_files_for_dealiasing_pipeline(min_obs_by_rcvr, ar_list_by_backend)
+
+    if this_backend is None:
+        raise ValueError("No suitable backend found with enough good archives.")
+
+    logger.info(f"Using the most sensitive backend that has enough good archives: {this_backend}")
+else:
+    this_backend = args.backend
+    ar_list = ar_list_by_backend.get(this_backend, [])
+    min_n_obs = min_obs_by_rcvr.get(this_backend, 0)
+    logger.info(f"Using user specified backend: {this_backend}")
+
+# Check if there are archives to process
+if len(ar_list) == 0:
+    raise ValueError(f"No archives found for pulsar {args.psr} from backend {this_backend}")
+
+
+##################################################
+# Determine the number of files to use           #
+##################################################
+
+# Determine the number of files to use
+n_files = min_n_obs * 2
+if args.n_files is not None:
+    if args.n_files == 0: # use all available archives
+        args.n_files = len(ar_list)
+    elif args.n_files < n_files: # cap on the user specified number of files
+        n_files = args.n_files
+
+# Sort the list of archives by mjd (newest to oldest)
+ar_list = sorted(ar_list, key=lambda ar: ar["mjd"], reverse=True)
+
+# Cap the list to the specified number of files (always the newest ones)
+ar_list = ar_list[:n_files]
+
+logger.info(f"Cap the list of archives to the newest {n_files} files.")
+
+
+##################################################
+# Show information                               #
+##################################################
 
 # Show archive information
 logger.info(f"Number of archives: {len(ar_list)}")
 for ar in ar_list:
     logger.info(f"{ar['location']} (backend: {ar['backend']})", layer=1)
+
+
+##################################################
+# Run pipeline                                   #
+##################################################
 
 # Find alias
 with Dealiasing(

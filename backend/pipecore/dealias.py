@@ -3,9 +3,13 @@ import time
 import random
 import numpy as np
 
-from ..tools.dealiasing import Dealiasing
 from ..utils.logger import logger
 from ..utils.utils import utils
+from ..tools.dealiasing import (
+    Dealiasing, 
+    estimate_minimal_obs_for_subint_snr_from_database, 
+    get_files_for_dealiasing_pipeline
+)
 
 class dealias:
     def __init__(self, psr_dir, db_hdl, archive_files, jumps, potential_fit_params, n_subints=8, min_snr_per_subint=5.0, max_n_files=120, n_bins=128, n_freqs=256, smooth=0, recent_threshold=90 * 24 * 3600, workspace="/tmp", cleanup=True, n_pools=1, logger=logger()):
@@ -25,41 +29,36 @@ class dealias:
         self.logger = logger
         self.n_pools = n_pools
 
-        # Determine the rcvr to use
-        rcvr_counts = {}
-        self.rcvr = None
+        # Organize archive files by backend
+        ar_list_by_backend = {}
         for mjd in archive_files:
-            rcvr = archive_files[mjd][0]["rcvr"]
-            if rcvr not in rcvr_counts:
-                rcvr_counts[rcvr] = 0
-            rcvr_counts[rcvr] += 1
+            for f in archive_files[mjd]:
+                if f["rcvr"] not in ar_list_by_backend:
+                    ar_list_by_backend[f["rcvr"]] = []
 
-        if rcvr_counts:
-            self.rcvr = max(rcvr_counts, key=rcvr_counts.get)
-            self.logger.info(f"Selected receiver for generating dealias diagnostics: {self.rcvr}")
-            
-        # Get snr and filter each archive file
-        self.archive_files = []
-        for mjd in archive_files:
-            if archive_files[mjd][0]["rcvr"] != self.rcvr:
-                continue
+                ar_list_by_backend[f["rcvr"]].append({
+                    "location": f["path"],
+                    "backend": f["rcvr"], # sorry but "rcvr" and "backend" are referring to the same thing in the pipeline... 
+                    "mjd": f["mjd"]
+                })
 
-            this_arid = utils.get_archive_id(archive_files[mjd][0]["path"])
-            this_info = self.db_hdl.get_archive_info_by_filename(this_arid)
-            
-            if len(this_info) == 0:
-                self.logger.warning(f"No archive info found for {this_arid}. Ignoring. ")
-                continue
-            self.archive_files.append({
-                "mjd": mjd,
-                "arid": this_arid,
-                "path": archive_files[mjd][0]["path"],
-                "rcvr": archive_files[mjd][0]["rcvr"],
-                "snr": this_info["psr_snr"]
-            })
+        # Get the minimal number of observation required to achieve the desired SNR per subint
+        min_n_obs = estimate_minimal_obs_for_subint_snr_from_database(
+            self.db_hdl, 
+            self.n_subints, 
+            self.min_snr_per_subint
+        )
+
+        # Get the best list of archive files to use
+        self.rcvr, self.archive_files, self.n_files_required = get_files_for_dealiasing_pipeline(
+            min_n_obs, 
+            ar_list_by_backend
+        )
 
         # Sort files by MJD
         self.archive_files.sort(key=lambda x: x["mjd"])
+
+        self.logger.info(f"Selected receiver for generating dealias diagnostics: {self.rcvr}")
 
     def get_minimal_required_file(self):
         # Get mean snr for each archive file
@@ -127,17 +126,16 @@ class dealias:
             return
 
         # Check whether enough files
-        n_files_required = self.get_minimal_required_file()
-        if len(self.archive_files) < n_files_required:
-            self.logger.debug(f"Not enough archive files. Required: {n_files_required}, available: {len(self.archive_files)}")
+        if len(self.archive_files) < self.n_files_required:
+            self.logger.debug(f"Not enough archive files. Required: {self.n_files_required}, available: {len(self.archive_files)}")
             return
         
         # Cap at twice as much of the required number of files
-        if len(self.archive_files) > 2 * n_files_required:
-            self.archive_files = self.archive_files[:2 * n_files_required]
-            self.logger.info(f"Capped archive files to twice the required number: 2 x {n_files_required} = {2 * n_files_required}")
+        if len(self.archive_files) > 2 * self.n_files_required:
+            self.archive_files = self.archive_files[:2 * self.n_files_required]
+            self.logger.info(f"Capped archive files to twice the required number: 2 x {self.n_files_required} = {2 * self.n_files_required}")
 
-        # Cap at 120 files to avoid excessive processing
+        # Cap at max_n_files to avoid excessive processing
         if len(self.archive_files) > self.max_n_files:
             self.archive_files = self.archive_files[:self.max_n_files]
             self.logger.info(f"Capped archive files to {self.max_n_files} since there are still too many files to be processed.")
@@ -146,7 +144,7 @@ class dealias:
         self.logger.debug(f"Starting dealiasing with {len(self.archive_files)} archive files.")
         with Dealiasing(
             psrdir=self.psr_dir, 
-            ar_list=[{"location": f_info["path"], "backend": f_info["rcvr"]} for f_info in self.archive_files],
+            ar_list=self.archive_files,
             parfile=os.path.join(self.psr_dir, "pulsar.par"),
             jumps=self.jumps, 
             n_subints=self.n_subints, 

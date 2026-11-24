@@ -21,6 +21,84 @@ from ..tools.stacking import Stacking
 from ..pipecore.psrchive import psrchive_handler
 from ..datastores.database import database
 
+def estimate_minimal_obs_for_subint_snr(obs_snrs, n_subints, subint_snr, min_n_obs=5):
+    """
+    Estimate the minimal number of observations required to achieve the desired SNR per subintegration.
+
+    Parameters:
+    - obs_snrs: List of SNRs for each observation.
+    - n_subints: Number of subintegrations.
+    - subint_snr: Desired SNR per subintegration.
+
+    Returns:
+    - Minimal number of observations required.
+    """
+
+    # Get mean snr for each archive file
+    mean_snr = np.mean(obs_snrs)
+
+    # Calculate the required number of files to reach the required snr per subint
+    # Assuming the snr adds in quadrature for multiple observations / each subints: 
+    #   SNR_subint = SNR_per_obs * sqrt(N_obs) / sqrt(N_subints)
+    n_obs = (
+        subint_snr * np.sqrt(n_subints) / mean_snr
+    )**2
+
+    # Ensure a minimum number of observations to robustly eliminate artifacts in single observation
+    if n_obs < min_n_obs:
+        n_obs = min_n_obs
+
+    return int(np.ceil(n_obs)) # ceiling to the next integer
+
+def estimate_minimal_obs_for_subint_snr_from_database(db, n_subints, subint_snr, min_n_obs=5):
+    """
+    Estimate the minimal number of observations required for each receiver to achieve the desired SNR per subintegration.
+
+    Parameters:
+    - db: Database path or handler.
+    - n_subints: Number of subintegrations.
+    - subint_snr: Desired SNR per subintegration.
+
+    Returns:
+    - Dictionary mapping receiver to minimal number of observations required.
+    """
+
+    # Initialize database if needed
+    db_hdl = db
+    if isinstance(db, str):
+        db_hdl = database(db, readonly=True)
+    
+    # Get the snr of observations from database and index by rcvr
+    obs_snrs_by_rcvr = {}
+    for f in db_hdl.get_all_archive_info():
+        # Unpack rcvr and snr
+        rcvr, snr = f["notes"]["rcvr"], f["psr_snr"]
+
+        if rcvr not in obs_snrs_by_rcvr:
+            obs_snrs_by_rcvr[rcvr] = []
+        obs_snrs_by_rcvr[rcvr].append(snr)
+
+    # Estimate minimal number of observations for each receiver
+    min_obs_by_rcvr = {}
+    for rcvr, obs_snrs in obs_snrs_by_rcvr.items():
+        min_obs_by_rcvr[rcvr] = estimate_minimal_obs_for_subint_snr(obs_snrs, n_subints, subint_snr, min_n_obs=min_n_obs)
+
+    # Close the database if it was initialized in this session
+    if isinstance(db, str):
+        db_hdl.close()
+
+    return min_obs_by_rcvr
+
+def get_files_for_dealiasing_pipeline(min_obs_by_rcvr, ar_list_by_rcvr):
+    # Sort the min_obs_by_rcvr dictionary by the number of required observations
+    sorted_min_n_obs = sorted(min_obs_by_rcvr.items(), key=lambda x: x[1])
+
+    for backend, n_required in sorted_min_n_obs:
+        if backend in ar_list_by_rcvr and len(ar_list_by_rcvr[backend]) >= n_required:
+            return backend, ar_list_by_rcvr[backend], min_obs_by_rcvr[backend]
+
+    return None, [], 0
+
 class DealiasingPayload:
     def __init__(self, logger=logger()):
         # Set logger
@@ -241,10 +319,6 @@ class Dealiasing:
             self.logger.debug(f"Injecting aliasing factor: {self.inj_af}")
             self.payload.stacked_data.dealiasing(alias_factor=-self.inj_af)
 
-        # Drop partial subints
-        self.logger.debug("Dropping partial subints")
-        self.payload.stacked_data.drop_partial_subints()
-
         # Scrunch to the desired sizes
         self.logger.debug("Scrunching stacked data to desired sizes")
         self.payload.stacked_data.scrunch(axis=1)
@@ -265,8 +339,6 @@ class Dealiasing:
 
     def optimize_dm(self):
         self.logger.debug("Optimizing DM")
-
-        print("!!!!", self.payload.stacked_data.meta.dm)
 
         # Run DM optimization
         results = DMOptimizer(
@@ -290,9 +362,16 @@ class Dealiasing:
     def resolve_aliasing(self, ignore_subints=[], smooth_sigma=None):
         self.logger.debug("Finding aliasing")
 
+        # Make a copy of the stacked data
+        stacked_data = self.payload.stacked_data.copy()
+
+        # Drop partial subints
+        self.logger.debug("Dropping partial subints")
+        stacked_data.drop_partial_subints()
+
         # Find aliasing
         results = AliasingFinder(
-            stacked_data=self.payload.stacked_data,
+            stacked_data=stacked_data,
             ncpus=self.ncpus,
             logger=self.logger.copy()
         ).find_aliasing_by_shifts(
@@ -321,7 +400,7 @@ class Dealiasing:
     def commit(self, db=None, overwrite=True):
 
         # Generate output directory path
-        outdir = f"{self.psrdir}/dealias"
+        outdir = f"{self.psrdir}/dealiasing"
 
         # Initialize database 
         this_db = None
