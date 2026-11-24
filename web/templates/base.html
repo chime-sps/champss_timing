@@ -209,6 +209,88 @@
             }
         }
     </script>
+
+    <script>
+        function download_resources(psrs, resources=undefined) {
+            var resource_map = {
+                "pdf": {
+                    "endpoint": "/pdf", 
+                    "filename": "champss_diagnostics.pdf"
+                },
+                "parfile": {
+                    "endpoint": "/parfile",
+                    "filename": "pulsar.par"
+                },
+                "timfile": {
+                    "endpoint": "/timfile",
+                    "filename": "pulsar.tim"
+                },
+                "dbfile": {
+                    "endpoint": "/dbfile",
+                    "filename": "champss_timing.sqlite3.db"
+                },
+                "dealiasing_diagnostics": {
+                    "endpoint": "/dealiasing/diagnostics",
+                    "filename": "dealiasing/diagnostic.pdf"
+                },
+                "dealiasing_parfile_initial": {
+                    "endpoint": "/dealiasing/parfile/initial",
+                    "filename": "dealiasing/initial.par"
+                },
+                "dealiasing_parfile_dealiased": {
+                    "endpoint": "/dealiasing/parfile/dealiased",
+                    "filename": "dealiasing/dealiased.par"
+                },
+                "dealiasing_dmo_diagnostics": {
+                    "endpoint": "/dealiasing/dmo_diagnostics",
+                    "filename": "dealiasing/dmo.pdf"
+                },
+                "dealiasing_stack_file": {
+                    "endpoint": "/dealiasing/stack_file",
+                    "filename": "dealiasing/stacked_data.npz"
+                }
+            };
+            
+
+            var urls = [];
+            var filenames = [];
+            
+            if (resources === undefined) {
+                resources = Object.keys(resource_map);
+            }
+
+            for (var i = 0; i < psrs.length; i++) {
+                var psr = psrs[i];
+                for (var j = 0; j < resources.length; j++) {
+                    var key = resources[j];
+                    if (resource_map.hasOwnProperty(key)) {
+                        urls.push("{{ url_for('diagnostic', source_id='') }}" + psr + resource_map[key].endpoint);
+                        filenames.push(psr + "/" + resource_map[key].filename);
+                    } else {
+                        console.warn("Resource key not found in resource_map: " + key);
+                    }
+                }
+            }
+
+            console.log(urls);
+            console.log(filenames);
+
+            var export_filename = 'champss_timing_'; 
+            if (psrs.length == 1) {
+                export_filename += psrs[0];
+            } else {
+                export_filename += psrs.length + '_psrs';
+            }
+
+            console.log(export_filename);
+
+            zip_download(
+                export_filename + '__' + new Date().toISOString().replace(/T/, ' ').replace(/\..+/, '').replace(/:/g, '-'),
+                filenames,
+                urls
+            );
+        };
+    </script>
 </head>
 
 <body>

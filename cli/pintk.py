@@ -15,7 +15,7 @@ class PintkUtils:
                 return f.read()
 
         if dealiased:
-            with open(f"{self.psrdir}/dealias/pulsar.dealiased.par", 'r') as f:
+            with open(f"{self.psrdir}/dealiasing/dealiased.par", 'r') as f:
                 return f.read()
 
         return self.sourcedb.get_all_timing_info()[-1]["notes"]["fitted_parfile"]

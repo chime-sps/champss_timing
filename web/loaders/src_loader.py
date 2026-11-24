@@ -9,6 +9,7 @@ import hashlib
 from scipy.spatial import KDTree
 from backend.pipecore.checker import checker, checker_pickle
 from backend.datastores.database import database
+from backend.utils.stacked_data import StackedData
 from backend.utils.utils import utils
 
 # Prevent matplotlib fail on a server thread by using a non-interactive backend
@@ -26,9 +27,11 @@ class src_loader():
         self.checker_warnings_length = 0
         self.pdf = source_dir + "/champss_diagnostic.pdf"
         self.logfile = source_dir + "/champss_timing.log"
-        self.dealias_diagnostic = source_dir + "/dealias/diagnostic.pdf"
-        self.dealias_summary = source_dir + "/dealias/summary.json"
-        self.dealias_stack_file = source_dir + "/dealias/stacked_data.npz"
+        self.dealias_diagnostic = source_dir + "/dealiasing/aliasing.pdf"
+        self.dealias_parfile_initial = source_dir + "/dealiasing/initial.par"
+        self.dealias_parfile_dealiased = source_dir + "/dealiasing/dealiased.par"
+        self.dealias_dmo_diagnostics = source_dir + "/dealiasing/dmo.pdf"
+        self.dealias_stack_file = source_dir + "/dealiasing/stacked_data.npz"
         self.psr_id = source_dir.split("/")[-1]
         self.psr_id_esc = self.psr_id.replace("+", "p").replace("-", "m")
         self.initialized = False
@@ -41,13 +44,21 @@ class src_loader():
         self.stats = {}
         self.parameter_info = {}
         self.tags = []
-        self.resources_status = {"pdf": False, "logfile": False, "dealias_diagnostic": False, "dealias_summary": False, "dealias_stack_file": False}
         self.preview_residual_data = []
         self.stacked_profile = []
         self.source_coincidences = None
         self.source_coincidences_radius = 0.25 # deg
         self.source_coincidences_catalogs = []
         self.source_coincidences_map_default = "SIMBAD Query"
+        self.resources_status = {
+            "pdf": False, 
+            "logfile": False, 
+            "dealias_diagnostic": False, 
+            "dealias_parfile_initial": False, 
+            "dealias_parfile_dealiased": False, 
+            "dealias_dmo_diagnostics": False,
+            "dealias_stack_file": False
+        }
 
         self.plot_colors = ["black", "red", "blue", "green", "orange", "purple", "brown", "pink", "gray"]
 
@@ -140,7 +151,9 @@ class src_loader():
             "pdf": os.path.exists(self.pdf),
             "logfile": os.path.exists(self.logfile),
             "dealias_diagnostic": os.path.exists(self.dealias_diagnostic),
-            "dealias_summary": os.path.exists(self.dealias_summary),
+            "dealias_parfile_initial": os.path.exists(self.dealias_parfile_initial),
+            "dealias_parfile_dealiased": os.path.exists(self.dealias_parfile_dealiased),
+            "dealias_dmo_diagnostics": os.path.exists(self.dealias_dmo_diagnostics),
             "dealias_stack_file": os.path.exists(self.dealias_stack_file)
         }
         return status
@@ -582,19 +595,35 @@ class src_loader():
             return None
 
         # Load the stacked data from the file
-        stacked_data = {}
-        stacked_data_raw = np.load(self.dealias_stack_file, allow_pickle=True)
+        stacked_data = StackedData.load(self.dealias_stack_file)
+        stacked_data.scrunch(axis=1)
 
         # Averages to get stacked phase and stacked frequencies 
+        data = None
         if axis == "time":
-            stacked_data["data"] = stacked_data_raw["data"].mean(axis=2).squeeze().tolist()
+            stacked_data.scrunch(axis=2) # freq scrunch
+            data = stacked_data.get_data(normalize=True)[:, 0, 0, :]
         elif axis == "freq":
-            stacked_data["data"] = stacked_data_raw["data"].mean(axis=0).squeeze().tolist()
+            stacked_data.scrunch(axis=0) # time scrunch
+            data = stacked_data.get_data(normalize=True)[0, 0, :, :]
+        else:
+            raise ValueError("Invalid axis specified. Must be 'time' or 'freq'.")
 
-        # Write metadata
-        stacked_data["metadata"] = utils.numpy_to_native(stacked_data_raw["metadata"])
+        return utils.numpy_to_native({
+            "data": data.tolist(),
+            "metadata": {
+                "freq_hi": stacked_data.meta.freq_hi,
+                "freq_lo": stacked_data.meta.freq_lo, 
+                "n_days": len(stacked_data.meta.input_files)
+            }, 
+            "expoure": stacked_data.expos.tolist()
+        })
 
-        return stacked_data
+    def get_dealiased_parfile(self, initial=False):
+        path = self.dealias_parfile_initial if not initial else self.dealias_parfile_dealiased
+        if not os.path.exists(path):
+            return None
+        return open(path, 'r').read()
 
     def simbad_query(self, ra, dec, radius=0.5, timeout=10):
         def parse_coord(coord):

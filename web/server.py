@@ -238,8 +238,8 @@ def sqlite3(source_id):
     res.headers['Content-Disposition'] = f'attachment; filename="champss_timing_{source_id}.sqlite3.db"'
     return res
 
-@app.route('/diagnostic/<source_id>/dealias/diagnostics')
-@app.route('/diagnostic/<source_id>/dealias/diagnostics/')
+@app.route('/diagnostic/<source_id>/dealiasing/diagnostics')
+@app.route('/diagnostic/<source_id>/dealiasing/diagnostics/')
 def dealias_diagnostics(source_id):
     if source_id not in app.sources:
         abort(404)
@@ -252,22 +252,46 @@ def dealias_diagnostics(source_id):
     res.headers['Content-Disposition'] = f'attachment; filename="champss_timing_{source_id}_dealias_diagnostic.pdf"'
     return res
 
-@app.route('/diagnostic/<source_id>/dealias/info')
-@app.route('/diagnostic/<source_id>/dealias/info/')
-def dealias_info(source_id):
+@app.route('/diagnostic/<source_id>/dealiasing/dmo_diagnostics')
+@app.route('/diagnostic/<source_id>/dealiasing/dmo_diagnostics/')
+def dealias_dmo(source_id):
     if source_id not in app.sources:
         abort(404)
 
-    if not os.path.exists(app.sources[source_id].dealias_summary):
-        return '{"not_available": "No summary from the de-aliasing pipeline, or the summary may have been generated from an older version of the pipeline."}'
+    if not os.path.exists(app.sources[source_id].dealias_dmo_diagnostics):
+        abort(404)
 
-    res = Response(open(app.sources[source_id].dealias_summary, 'rb').read())
-    res.headers['Content-Type'] = 'text/plain'
-    res.headers['Content-Disposition'] = f'attachment; filename="champss_timing_{source_id}_dealias_summary.json"'
+    res = Response(open(app.sources[source_id].dealias_dmo_diagnostics, 'rb').read())
+    res.headers['Content-Type'] = 'application/pdf'
+    res.headers['Content-Disposition'] = f'attachment; filename="champss_timing_{source_id}_dealias_dmo_diagnostics.pdf"'
     return res
 
-@app.route('/diagnostic/<source_id>/dealias/stack_file')
-@app.route('/diagnostic/<source_id>/dealias/stack_file/')
+@app.route('/diagnostic/<source_id>/dealiasing/parfile/<kind>')
+def dealiased_parfile(source_id, kind):
+    if source_id not in app.sources:
+        abort(404)
+
+    if kind == "initial":
+        parfile = app.sources[source_id].get_dealiased_parfile(initial=True)
+    elif kind == "dealiased":
+        parfile = app.sources[source_id].get_dealiased_parfile(initial=False)
+    elif kind == "available":
+        parfile = app.sources[source_id].get_dealiased_parfile(initial=False)
+        if parfile is None:
+            parfile = app.sources[source_id].get_dealiased_parfile(initial=True)
+    else:
+        abort(404)
+
+    if parfile is None:
+        return '{"not_available": "No parfile from the de-aliasing pipeline, or the parfile may have been generated from an older version of the pipeline."}'
+
+    res = Response(parfile)
+    res.headers['Content-Type'] = 'text/plain'
+    res.headers['Content-Disposition'] = f'attachment; filename="champss_timing_{source_id}_{kind}_parfile.par"'
+    return res
+
+@app.route('/diagnostic/<source_id>/dealiasing/stack_file')
+@app.route('/diagnostic/<source_id>/dealiasing/stack_file/')
 def dealias_stack_file(source_id):
     if source_id not in app.sources:
         abort(404)
@@ -280,7 +304,7 @@ def dealias_stack_file(source_id):
     res.headers['Content-Disposition'] = f'attachment; filename="champss_timing_{source_id}_stack_file.npz"'
     return res
 
-@app.route('/diagnostic/<source_id>/dealias/stacked', methods=['GET'])
+@app.route('/diagnostic/<source_id>/dealiasing/stacked', methods=['GET'])
 def dealias_stacked_data(source_id):
     if source_id not in app.sources:
         abort(404)

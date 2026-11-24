@@ -43,13 +43,17 @@
             // Get data
             var stacked_data = data["data"];
             var metadata = data["metadata"];
+            var exposure = data["expoure"];
             console.log("Metadata: ", metadata);
 
             // Get number of days stacked
-            var n_days = metadata["durations"].length;
+            var n_days = metadata["n_days"];
+
+            // Get duration of observations
+            var total_exposure = exposure.reduce((a, b) => a + b, 0);
 
             // Determine title and axis
-            var title = "Stacked Data<br>{{source_id}} | " + n_days + " days | " + Math.round(metadata["durations"][0] * 86400 / 60 * 1000) / 1000 + " min per day";
+            var title = "Stacked Data<br>{{source_id}} | " + n_days + " days | " + Math.round(total_exposure * 86400 / n_days / 60 * 1000) / 1000 + " min per day";
             var xaxis = { title: "Pulse Phase", mirror: true, showline: true, ticks: 'outside', tickcolor: '#ffffff', gridcolor: '#eeeeee', linecolor: '#ffffff' };
             var yaxis = { title: "", mirror: true, showline: true, ticks: 'outside', tickcolor: '#ffffff', gridcolor: '#eeeeee', linecolor: '#ffffff' };
             if (axis === "time") {
@@ -67,8 +71,8 @@
             } else if (axis === "freq") {
                 yaxis["title"] = "Frequency (MHz)";
 
-                var freq_hi = metadata["freq_hi"][0];
-                var freq_lo = metadata["freq_lo"][0];
+                var freq_hi = metadata["freq_hi"];
+                var freq_lo = metadata["freq_lo"];
                 var n_chan = stacked_data.length;
 
                 var plotdata = [{

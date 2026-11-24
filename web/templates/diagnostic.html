@@ -95,9 +95,11 @@
                             <li><a class="dropdown-item" href="{{ url_for("diagnostic", source_id=source_id) }}/timfile">TOA Timfile (.tim)</a></li>
                             <li><hr class="dropdown-divider"></li>
                             <li><h6 class="dropdown-header">De-aliasing</h6></li>
-                            <li><a class="dropdown-item{% if not sources[source_id].resources_status["dealias_diagnostic"]: %} disabled{% endif %}" href="{{ url_for("diagnostic", source_id=source_id) }}/dealias/diagnostics">De-aliasing Diagnostics (.pdf)</a></li>
-                            <li><a class="dropdown-item{% if not sources[source_id].resources_status["dealias_summary"]: %} disabled{% endif %}" href="{{ url_for("diagnostic", source_id=source_id) }}/dealias/info">De-aliasing Summary (.json)</a></li>
-                            <li><a class="dropdown-item{% if not sources[source_id].resources_status["dealias_stack_file"]: %} disabled{% endif %}" href="{{ url_for("diagnostic", source_id=source_id) }}/dealias/stack_file">Stack File (.npz)</a></li>
+                            <li><a class="dropdown-item{% if not sources[source_id].resources_status["dealias_diagnostic"]: %} disabled{% endif %}" href="{{ url_for("diagnostic", source_id=source_id) }}/dealiasing/diagnostics">De-aliasing Diagnostics (.pdf)</a></li>
+                            <li><a class="dropdown-item{% if not sources[source_id].resources_status["dealias_parfile_initial"]: %} disabled{% endif %}" href="{{ url_for("diagnostic", source_id=source_id) }}/dealiasing/parfile/initial">Initial Parfile (.par)</a></li>
+                            <li><a class="dropdown-item{% if not sources[source_id].resources_status["dealias_parfile_dealiased"]: %} disabled{% endif %}" href="{{ url_for("diagnostic", source_id=source_id) }}/dealiasing/parfile/dealiased">Dealiased Parfile (.par)</a></li>
+                            <li><a class="dropdown-item{% if not sources[source_id].resources_status["dealias_dmo_diagnostics"]: %} disabled{% endif %}" href="{{ url_for("diagnostic", source_id=source_id) }}/dealiasing/dmo_diagnostics">DM Diagnostics (.pdf)</a></li>
+                            <li><a class="dropdown-item{% if not sources[source_id].resources_status["dealias_stack_file"]: %} disabled{% endif %}" href="{{ url_for("diagnostic", source_id=source_id) }}/dealiasing/stack_file">Stack File (.npz)</a></li>
                             <li><hr class="dropdown-divider"></li>
                             <li><h6 class="dropdown-header">Debug</h6></li>
                             <li><a class="dropdown-item" href="{{ url_for("diagnostic", source_id=source_id) }}/dbfile">Database File (.sqlite3.db)</a></li>
@@ -903,7 +905,7 @@
                 <div class="modal-body" style="height: 100%; padding: 6px; background-color: unset; border: none; z-index: 999; ">
                     <div class="row" style="height: 100%; ">
                         {% if sources[source_id].is_timing_solution_aliased() is none: %}
-                        <div class="col-md-10" style="position: relative; left: 50%; transform: translateX(-50%); margin-top: 1em; ">
+                        <div class="col-md-12" style="position: relative; left: 50%; transform: translateX(-50%); margin-top: 1em; ">
                             <div class="card" style="height: 100%; ">
                                 <div class="card-body" style="height: 100%; ">
                                     <div style="text-align: center; color: #888; top: 50%; transform: translateY(-50%); position: relative; ">
@@ -915,26 +917,42 @@
                             </div>
                         </div>
                         {% else: %}
-                        <div class="col-md-10" style="position: relative; left: 50%; transform: translateX(-50%); ">
+                        <div class="col-md-12">
                             <div class="card">
                                 <div class="card-body">
-                                    <!-- <iframe src="{{ url_for("diagnostic", source_id=source_id) }}/dealias/diagnostics" style="width: 100%; height: 100px; "></iframe> -->
-                                    <div id="dealias_diagnostics_pdf_div" style="width: 100%; height: 100%; aspect-ratio: 1.5; ">
+                                    <!-- <iframe src="{{ url_for("diagnostic", source_id=source_id) }}/dealiasing/diagnostics" style="width: 100%; height: 100px; "></iframe> -->
+                                    <div id="dealias_diagnostics_pdf_div" style="width: 100%; height: 100%; aspect-ratio: 2; ">
                                         <div id="dealias_diagnostics_pdf" style="display: none; width: 100%; height: 100%; "></div>
                                         <div id="dealias_diagnostics_pdf_placeholder" style="position: absolute; bottom: 10px; right: 0px; ">
                                             <button class="btn btn-dark btn-sm" type="button" style="scale: 0.75; border-radius: 5em;" disabled>
                                                 <span class="spinner-grow spinner-grow-sm" aria-hidden="true"></span>
-                                                <span role="status">Loading diagnostics data...</span>
+                                                <span role="status">Loading dealiasing diagnostics...</span>
                                             </button>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-10" style="position: relative; left: 50%; transform: translateX(-50%); margin-top: 1em; ">
+                        <div style="margin-top: 25px;"></div>
+                        <div class="col-md-6">
                             <div class="card" style="height: 100%; ">
                                 <div class="card-body" style="height: 100%; ">
-                                    <pre id="dealias_log_div" style="height: 100%; overflow-y: scroll; font-size: 12px; cursor: text; "></pre>
+                                    <pre id="dealias_parfile_div" style="height: 100%; overflow-y: scroll; font-size: 12px; cursor: text; "></pre>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card" style="height: 100%; ">
+                                <div class="card-body" style="height: 100%; ">
+                                    <div id="dealias_dmo_diagnostics_pdf_div" style="width: 100%; height: 100%; aspect-ratio: 0.8; ">
+                                        <div id="dealias_dmo_diagnostics_pdf" style="display: none; width: 100%; height: 100%; "></div>
+                                        <div id="dealias_dmo_diagnostics_pdf_placeholder" style="position: absolute; bottom: 10px; right: 0px; ">
+                                            <button class="btn btn-dark btn-sm" type="button" style="scale: 0.75; border-radius: 5em;" disabled>
+                                                <span class="spinner-grow spinner-grow-sm" aria-hidden="true"></span>
+                                                <span role="status">Loading DM diagnostics...</span>
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -943,8 +961,9 @@
                     <small style="top: 1em; left: 1em; color: #fff; opacity: 75%; font-weight: 600; font-size: 12px; cursor: pointer; position: fixed; height: 100%; width: 100%; z-index: 998;" onclick="$('#dealias_diagnostics_modal').modal('hide'); "></small>
                     <script>
                         function load_dealias_diagnostics() {
-                            var url_diagnostics = "{{ url_for("diagnostic", source_id=source_id) }}/dealias/diagnostics";
-                            var url_info = "{{ url_for("diagnostic", source_id=source_id) }}/dealias/info";
+                            var url_diagnostics = "{{ url_for("diagnostic", source_id=source_id) }}/dealiasing/diagnostics";
+                            var url_parfile = "{{ url_for("diagnostic", source_id=source_id) }}/dealiasing/parfile/available";
+                            var url_dmo_diagnostics = "{{ url_for("diagnostic", source_id=source_id) }}/dealiasing/dmo_diagnostics";
                             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://mozilla.github.io/pdf.js/build/pdf.worker.mjs';
 
                             // Fetech diagnostics PDF and render it
@@ -974,8 +993,34 @@
                             });
 
                             // Fetch dealias info text and display it
-                            $.get(url_info, function(data) {
-                                $("#dealias_log_div").text(data);
+                            $.get(url_parfile, function(data) {
+                                $("#dealias_parfile_div").text(data);
+                            });
+
+                            // Fetech dm optimizer diagnostics PDF and render it
+                            console.log("Loading dm optimizer diagnostics PDF from URL:", url_dmo_diagnostics);
+                            pdfjsLib.getDocument({url: url_dmo_diagnostics}).promise.then(function(pdf) {
+                                pdf.getPage(1).then(function(page) {
+                                    var scale = 2;
+                                    var viewport = page.getViewport({ scale: scale });
+                                    var canvas = document.createElement('canvas');
+                                    var context = canvas.getContext('2d');
+                                    canvas.height = viewport.height;
+                                    canvas.width = viewport.width;
+                                    canvas.style.width = '100%';
+                                    var renderContext = {
+                                        canvasContext: context,
+                                        viewport: viewport
+                                    };
+                                    page.render(renderContext).promise.then(function() {
+                                        $("#dealias_dmo_diagnostics_pdf").empty();
+                                        document.getElementById('dealias_dmo_diagnostics_pdf').appendChild(canvas);
+                                        $("#dealias_dmo_diagnostics_pdf_placeholder").hide();
+                                        setTimeout(() => {
+                                            $("#dealias_dmo_diagnostics_pdf").fadeIn();
+                                        }, 0);
+                                    });
+                                });
                             });
                         }
 
@@ -1150,29 +1195,7 @@
 
     <script>
         $("#download_all").on("click", function() {
-            var urls = [
-                "{{ url_for("diagnostic", source_id=source_id) }}/pdf",
-                "{{ url_for("diagnostic", source_id=source_id) }}/parfile",
-                "{{ url_for("diagnostic", source_id=source_id) }}/timfile",
-                "{{ url_for("diagnostic", source_id=source_id) }}/dbfile",
-                "{{ url_for("diagnostic", source_id=source_id) }}/dealias/diagnostics",
-                "{{ url_for("diagnostic", source_id=source_id) }}/dealias/info",
-                "{{ url_for("diagnostic", source_id=source_id) }}/dealias/stack_file"
-            ];
-            var filenames = [
-                "{{ source_id }}/champss_diagnostics.pdf",
-                "{{ source_id }}/pulsar.par",
-                "{{ source_id }}/pulsar.tim",
-                "{{ source_id }}/champss_timing.sqlite3.db",
-                "{{ source_id }}/dealias/diagnostic.pdf",
-                "{{ source_id }}/dealias/summary.json",
-                "{{ source_id }}/dealias/stacked_data.npz"
-            ];
-            zip_download(
-                'champss_timing_{{ source_id }}__' + new Date().toISOString().replace(/T/, ' ').replace(/\..+/, '').replace(/:/g, '-'),
-                filenames,
-                urls
-            );
+            download_resources([ "{{ source_id }}" ])
         });
     </script>
 
