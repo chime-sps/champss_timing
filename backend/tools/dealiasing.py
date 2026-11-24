@@ -171,6 +171,18 @@ class DealiasingPayload:
             "best_dm": self.get_dm_info()
         }
 
+    def get_summary_text(self):
+        summary = self.get_summary()
+        lines = []
+        for key, value in summary.items():
+            if isinstance(value, dict):
+                lines.append(f"{key}:")
+                for subkey, subvalue in value.items():
+                    lines.append(f"  {subkey}: {subvalue}")
+            else:
+                lines.append(f"{key}: {value}")
+        return "\n".join(lines)
+
     def unpack(self, outdir, overwrite=False):
         # Remove existing directory if requested
         if os.path.exists(outdir):
@@ -185,19 +197,24 @@ class DealiasingPayload:
         # Stacked data
         self.stacked_data.save(os.path.join(outdir, "stacked_data.npz"))
 
-        # Dealiasing summary
-        with open(os.path.join(outdir, "summary.json"), "w") as f:
-            f.write(json.dumps(self.get_summary(), indent=4))
-
         # Aliasing finder plot
-        self.af_res.plot(os.path.join(outdir, "diagnostics.pdf"))
+        self.af_res.plot(os.path.join(outdir, "aliasing.pdf"))
 
         # Dealiased timing residual plot
         self.sol.plot(os.path.join(outdir, "timing_residuals.pdf"))
 
+        # Prefit timing solution
+        self.sol.write_prefit_parfile(
+            os.path.join(outdir, "original.par"), 
+            comment=self.get_summary_text() # include summary in prefit parfile
+        )
+
         # Dealiased timing solution
         if self.af_res_summary["alias_factor"] != 0:
-            self.sol.write_dealiased_parfile(os.path.join(outdir, "pulsar.dealiased.par"))
+            self.sol.write_dealiased_parfile(
+                os.path.join(outdir, "dealiased.par"), 
+                comment="Corrected for aliasing by {} phase(s) per day".format(self.af_res_summary["alias_factor"])
+            )
         else:
             self.logger.debug("Timing solution is unaliased. Skip writing dealiased parfile")
 

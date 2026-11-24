@@ -178,15 +178,27 @@ class DealiasedTimingSolution:
         for key, value in self.info.items():
             self.logger.info(f"{key}: {value}", layer=1)
 
-    def get_dealiased_parfile(self):
-        if self.postfit is not None:
-            return self.postfit.as_parfile()
+    def get_prefit_parfile(self, comment=None):
+        if self.prefit is not None:
+            return self.prefit.as_parfile(comment=comment)
         return None
 
-    def write_dealiased_parfile(self, filename):
+    def write_prefit_parfile(self, filename, comment=None):
+        if self.prefit is not None:
+            with open(filename, 'w') as f:
+                f.write(self.prefit.as_parfile(comment=comment))
+        else:
+            self.logger.error("No prefit model available to write.")
+
+    def get_dealiased_parfile(self, comment=None):
+        if self.postfit is not None:
+            return self.postfit.as_parfile(comment=comment)
+        return None
+
+    def write_dealiased_parfile(self, filename, comment=None):
         if self.postfit is not None:
             with open(filename, 'w') as f:
-                f.write(self.postfit.as_parfile())
+                f.write(self.postfit.as_parfile(comment=comment))
         else:
             self.logger.error("No postfit model available to write.")
 
