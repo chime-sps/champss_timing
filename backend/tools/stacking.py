@@ -68,7 +68,7 @@ def _stack_worker(args):
 
             # convert to ar using dspsr
             du = dspsr_shutils(n_pools=1)
-            du.fil2ar(this_fil, this_ar, this_par, nbin=config["n_bins"])
+            du.fil2ar(this_fil, this_ar, this_par, nbin=config["filterbank_nbins"])
 
             # rename converted ar
             shutil.move(this_ar + ".ar", this_ar)
@@ -104,9 +104,6 @@ def _stack_worker(args):
         # remove baseline if needed
         if config["remove_baseline"]:
             this_arch.remove_baseline()
-
-        # # downsample using PSRCHIVE scrunch
-        # _resize_psrchive(this_arch, (config["n_subs"], config["n_pols"], config["n_freqs"], config["n_bins"]))
 
         # get the start time
         this_start_mjd = this_arch.start_time().in_days()
@@ -190,6 +187,7 @@ class Stacking:
             jumps={}, 
             remove_baseline=False,
             resample_phase_bins=False, 
+            filterbank_nbins=1024,
             workspace="/tmp", 
             verbose=False, 
             logger=logger()
@@ -200,16 +198,13 @@ class Stacking:
         Parameters:
         files (list): List of archive files to be stacked.
         parfile (str): Parameter file.
-        n_subs (int): Number of sub-integrations.
-        n_pols (int): Number of polarizations.
-        n_freqs (int): Number of frequency channels.
-        n_bins (int): Number of phase bins.
         ncpus (int): Number of parallel pools.
         jumps (dict): Dictionary of jumps.
         remove_baseline (bool): Whether to remove baseline.
         resample_phase_bins (bool): Whether to resample phase bins.
-        duration_tol (float): Tolerance for duration mismatch in seconds.
+        filterbank_nbins (int): Number of phase bins for the filterbank.
         workspace (str): Workspace directory.
+        verbose (bool): Verbosity flag.
         logger (logger): Logger instance.
         """
 
@@ -221,6 +216,7 @@ class Stacking:
         self.jumps = jumps
         self.remove_baseline = remove_baseline
         self.resample_phase_bins = resample_phase_bins
+        self.filterbank_nbins = filterbank_nbins
         self.tempdir = workspace + f"/champss_timing__stack_utils/{utils.get_time_string()}__{utils.get_rand_string()}"
 
         if not os.path.exists(workspace):
@@ -365,6 +361,7 @@ class Stacking:
                 "parfile": self.parfile,
                 "remove_baseline": self.remove_baseline,
                 "resample_phase_bins": self.resample_phase_bins,
+                "filterbank_nbins": self.filterbank_nbins,
                 "logger": self.logger
             }
 
@@ -391,6 +388,10 @@ class Stacking:
                 if meta is None:
                     mask[i] = False
             self.logger.debug(f"Number of files successfully prepared: {np.sum(mask)}")
+
+            # Sanity check if there is any valid data left after filtering
+            if not np.any(mask):
+                raise ValueError("No data were successfully prepared. Please check the output from the previous steps.")
 
             # Sanity check if data were folding at the same dm
             for meta in sf_meta[mask]:

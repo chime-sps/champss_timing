@@ -116,7 +116,6 @@ class DealiasingPayload:
         self.af_res = None
         self.sol = None
         self.af_res_summary = None
-        self.sol_info = None
 
     def set_stacked_data(self, stacked_data):
         self.stacked_data = stacked_data
@@ -137,15 +136,14 @@ class DealiasingPayload:
 
         # Get solution summary
         self.af_res_summary = af_res.get_summary()
-        self.sol_info = sol.get_info()
 
     def validate(self):
         if self.stacked_data is None:
             raise ValueError("Stacked data is not set")
         if self.best_dm_val is None or self.best_dm_err is None:
             raise ValueError("Optimized DM values are not set")
-        if self.sol is None or self.sol_info is None:
-            raise ValueError("Dealiased solution or its info is not set")
+        if self.sol is None:
+            raise ValueError("Dealiased solution is not set")
         if self.af_res is None or self.af_res_summary is None:
             raise ValueError("Aliasing finder result or its summary is not set")
 
@@ -203,8 +201,8 @@ class DealiasingPayload:
         # Dealiased timing residual plot
         self.sol.plot(os.path.join(outdir, "timing_residuals.pdf"))
 
-        # Prefit timing solution
-        self.sol.write_prefit_parfile(
+        # Input timing solution
+        self.sol.write_input_parfile(
             os.path.join(outdir, "initial.par"), 
             comment="[Input parfile to CHAMPSS dealiasing pipeline]\n" + self.get_summary_text()
         )
@@ -339,9 +337,9 @@ class Dealiasing:
         # Scrunch to the desired sizes
         self.logger.debug("Scrunching stacked data to desired sizes")
         self.payload.stacked_data.scrunch(axis=1)
-        self.payload.stacked_data.downsample_to_length(self.n_subints, axis=0)
-        self.payload.stacked_data.downsample_to_length(self.n_freqs, axis=2)
-        self.payload.stacked_data.downsample_to_length(self.n_bins, axis=3)
+        self.payload.stacked_data.downsample_to_length(self.n_subints, axis=0, skip_if_shorter=True)
+        self.payload.stacked_data.downsample_to_length(self.n_freqs, axis=2, skip_if_shorter=True)
+        self.payload.stacked_data.downsample_to_length(self.n_bins, axis=3, skip_if_shorter=True)
 
         # Verbose plotting
         if self.verbose:
@@ -405,9 +403,6 @@ class Dealiasing:
 
         # Unpack summary to payload
         self.payload.set_dealiased_solution(results, sol)
-
-        # Print information
-        sol.print_info()
 
         # Verbose plot
         if self.verbose:

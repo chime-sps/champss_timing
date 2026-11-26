@@ -78,7 +78,7 @@ def generate_template_from_stacked_data(stacked_data, smooth_sigma=None, logger=
 class DealiasedTimingSolution:
     def __init__(self, model, toas, best_af, logger):
         self.aliased = model
-        self.prefit = None
+        self.prefit = copy.deepcopy(self.aliased)
         self.postfit = None
         self.fitter = None
         self.status = None
@@ -86,9 +86,6 @@ class DealiasedTimingSolution:
         self.toas = toas
         self.best_af = best_af
         self.logger = logger
-
-        self.info = {}
-        self.info["alias_factor"] = self.best_af
 
         self.mask = np.ones(len(toas), dtype=bool)
 
@@ -105,9 +102,6 @@ class DealiasedTimingSolution:
             dealias_res = True
             self.status = "not_needed"
             self.logger.success("No dealias needed, alias_factor=0")
-            
-        self.info["status"] = self.status
-        self.info["timestamp"] = datetime.datetime.now().isoformat()
 
     def _dealias(self):
         # get p0
@@ -116,9 +110,7 @@ class DealiasedTimingSolution:
         # calculate alias solution
         dp_alias = p0 / ((u.sday.to(u.s) * (1/self.best_af)) / p0)
         p_dealiased = p0 + dp_alias
-        self.logger.info(f"Dealiased period: {p_dealiased} s, dp_alias: {dp_alias} s")
-        self.info["p0_aliased"] = p0
-        self.info["p0_unaliased"] = p_dealiased
+        self.logger.info(f"Aliased period: {p0} s, dp_alias: {dp_alias} s -> dealiased period: {p_dealiased} s")
 
         # calculate outlier threshold and toa mask
         rs_aliased = Residuals(self.toas, self.aliased).phase_resids
@@ -140,7 +132,7 @@ class DealiasedTimingSolution:
             self.fitter = WLSFitter(self.toas[self.mask], self.prefit)
             self.fitter.fit_toas()
             self.fitter.print_summary()
-            self.info["chi2r_unaliased"] = self.fitter.model.CHI2R.value
+            self.logger.debug(f"Chi2r for postfit model: {self.fitter.model.CHI2R.value}")
         except Exception as e:
             self.logger.error("Dealiasing failed, fitting failed. ")
             self.logger.error(traceback.format_exc())
@@ -158,7 +150,7 @@ class DealiasedTimingSolution:
 
         # calculate chi2r for aliased model after masking out outliers
         chi2r_aliased = Residuals(self.toas[self.mask], self.aliased).chi2_reduced
-        self.info["chi2r_aliased"] = chi2r_aliased
+        self.logger.debug(f"Chi2r for aliased model: {chi2r_aliased}")
 
         # check chi2r
         chi2r_postfit = self.postfit.CHI2R.value
@@ -170,13 +162,17 @@ class DealiasedTimingSolution:
 
         return True
 
-    def get_info(self):
-        return self.info
+    def get_input_parfile(self, comment=None):
+        if self.aliased is not None:
+            return self.aliased.as_parfile(comment=comment)
+        return None
 
-    def print_info(self):
-        self.logger.info("Dealiased timing solution information:")
-        for key, value in self.info.items():
-            self.logger.info(f"{key}: {value}", layer=1)
+    def write_input_parfile(self, filename, comment=None):
+        if self.aliased is not None:
+            with open(filename, 'w') as f:
+                f.write(self.aliased.as_parfile(comment=comment))
+        else:
+            self.logger.error("No aliased model available to write.")
 
     def get_prefit_parfile(self, comment=None):
         if self.prefit is not None:

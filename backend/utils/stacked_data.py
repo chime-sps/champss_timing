@@ -121,12 +121,48 @@ class StackedData:
         self.expos = np.asarray(expos)
         self.meta = meta
 
-        # Generate frequency channels
-        self.freqs = None
-        self.__generate_freqs()
-
         # Validate
         self.validate()
+
+    @property
+    def shape(self):
+        return self.data.shape
+
+    @property
+    def nsubs(self):
+        return self.data.shape[0]
+
+    @property
+    def npols(self):
+        return self.data.shape[1]
+
+    @property
+    def nfreqs(self):
+        return self.data.shape[2]
+
+    @property
+    def nchans(self):
+        return self.data.shape[2]
+
+    @property
+    def nbins(self):
+        return self.data.shape[3]
+    
+    @property
+    def freqs(self):
+        return np.linspace(
+            self.meta.freq_lo,
+            self.meta.freq_hi,
+            self.data.shape[2]
+        )
+
+    @property
+    def period(self):
+        return self.meta.period
+
+    @property
+    def dm(self):
+        return self.meta.dm
 
     @staticmethod
     def load(stackfile, format=None):
@@ -189,10 +225,6 @@ class StackedData:
         if self.data.shape[0] != len(self.expos):
             raise ValueError("Number of subints must match the length of expos.")
 
-        # Frequency axis
-        if self.data.shape[2] != len(self.freqs):
-            raise ValueError("Number of frequency channels must match the length of freqs.")
-
         # Type of metadata
         if not isinstance(self.meta, StackedDataMetadata):
             raise ValueError("Metadata must be an instance of StackedDataMetadata.")
@@ -200,23 +232,26 @@ class StackedData:
         # Validate metadata
         self.meta.validate()
 
-    def __generate_freqs(self):
-        self.freqs = np.linspace(
-            self.meta.freq_lo,
-            self.meta.freq_hi,
-            self.data.shape[2]
-        )
-
     ####################################
     # Downsampling and resizing
     ####################################
 
     def normalize(self):
-        """Normalize the data."""
+        """
+        Normalize the data.
+        """
+        
         self.data = normalize_data(self.data)
 
     def scrunch(self, axis):
-        """Scrunch (average) the data along the specified axis."""
+        """
+        Scrunch (average) the data along the specified axis.
+
+        Parameters
+        ----------
+        axis : int
+            The axis along which to scrunch.
+        """
 
         if axis < 0 or axis >= self.data.ndim:
             raise ValueError("Invalid axis for scrunching.")
@@ -227,22 +262,30 @@ class StackedData:
             self.epochs = self.epochs.mean(keepdims=True)
             self.expos = self.expos.sum(keepdims=True)
 
-        if axis == 2:  # Frequency axis
-            self.__generate_freqs()
-
         self.validate()
 
     def downsample(self, factor, axis):
-        """Downsample the data by a given factor along the specified axis."""
+        """
+        Downsample the data by a given factor along the specified axis.
+
+        Parameters
+        ----------
+        factor : int
+            The downsample factor.
+        axis : int
+            The axis along which to downsample.
+
+        """
 
         if axis < 0 or axis >= self.data.ndim:
-            raise ValueError("Invalid axis for downsampling.")
+            raise ValueError(f"Invalid axis ({axis}) for downsampling.")
 
         if factor <= 0:
-            raise ValueError("Downsample factor must be a positive integer.")
+            raise ValueError(f"Downsample factor ({factor}) must be a positive integer.")
 
-        if factor > self.data.shape[axis]:
-            raise ValueError("Downsample factor cannot be greater than the size of the axis.")
+        if factor >= self.data.shape[axis]:
+            self.scrunch(axis) # If the downsample factor is greater than or equal to the axis size, scrunch instead.
+            return
 
         self.data = downsample(self.data, axis, factor, method="sum")
 
@@ -250,18 +293,38 @@ class StackedData:
             self.epochs = downsample(self.epochs, 0, factor, method="mean")
             self.expos = downsample(self.expos, 0, factor, method="sum")
 
-        if axis == 2:  # Frequency axis
-            self.__generate_freqs()
-
         self.validate()
 
     def downsample_by_factor(self, factor, axis):
-        """Downsample the data by a given factor along the specified axis."""
+        """
+        Downsample the data by a given factor along the specified axis.
+        
+        Parameters
+        ----------
+        factor : int
+            The downsample factor.
+        axis : int
+            The axis along which to downsample.
+        """
 
         self.downsample(factor, axis)
                              
-    def downsample_to_length(self, length, axis):
-        """Shortcut to downsample the data to a specific length along the given axis."""
+    def downsample_to_length(self, length, axis, skip_if_shorter=False):
+        """
+        Shortcut to downsample the data to a specific length along the given axis.
+        
+        Parameters
+        ----------
+        length : int
+            The desired length along the specified axis.
+        axis : int
+            The axis along which to downsample.
+        skip_if_shorter : bool, optional
+            If True, skip downsampling if the current length is shorter than the desired length.
+        """
+
+        if skip_if_shorter and self.data.shape[axis] <= length:
+            return
 
         self.downsample_by_factor(
             factor=self.data.shape[axis] // length,
@@ -269,7 +332,14 @@ class StackedData:
         )
 
     def drop_partial_subints(self, threshold=0.5):
-        """Drop subintegrations that are partially filled."""
+        """
+        Drop subintegrations that are partially filled.
+
+        Parameters
+        ----------
+        threshold : float, optional
+            The fraction of the median exposure below which subintegrations are considered partially filled.
+        """
 
         if self.data.shape[0] <= 1:
             return
@@ -298,23 +368,27 @@ class StackedData:
     ####################################
 
     def get_metadata(self):
+        """Shortcut to get the metadata."""
         return self.meta
 
     def get_shape(self):
+        """Shortcut to get the shape of the data."""
         return self.data.shape
-
-    def get_subint_snrs(self):
-        if self.data.shape[0] <= 1:
-            return []
-        
-        return [
-            data_quality_utils.boxcar_snr(subint) for subint in self.get_data(
-                scrunch=(1, 2), keepdims=True
-            )[:, 0, 0, :]
-        ]
     
     def get_subint_metric(self, metric):
-        """Get the subintegration metric for the given metric type."""
+        """
+        Get the subintegration metric for the given metric type.
+
+        Parameters
+        ----------
+        metric : str
+            The type of metric to compute. Supported values are "snr" and "chi2".
+
+        Returns
+        -------
+        float
+            The computed metric for the subintegration.
+        """
 
         if self.data.shape[3] <= 1:
             return 0.0
@@ -325,17 +399,19 @@ class StackedData:
             method = data_quality_utils.chi2
         else:
             raise ValueError(f"Unsupported metric: {metric}")
+        
+        return [
+            method(subint) for subint in self.get_data(
+                scrunch=(1, 2), keepdims=True
+            )[:, 0, 0, :]
+        ]
 
-        return method(
-            self.get_data(scrunch=(0, 1, 2), keepdims=True)[0, 0, 0, :]
-        )
-
-    def get_stacked_snr(self):
-        """Shortcut to get the stacked SNR."""
+    def get_subint_snrs(self):
+        """Get the SNR for each subintegration."""
         return self.get_subint_metric("snr")
 
-    def get_subint_chi2(self):
-        """Shortcut to get the subintegration chi-squared."""
+    def get_subint_chi2s(self):
+        """Get the chi-squared for each subintegration."""
         return self.get_subint_metric("chi2")
 
     def get_stacked_metric(self, metric):
@@ -364,9 +440,11 @@ class StackedData:
         return self.get_stacked_metric("snr")
 
     def get_period(self):
+        """Get the period from the metadata."""
         return self.meta.period
 
     def get_dm(self):
+        """Get the dispersion measure (DM) from the metadata."""
         return self.meta.dm
 
     def get_data(
