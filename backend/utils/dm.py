@@ -51,11 +51,11 @@ def get_dm_optimizer_from_stackfile(stackfile, n_subs=None, n_freqs=None, n_bins
 
     # downsample
     if n_subs is not None:
-        stacked_data.downsample_to_length(n_subs, axis=0)
+        stacked_data.downsample_to_length(n_subs, axis=0, skip_if_shorter=True)
     if n_freqs is not None: 
-        stacked_data.downsample_to_length(n_freqs, axis=2)
+        stacked_data.downsample_to_length(n_freqs, axis=2, skip_if_shorter=True)
     if n_bins is not None:
-        stacked_data.downsample_to_length(n_bins, axis=3)
+        stacked_data.downsample_to_length(n_bins, axis=3, skip_if_shorter=True)
 
     return DMOptimizer(
         stacked_data=stacked_data, 
