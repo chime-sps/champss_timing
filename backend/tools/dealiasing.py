@@ -148,7 +148,7 @@ class DealiasingPayload:
             raise ValueError("Aliasing finder result or its summary is not set")
 
     def get_remark(self):
-        return "DEALIAS_FITTING_OK" if self.sol.status else "DEALIAS_FITTING_FAILED"
+        return "DEALIAS_FITTING_OK" if self.sol.status in ["ok", "not_needed"] else "DEALIAS_FITTING_FAILED"
 
     def get_dm_info(self):
         return {
@@ -415,7 +415,7 @@ class Dealiasing:
         outdir = f"{self.psrdir}/dealiasing"
 
         # Initialize database 
-        this_db = None
+        this_db = db
         if this_db is None:
             this_db = database(f"{self.psrdir}/champss_timing.sqlite3.db")
 

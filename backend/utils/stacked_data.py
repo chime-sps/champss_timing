@@ -303,7 +303,7 @@ class StackedData:
             
             if n_kept != self.nfreqs:
                 # Compute new frequency band after downsampling
-                self.logger.warning(f"Downsampling by factor {factor} will drop {self.nfreqs - n_kept} channels from the frequency axis.")
+                print(f"!!!Downsampling by factor {factor} will drop {self.nfreqs - n_kept} channels from the frequency axis.!!!")
                 chan_bw = (self.meta.freq_hi - self.meta.freq_lo) / self.nfreqs
                 self.meta.freq_hi = self.meta.freq_lo + chan_bw * n_kept
 
@@ -331,7 +331,7 @@ class StackedData:
                              
     def downsample_to_length(self, length, axis, skip_if_shorter=False):
         """
-        Shortcut to downsample the data to a specific length along the given axis.
+        Shortcut to downsample the data to (roughly) a specific length along the given axis.
         
         Parameters
         ----------

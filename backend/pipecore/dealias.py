@@ -124,6 +124,12 @@ class dealias:
         if self.is_dealiased_recently():
             self.logger.info("Data has been dealias recently. Skipping dealias step.")
             return
+        
+        # Check if there's a rcvr ready to use
+        # (get_files_for_dealiasing_pipeline returns rcvr=None when there's no enough file to use)
+        if self.rcvr is None:
+            self.logger.debug("No receiver is ready to use.")
+            return
 
         # Check whether enough files
         if len(self.archive_files) < self.n_files_required:

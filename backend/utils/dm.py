@@ -427,7 +427,7 @@ class DMOptimizer:
         self.ncpus = ncpus
         self.stacked_data = stacked_data.copy()
 
-    def __calc_step_size(self, tol):
+    def __calc_step_size(self, tol, max_steps=None):
         """
         Calculate the DM step size based on the tolerance of error in phase across the entire band.
 
@@ -435,15 +435,23 @@ class DMOptimizer:
         ----------
         tol : float, optional
             Tolerance  in phase across the entire band.
+        max_steps : int, optional
+            Maximum number of DM steps to take (may raise the tolerance if exceeded).
 
         Returns
         -------
         float
             Calculated DM step size.
         """
-        return np.abs(tol * self.stacked_data.meta.period / K_DM / (
+        step_size = np.abs(tol * self.stacked_data.meta.period / K_DM / (
             self.stacked_data.meta.freq_lo ** -2 - self.stacked_data.meta.freq_hi ** -2
         ))
+
+        if max_steps is not None:
+            min_step_size = (self.stacked_data.meta.freq_lo ** -2 - self.stacked_data.meta.freq_hi ** -2) / max_steps
+            step_size = max(step_size, min_step_size)
+
+        return step_size
 
     def __take_step(self, ddm):
         # Unpack payload
@@ -532,7 +540,7 @@ class DMOptimizer:
 
         return steps
 
-    def optimize(self, dm_range=[-1, 1], tol=1e-3, n_bootstrap=64, seed=0):
+    def optimize(self, dm_range=[-1, 1], tol=1e-3, max_steps=512, n_bootstrap=64, seed=0):
         """
         Optimize the DM by trying multiple DM steps within the specified range.
 
@@ -542,6 +550,8 @@ class DMOptimizer:
             Range of DM steps to try, relative to the folding DM.
         tol : float, optional
             Tolerance in phase across the entire band.
+        max_steps : int, optional
+            Maximum number of DM steps to take (may raise the tolerance if exceeded).
         n_bootstrap : int, optional
             Number of bootstrap resamples of the subints used for the uncertainty.
             The uncertainty itself is only good to ~1/sqrt(2 * n_bootstrap)
@@ -556,7 +566,7 @@ class DMOptimizer:
         """
 
         # Compute step size
-        step_size = self.__calc_step_size(tol)
+        step_size = self.__calc_step_size(tol, max_steps=max_steps)
         self.logger.debug(f"Step size: {step_size}")
 
         # Generate DM trial values on a grid anchored to absolute DM (multiples of step_size),

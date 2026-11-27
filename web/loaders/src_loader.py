@@ -616,11 +616,11 @@ class src_loader():
                 "freq_lo": stacked_data.meta.freq_lo, 
                 "n_days": len(stacked_data.meta.input_files)
             }, 
-            "expoure": stacked_data.expos.tolist()
+            "exposure": stacked_data.expos.tolist()
         })
 
     def get_dealiased_parfile(self, initial=False):
-        path = self.dealias_parfile_initial if not initial else self.dealias_parfile_dealiased
+        path = self.dealias_parfile_initial if initial else self.dealias_parfile_dealiased
         if not os.path.exists(path):
             return None
         return open(path, 'r').read()

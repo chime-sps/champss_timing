@@ -399,10 +399,15 @@ class Stacking:
                     raise ValueError("Data were not folding at the same dm.")
 
             # Find the expected size of the data
-            expected_shape = self.__find_most_common([meta["shape"] for meta in sf_meta])
+            expected_shape = self.__find_most_common([meta["shape"] for meta in sf_meta[mask]])
 
             # Make sure all the data has the expected shape
             for i, meta in enumerate(sf_meta):
+                # Skip files in the mask that are already marked as invalid
+                if not mask[i]:
+                    continue
+
+                # Check if the file has the expected shape (excluding the first dimension which is subints)
                 if not self.resample_phase_bins:
                     mask[i] = (meta["shape"][1:] == expected_shape[1:])
                 else:
@@ -411,17 +416,22 @@ class Stacking:
             self.logger.debug(f"Resampling phase bins? {'yes' if self.resample_phase_bins else 'no'}", layer=1)
 
             # Unpack frequency ranges
-            freq_lo_vals = np.array([meta["freq_lo"] for meta in sf_meta])
-            freq_hi_vals = np.array([meta["freq_hi"] for meta in sf_meta])
+            freq_lo_vals = np.array([meta["freq_lo"] for meta in sf_meta[mask]])
+            freq_hi_vals = np.array([meta["freq_hi"] for meta in sf_meta[mask]])
 
             # Find the most common frequency ranges
             most_common_freqs = self.__find_most_common(
-                list(zip(freq_lo_vals[mask], freq_hi_vals[mask]))
+                list(zip(freq_lo_vals, freq_hi_vals))
             )
 
             # Filter out data with frequency ranges that deviate significantly from the median
-            mask &= np.isclose(freq_lo_vals, most_common_freqs[0])
-            mask &= np.isclose(freq_hi_vals, most_common_freqs[1])
+            # mask &= np.isclose(freq_lo_vals, most_common_freqs[0])
+            # mask &= np.isclose(freq_hi_vals, most_common_freqs[1])
+            for i, meta in enumerate(sf_meta):
+                if not mask[i]:
+                    continue
+                if not np.isclose(meta["freq_lo"], most_common_freqs[0]) or not np.isclose(meta["freq_hi"], most_common_freqs[1]):
+                    mask[i] = False
             self.logger.debug(f"Number of files with consistent frequency ranges: {np.sum(mask)} (freq_lo={most_common_freqs[0]}, freq_hi={most_common_freqs[1]})")
 
             # Sanity check on the mask to ensure there is data to stack
