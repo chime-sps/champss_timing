@@ -190,6 +190,7 @@ else:
 # Check if there are archives to process
 if len(ar_list) == 0:
     raise ValueError(f"No archives found for pulsar {args.psr} from backend {this_backend}")
+logger.debug(f"Number of archives can be processed: {len(ar_list)}")
 
 
 ##################################################
@@ -200,17 +201,17 @@ if len(ar_list) == 0:
 n_files = min_n_obs * 2
 if args.n_files is not None:
     if args.n_files == 0: # use all available archives
-        args.n_files = len(ar_list)
+        n_files = len(ar_list)
+        logger.info(f"Using all available archives: {n_files}")
     elif args.n_files < n_files: # cap on the user specified number of files
         n_files = args.n_files
+        logger.info(f"Cap the list of archives to the newest {n_files} files.")
 
 # Sort the list of archives by mjd (newest to oldest)
 ar_list = sorted(ar_list, key=lambda ar: ar["mjd"], reverse=True)
 
 # Cap the list to the specified number of files (always the newest ones)
 ar_list = ar_list[:n_files]
-
-logger.info(f"Cap the list of archives to the newest {n_files} files.")
 
 
 ##################################################
