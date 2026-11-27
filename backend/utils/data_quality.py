@@ -38,10 +38,10 @@ class data_quality_utils:
         return data_quality_utils.boxcar(profile, max_width)[0]
 
     @staticmethod
-    def chi2(profile):
+    def chi2(profile, sigma=1):
         """Compute the chi-squared of a profile against pure noise"""
         x = np.asarray(profile, dtype=float)
-        return ((x - x.mean())**2).sum()
+        return ((x - x.mean())**2).sum() / sigma**2
 
     @staticmethod
     def remove_baseline(profile):

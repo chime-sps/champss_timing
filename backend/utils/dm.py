@@ -106,6 +106,13 @@ class DMOptimizerResults:
         # Reveal the best index
         best_idx = np.argmax(metric_vals)
 
+        # Sanity check: a peak on the edge of the trial range cannot be refined and is probably not the true peak
+        if best_idx == 0 or best_idx == len(metric_vals) - 1:
+            self.logger.warning(
+                f"Best DM trial ({self.get_dm_vals()[best_idx]}) is on the edge of the search range. "
+                "Widen dm_range; the result and its uncertainty are unreliable."
+            )
+
         # Refine around the best index
         best_dm, correction = self.__refine_best_dm(self.get_dm_vals(), metric_vals, best_idx)
         self.logger.debug(f"Refined best DM: {best_dm}, correction: {correction}")
@@ -133,6 +140,9 @@ class DMOptimizerResults:
     def __refine_best_dm(self, dm_vals, metric_vals, i_best):
         """Helper function to define the best DM based on the metric."""
 
+        dm_vals = np.asarray(dm_vals, dtype=float)
+        metric_vals = np.asarray(metric_vals, dtype=float)
+
         correction = 0
         if i_best != 0 and i_best != len(dm_vals) - 1:
             # Find nearby points
@@ -156,6 +166,7 @@ class DMOptimizerResults:
 
         # Measure DM values for each bootstrap trial
         best_dm_vals = []
+        n_on_edge = 0
         trial_dm_vals = self.get_dm_vals()
         for j in range(self.steps[0].n_bootstrap):
             # Get metric values
@@ -163,11 +174,23 @@ class DMOptimizerResults:
 
             # Find the best index
             i_best = np.argmax(this_metric_vals)
+            if i_best == 0 or i_best == len(this_metric_vals) - 1:
+                n_on_edge += 1
 
             # Refine the best DM for this bootstrap trial
             best_dm, _ = self.__refine_best_dm(trial_dm_vals, this_metric_vals, i_best)
 
             best_dm_vals.append(best_dm)
+
+        # Bootstrap peaks on the edge are clipped by the search range, which biases the scatter low
+        if n_on_edge > 0:
+            self.logger.warning(
+                f"{n_on_edge}/{self.steps[0].n_bootstrap} bootstrap trials peaked on the edge of the DM range. "
+                "Widen dm_range; the uncertainty is underestimated."
+            )
+
+        n_bs = self.steps[0].n_bootstrap
+        self.logger.debug(f"(Bootstrap uncertainty from {n_bs} trials is itself uncertain by ~{100 / np.sqrt(2 * n_bs):.0f}%)")
 
         return np.std(best_dm_vals) # measure uncertainty from the scatter of the best DM values across bootstrap trials
 
@@ -509,16 +532,22 @@ class DMOptimizer:
 
         return steps
 
-    def optimize(self, dm_range=[-1, 1], tol=1e-3):
+    def optimize(self, dm_range=[-1, 1], tol=1e-3, n_bootstrap=64, seed=0):
         """
         Optimize the DM by trying multiple DM steps within the specified range.
 
         Parameters
         ----------
         dm_range : list of float, optional
-            Range of DM steps to try.
+            Range of DM steps to try, relative to the folding DM.
         tol : float, optional
             Tolerance in phase across the entire band.
+        n_bootstrap : int, optional
+            Number of bootstrap resamples of the subints used for the uncertainty.
+            The uncertainty itself is only good to ~1/sqrt(2 * n_bootstrap)
+            (~9% for 64, ~4% for 256).
+        seed : int, optional
+            Seed for the bootstrap resampling.
 
         Returns
         -------
@@ -530,12 +559,16 @@ class DMOptimizer:
         step_size = self.__calc_step_size(tol)
         self.logger.debug(f"Step size: {step_size}")
 
-        # Generate DM trial values
-        ddm_values = np.arange(np.ceil(dm_range[0] / step_size), np.floor(dm_range[1] / step_size) + 1) * step_size
+        # Generate DM trial values on a grid anchored to absolute DM (multiples of step_size),
+        # so the trial DMs do not depend on the folding DM the data are labelled with.
+        dm0 = self.stacked_data.get_dm()
+        i_lo = np.ceil((dm0 + dm_range[0]) / step_size)
+        i_hi = np.floor((dm0 + dm_range[1]) / step_size)
+        ddm_values = np.arange(i_lo, i_hi + 1) * step_size - dm0
         self.logger.debug(f"Taking {len(ddm_values)} DM trials")
 
         # take steps
-        steps = self.__take_trials(ddm_values)
+        steps = self.__take_trials(ddm_values, n_bootstrap=n_bootstrap, seed=seed)
 
         return DMOptimizerResults(steps, self.stacked_data, metric=self.metric, logger=self.logger)
 

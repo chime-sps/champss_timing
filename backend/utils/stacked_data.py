@@ -150,11 +150,15 @@ class StackedData:
     
     @property
     def freqs(self):
-        return np.linspace(
+        """Centre frequency of each channel."""
+
+        edges = np.linspace(
             self.meta.freq_lo,
             self.meta.freq_hi,
-            self.data.shape[2]
-        )
+            self.data.shape[2] + 1
+        ) # freq_lo and freq_hi define the band edges here
+        
+        return 0.5 * (edges[:-1] + edges[1:])
 
     @property
     def period(self):
@@ -286,6 +290,22 @@ class StackedData:
         if factor >= self.data.shape[axis]:
             self.scrunch(axis) # If the downsample factor is greater than or equal to the axis size, scrunch instead.
             return
+
+        if axis == 2:
+            """
+            downsample() drops the trailing channels that do not fill a whole block,
+            so shrink the band to the channels that are kept (otherwise self.freqs
+            would spread the remaining channels over the full band).
+            """
+
+            # Compute the number of channels to keep after downsampling
+            n_kept = (self.nfreqs // factor) * factor
+            
+            if n_kept != self.nfreqs:
+                # Compute new frequency band after downsampling
+                self.logger.warning(f"Downsampling by factor {factor} will drop {self.nfreqs - n_kept} channels from the frequency axis.")
+                chan_bw = (self.meta.freq_hi - self.meta.freq_lo) / self.nfreqs
+                self.meta.freq_hi = self.meta.freq_lo + chan_bw * n_kept
 
         self.data = downsample(self.data, axis, factor, method="sum")
 
